@@ -616,6 +616,8 @@
   let listenerTranslationQueue = Promise.resolve();
   let fullTranslatedTranscript = "";
   let listenerSessionId = createListenerSessionId();
+  const returnVisitorMessagesShownThisPage = new Set();
+  let anonymousVisitorFallbackId = "";
   let listenerVoiceGender = "male";
   let listenerAudioMuted = false;
   let listenerDisplayQueue = [];
@@ -786,6 +788,181 @@ listenerAudioButton.addEventListener("click", () => {
         .toString(36)
         .substring(2, 10)
     );
+  }
+
+
+  function createAnonymousVisitorId() {
+    try {
+      if (
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+      ) {
+        return (
+          "lbv_" +
+          crypto.randomUUID()
+            .replace(/-/g, "")
+        );
+      }
+    } catch {}
+
+    return (
+      "lbv_" +
+      Date.now() +
+      "_" +
+      Math.random()
+        .toString(36)
+        .substring(2, 12) +
+      Math.random()
+        .toString(36)
+        .substring(2, 12)
+    );
+  }
+
+
+  function getAnonymousVisitorIdForRoom(
+    room
+  ) {
+    const normalizedRoom =
+      String(room || "")
+        .trim()
+        .toUpperCase();
+
+    if (!normalizedRoom) {
+      return "";
+    }
+
+    const storageKey =
+      "livebridgeVisitorId:" +
+      normalizedRoom;
+
+    try {
+      let visitorId =
+        localStorage.getItem(
+          storageKey
+        );
+
+      if (!visitorId) {
+        visitorId =
+          createAnonymousVisitorId();
+
+        localStorage.setItem(
+          storageKey,
+          visitorId
+        );
+      }
+
+      return visitorId;
+
+    } catch {
+      if (!anonymousVisitorFallbackId) {
+        anonymousVisitorFallbackId =
+          createAnonymousVisitorId();
+      }
+
+      return anonymousVisitorFallbackId;
+    }
+  }
+
+
+  function getLocalVisitDay() {
+    const now = new Date();
+
+    const year =
+      now.getFullYear();
+
+    const month =
+      String(
+        now.getMonth() + 1
+      ).padStart(2, "0");
+
+    const day =
+      String(
+        now.getDate()
+      ).padStart(2, "0");
+
+    return (
+      year +
+      "-" +
+      month +
+      "-" +
+      day
+    );
+  }
+
+
+  function showConfiguredReturnVisitorMessage(
+    data,
+    visitDay
+  ) {
+    const message =
+      String(
+        data?.returnMessage || ""
+      ).trim();
+
+    const visitNumber =
+      Number(
+        data?.visitor?.visitNumber ||
+        0
+      );
+
+    if (
+      !message ||
+      visitNumber < 2 ||
+      !ROOM_ID
+    ) {
+      return;
+    }
+
+    const shownKey =
+      ROOM_ID +
+      ":" +
+      visitDay +
+      ":" +
+      visitNumber;
+
+    if (
+      returnVisitorMessagesShownThisPage.has(
+        shownKey
+      )
+    ) {
+      return;
+    }
+
+    const storageKey =
+      "livebridgeReturnMessageShown:" +
+      shownKey;
+
+    try {
+      if (
+        localStorage.getItem(
+          storageKey
+        ) === "1"
+      ) {
+        returnVisitorMessagesShownThisPage.add(
+          shownKey
+        );
+        return;
+      }
+
+      localStorage.setItem(
+        storageKey,
+        "1"
+      );
+    } catch {}
+
+    returnVisitorMessagesShownThisPage.add(
+      shownKey
+    );
+
+    showLiveBridgeRoomNotice({
+      title:
+        "Welcome Back",
+      message,
+      organizationName:
+        String(
+          data?.organizationName || ""
+        )
+    });
   }
 
 
@@ -2154,6 +2331,14 @@ resolve(email);
         .value
         .split("|")[0];
 
+    const visitorId =
+      getAnonymousVisitorIdForRoom(
+        ROOM_ID
+      );
+
+    const visitDay =
+      getLocalVisitDay();
+
     try {
       const response =
         await fetch(
@@ -2171,6 +2356,10 @@ resolve(email);
               listenerId:
                 listenerSessionId,
 
+              visitorId,
+
+              visitDay,
+
               language,
 
               room:
@@ -2179,12 +2368,27 @@ resolve(email);
           }
         );
 
+      let data = null;
+
+      try {
+        data =
+          await response.json();
+      } catch {}
+
       if (!response.ok) {
         throw new Error(
-          "Listener analytics start failed: " +
-          response.status
+          data?.error ||
+          (
+            "Listener analytics start failed: " +
+            response.status
+          )
         );
       }
+
+      showConfiguredReturnVisitorMessage(
+        data,
+        visitDay
+      );
 
       listenerHeartbeat =
         setInterval(
