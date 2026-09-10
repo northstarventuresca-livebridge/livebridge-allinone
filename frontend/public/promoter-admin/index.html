@@ -1,11 +1,21 @@
 <!doctype html>
 <html lang="en">
+
 <head>
+
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LiveBridge Promoter Admin</title>
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1"
+>
+
+<title>
+LiveBridge Promoter Admin
+</title>
+
 
 <style>
+
 *{
   box-sizing:border-box;
 }
@@ -20,18 +30,30 @@ body{
 #app{
   min-height:100vh;
   background:
-    radial-gradient(circle at top left,#153969 0%,transparent 30%),
-    radial-gradient(circle at top right,#321455 0%,transparent 30%),
+    radial-gradient(
+      circle at top left,
+      #153969 0%,
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at top right,
+      #321455 0%,
+      transparent 30%
+    ),
     #07111f;
 }
 
-.loading{
+.loading,
+.login-shell{
   min-height:100vh;
   display:flex;
   align-items:center;
   justify-content:center;
+  padding:24px;
+}
+
+.loading{
   text-align:center;
-  padding:30px;
 }
 
 .spinner{
@@ -50,14 +72,6 @@ body{
   }
 }
 
-.login-shell{
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:24px;
-}
-
 .login-layout{
   width:min(1000px,100%);
   display:grid;
@@ -66,33 +80,30 @@ body{
   align-items:center;
 }
 
-.login-brand{
-  padding:20px;
-}
-
 .login-logo{
   font-size:46px;
   font-weight:900;
   margin-bottom:8px;
 }
 
-.login-logo span{
-  background:linear-gradient(90deg,#35d3bd,#2996ff,#9f4cff);
+.login-logo span,
+.logo span{
+  background:
+    linear-gradient(
+      90deg,
+      #35d3bd,
+      #2996ff,
+      #9f4cff
+    );
+
   -webkit-background-clip:text;
   color:transparent;
 }
 
-.login-tagline{
-  font-size:21px;
+.login-title{
+  font-size:22px;
   font-weight:900;
-  margin-bottom:12px;
-}
-
-.login-description{
-  color:#91a8c0;
-  font-size:14px;
-  line-height:1.65;
-  max-width:500px;
+  margin-bottom:10px;
 }
 
 .login-card{
@@ -104,17 +115,14 @@ body{
   border-radius:22px;
   background:rgba(255,255,255,.045);
   border:1px solid rgba(255,255,255,.10);
-  box-shadow:0 30px 80px rgba(0,0,0,.25);
-}
-
-#signInMount{
-  width:100%;
-  display:flex;
-  justify-content:center;
 }
 
 .shell{
-  width:min(1180px,calc(100% - 32px));
+  width:min(
+    1180px,
+    calc(100% - 32px)
+  );
+
   margin:auto;
   padding:28px 0 60px;
 }
@@ -130,12 +138,6 @@ body{
 .logo{
   font-size:28px;
   font-weight:900;
-}
-
-.logo span{
-  background:linear-gradient(90deg,#35d3bd,#2996ff,#9f4cff);
-  -webkit-background-clip:text;
-  color:transparent;
 }
 
 .subtitle{
@@ -188,7 +190,8 @@ body{
 }
 
 .field input,
-.field textarea{
+.field textarea,
+.field select{
   width:100%;
   padding:11px 12px;
   border-radius:9px;
@@ -207,6 +210,7 @@ body{
   justify-content:flex-end;
   gap:10px;
   margin-top:17px;
+  flex-wrap:wrap;
 }
 
 button{
@@ -224,12 +228,21 @@ button:disabled{
 }
 
 .primary{
-  background:linear-gradient(135deg,#288cf8,#7046df);
+  background:
+    linear-gradient(
+      135deg,
+      #288cf8,
+      #7046df
+    );
 }
 
 .green{
   background:#29d783;
   color:#04150d;
+}
+
+.red{
+  background:#dc3545;
 }
 
 .secondary{
@@ -259,11 +272,16 @@ button:disabled{
 
 .promoter-row{
   display:grid;
-  grid-template-columns:1.2fr .8fr .7fr .7fr auto;
+  grid-template-columns:
+    1.2fr .8fr .7fr .7fr auto;
+
   gap:12px;
   align-items:center;
   padding:14px 0;
-  border-bottom:1px solid rgba(255,255,255,.07);
+  border-bottom:
+    1px solid
+    rgba(255,255,255,.07);
+
   font-size:12px;
 }
 
@@ -297,6 +315,21 @@ button:disabled{
   color:#f87171;
 }
 
+.badge.pending{
+  background:rgba(234,179,8,.12);
+  color:#facc15;
+}
+
+.badge.approved{
+  background:rgba(34,197,94,.12);
+  color:#62e69d;
+}
+
+.badge.rejected{
+  background:rgba(239,68,68,.12);
+  color:#f87171;
+}
+
 .empty{
   padding:25px 0;
   color:#8298af;
@@ -309,7 +342,9 @@ button:disabled{
   padding:18px;
   border-radius:15px;
   background:rgba(45,151,255,.08);
-  border:1px solid rgba(45,151,255,.25);
+  border:
+    1px solid
+    rgba(45,151,255,.25);
 }
 
 .invite-box.show{
@@ -321,9 +356,85 @@ button:disabled{
   margin-top:9px;
   padding:12px;
   border-radius:9px;
-  border:1px solid rgba(255,255,255,.11);
+  border:
+    1px solid
+    rgba(255,255,255,.11);
+
   background:#071725;
   color:white;
+}
+
+.plan-card{
+  margin-top:16px;
+  padding:18px;
+  border-radius:15px;
+  border:
+    1px solid
+    rgba(255,255,255,.09);
+
+  background:#0d1a2a;
+}
+
+.plan-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:15px;
+  margin-bottom:15px;
+}
+
+.plan-name{
+  font-size:18px;
+  font-weight:900;
+}
+
+.plan-meta{
+  color:#8fa6be;
+  font-size:11px;
+  margin-top:5px;
+}
+
+.plan-stats{
+  display:grid;
+  grid-template-columns:
+    repeat(4,1fr);
+
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.stat{
+  padding:11px;
+  border-radius:10px;
+  background:#091725;
+  border:
+    1px solid
+    rgba(255,255,255,.07);
+}
+
+.stat strong{
+  display:block;
+  font-size:15px;
+  margin-top:3px;
+}
+
+.feature-list{
+  margin:8px 0 0;
+  padding-left:18px;
+  color:#b3c4d5;
+  font-size:12px;
+  line-height:1.7;
+}
+
+.review-box{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:15px;
+}
+
+.review-box .full{
+  grid-column:1 / -1;
 }
 
 @media(max-width:760px){
@@ -333,25 +444,16 @@ button:disabled{
     gap:12px;
   }
 
-  .login-brand{
-    text-align:center;
-  }
-
-  .login-logo{
-    font-size:36px;
-  }
-
-  .login-description{
-    margin:auto;
-  }
-
   .login-card{
     min-height:440px;
-    padding:10px;
   }
 
   .shell{
-    width:min(100% - 20px,1180px);
+    width:min(
+      100% - 20px,
+      1180px
+    );
+
     padding-top:16px;
   }
 
@@ -360,40 +462,63 @@ button:disabled{
     flex-direction:column;
   }
 
-  .grid{
+  .grid,
+  .review-box{
     grid-template-columns:1fr;
   }
 
-  .field.full{
+  .field.full,
+  .review-box .full{
     grid-column:auto;
   }
 
   .promoter-row{
-    grid-template-columns:1fr auto;
+    grid-template-columns:
+      1fr auto;
+  }
+
+  .plan-stats{
+    grid-template-columns:
+      1fr 1fr;
   }
 
   .mobile-hide{
     display:none;
   }
 }
+
 </style>
+
 </head>
+
 
 <body>
 
 <div id="app">
 
-  <div id="loading" class="loading">
+
+  <div
+    id="loading"
+    class="loading"
+  >
 
     <div>
 
       <div class="spinner"></div>
 
-      <div style="font-size:22px;font-weight:900;">
+      <div
+        style="
+          font-size:22px;
+          font-weight:900;
+        "
+      >
         LiveBridge
       </div>
 
-      <div class="muted" style="margin-top:5px;">
+      <div
+        class="muted"
+        style="margin-top:5px;"
+      >
         Loading Promoter Administration...
       </div>
 
@@ -410,19 +535,20 @@ button:disabled{
 
     <div class="login-layout">
 
-      <div class="login-brand">
+
+      <div>
 
         <div class="login-logo">
           Live<span>Bridge</span>
         </div>
 
-        <div class="login-tagline">
+        <div class="login-title">
           Promoter Administration
         </div>
 
-        <div class="login-description">
-          Sign in with your existing LiveBridge administrator account.
-          This test portal uses the isolated promoter development environment.
+        <div class="muted">
+          Sign in with your LiveBridge
+          administrator account.
         </div>
 
       </div>
@@ -433,6 +559,7 @@ button:disabled{
         <div id="signInMount"></div>
 
       </div>
+
 
     </div>
 
@@ -445,6 +572,7 @@ button:disabled{
     style="display:none;"
   >
 
+
     <div class="topbar">
 
       <div>
@@ -454,7 +582,8 @@ button:disabled{
         </div>
 
         <div class="subtitle">
-          Promoter Administration — Test Environment
+          Promoter Administration
+          — Test Environment
         </div>
 
       </div>
@@ -464,6 +593,37 @@ button:disabled{
     </div>
 
 
+
+    <!-- PROMOTER PLAN APPROVALS -->
+
+
+    <div class="card">
+
+      <div class="title">
+        Promoter Plan Approvals
+      </div>
+
+      <div class="muted">
+        Review plans submitted by promoters.
+        Promoters cannot offer them until
+        they are approved here.
+      </div>
+
+      <div id="planRequests">
+
+        <div class="empty">
+          Loading plan requests...
+        </div>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- ADD PROMOTER -->
+
+
     <div class="card">
 
       <div class="title">
@@ -471,11 +631,13 @@ button:disabled{
       </div>
 
       <div class="muted">
-        Creates a promoter profile and secure invitation.
+        Creates a promoter profile
+        and secure invitation.
       </div>
 
 
       <div class="grid">
+
 
         <div class="field">
 
@@ -604,6 +766,7 @@ button:disabled{
 
         </div>
 
+
       </div>
 
 
@@ -631,7 +794,12 @@ button:disabled{
         class="invite-box"
       >
 
-        <div style="font-weight:900;font-size:16px;">
+        <div
+          style="
+            font-weight:900;
+            font-size:16px;
+          "
+        >
           Promoter Invitation Ready
         </div>
 
@@ -639,7 +807,8 @@ button:disabled{
           class="muted"
           style="margin-top:4px;"
         >
-          Send this secure link to the promoter.
+          Send this secure link
+          to the promoter.
         </div>
 
         <input
@@ -666,6 +835,10 @@ button:disabled{
     </div>
 
 
+
+    <!-- PROMOTERS -->
+
+
     <div class="card">
 
       <div class="title">
@@ -673,7 +846,8 @@ button:disabled{
       </div>
 
       <div class="muted">
-        Promoter accounts, clients and pending plan requests.
+        Promoter accounts,
+        clients and commissions.
       </div>
 
       <div id="promoters">
@@ -686,9 +860,11 @@ button:disabled{
 
     </div>
 
+
   </div>
 
 </div>
+
 
 
 <script
@@ -701,12 +877,52 @@ button:disabled{
 
 <script>
 
+
 const API =
   "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev";
 
 
 let signInMounted =
   false;
+
+
+
+function escapeHtml(
+  value
+){
+
+  return String(
+    value || ""
+  )
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+
+
+function money(
+  cents,
+  currency="CAD"
+){
+
+  return new Intl.NumberFormat(
+    "en-CA",
+    {
+      style:
+        "currency",
+
+      currency:
+        currency || "CAD"
+    }
+  ).format(
+    Number(
+      cents || 0
+    ) / 100
+  );
+}
+
 
 
 async function getSession(){
@@ -720,6 +936,7 @@ async function getSession(){
     Clerk.session ||
     null;
 
+
   if(!session){
 
     const lastActiveId =
@@ -732,18 +949,23 @@ async function getSession(){
           item.id ===
           lastActiveId
       ) ||
+
       sessions.find(
         item =>
           item.status ===
           "active"
       ) ||
+
       sessions[0] ||
       null;
   }
 
+
   if(!session){
+
     return null;
   }
+
 
   try{
 
@@ -763,13 +985,14 @@ async function getSession(){
   }catch(error){
 
     console.error(
-      "Promoter admin session error:",
+      "Session error:",
       error
     );
 
     return null;
   }
 }
+
 
 
 async function getToken(){
@@ -778,23 +1001,13 @@ async function getToken(){
     await getSession();
 
   if(!session){
-    return null;
-  }
-
-  try{
-
-    return await session.getToken();
-
-  }catch(error){
-
-    console.error(
-      "Promoter admin token error:",
-      error
-    );
 
     return null;
   }
+
+  return session.getToken();
 }
+
 
 
 async function api(
@@ -812,13 +1025,16 @@ async function api(
     );
   }
 
+
   const headers = {
+
     ...(options.headers || {}),
 
-    "Authorization":
+    Authorization:
       "Bearer " +
       token
   };
+
 
   if(
     options.body &&
@@ -828,6 +1044,7 @@ async function api(
     headers["Content-Type"] =
       "application/json";
   }
+
 
   return fetch(
     API + path,
@@ -839,65 +1056,56 @@ async function api(
 }
 
 
-function escapeHtml(
-  value
-){
-
-  return String(
-    value || ""
-  )
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;");
-}
-
 
 function hideAllViews(){
 
-  document.getElementById(
-    "loading"
-  ).style.display =
-    "none";
+  document
+    .getElementById(
+      "loading"
+    )
+    .style.display =
+      "none";
 
-  document.getElementById(
-    "loginView"
-  ).style.display =
-    "none";
+  document
+    .getElementById(
+      "loginView"
+    )
+    .style.display =
+      "none";
 
-  document.getElementById(
-    "shell"
-  ).style.display =
-    "none";
+  document
+    .getElementById(
+      "shell"
+    )
+    .style.display =
+      "none";
 }
+
 
 
 function showLogin(){
 
   hideAllViews();
 
-  document.getElementById(
-    "loginView"
-  ).style.display =
-    "flex";
+  document
+    .getElementById(
+      "loginView"
+    )
+    .style.display =
+      "flex";
 
-  const mount =
-    document.getElementById(
-      "signInMount"
-    );
 
-  if(
-    !signInMounted
-  ){
+  if(!signInMounted){
 
     Clerk.mountSignIn(
-      mount,
+      document.getElementById(
+        "signInMount"
+      ),
       {
         routing:
           "hash",
 
         appearance:{
-
           variables:{
             colorPrimary:
               "#2d97ff"
@@ -912,6 +1120,7 @@ function showLogin(){
 }
 
 
+
 async function verifyAdmin(){
 
   const response =
@@ -921,6 +1130,7 @@ async function verifyAdmin(){
 
   const data =
     await response.json();
+
 
   if(!response.ok){
 
@@ -934,24 +1144,6 @@ async function verifyAdmin(){
 }
 
 
-async function showAdmin(){
-
-  hideAllViews();
-
-  Clerk.mountUserButton(
-    document.getElementById(
-      "userButton"
-    )
-  );
-
-  await loadPromoters();
-
-  document.getElementById(
-    "shell"
-  ).style.display =
-    "block";
-}
-
 
 async function loadPromoters(){
 
@@ -960,16 +1152,16 @@ async function loadPromoters(){
       "promoters"
     );
 
-  box.innerHTML =
-    '<div class="empty">Loading promoters...</div>';
 
   const response =
     await api(
       "/promoter-admin/promoters"
     );
 
+
   const data =
     await response.json();
+
 
   if(!response.ok){
 
@@ -979,9 +1171,11 @@ async function loadPromoters(){
     );
   }
 
+
   const list =
     data.promoters ||
     [];
+
 
   if(!list.length){
 
@@ -990,6 +1184,7 @@ async function loadPromoters(){
 
     return;
   }
+
 
   box.innerHTML =
     list.map(
@@ -1000,25 +1195,31 @@ async function loadPromoters(){
           <div>
 
             <div class="name">
+
               ${escapeHtml(
                 promoter.displayName
               )}
+
             </div>
 
             <div class="code">
+
               ${escapeHtml(
                 promoter.promoterCode
               )}
+
             </div>
 
             <div
               class="muted"
               style="margin-top:3px;"
             >
+
               ${escapeHtml(
                 promoter.email ||
                 ""
               )}
+
             </div>
 
           </div>
@@ -1046,13 +1247,9 @@ async function loadPromoters(){
 
           <div class="mobile-hide">
 
-            $${(
-              Number(
-                promoter.unpaidCommissionCents ||
-                0
-              ) /
-              100
-            ).toFixed(2)}
+            ${money(
+              promoter.unpaidCommissionCents
+            )}
 
           </div>
 
@@ -1077,11 +1274,761 @@ async function loadPromoters(){
 
           </div>
 
+
         </div>
+
       `
     )
     .join("");
 }
+
+
+
+function planFeaturesHtml(
+  features
+){
+
+  const list =
+    Array.isArray(
+      features
+    )
+      ? features
+      : [];
+
+
+  if(!list.length){
+
+    return `
+      <div class="muted">
+        No features listed.
+      </div>
+    `;
+  }
+
+
+  return `
+
+    <ul class="feature-list">
+
+      ${list.map(
+        feature => `
+          <li>
+            ${escapeHtml(
+              feature
+            )}
+          </li>
+        `
+      ).join("")}
+
+    </ul>
+
+  `;
+}
+
+
+
+async function loadPlanRequests(){
+
+  const box =
+    document.getElementById(
+      "planRequests"
+    );
+
+
+  box.innerHTML =
+    '<div class="empty">Loading plan requests...</div>';
+
+
+  const response =
+    await api(
+      "/promoter-admin/plan-requests"
+    );
+
+
+  const data =
+    await response.json();
+
+
+  if(!response.ok){
+
+    throw new Error(
+      data.error ||
+      "Unable to load plan requests."
+    );
+  }
+
+
+  const requests =
+    data.requests ||
+    [];
+
+
+  if(!requests.length){
+
+    box.innerHTML =
+      '<div class="empty">No promoter plan requests.</div>';
+
+    return;
+  }
+
+
+  box.innerHTML =
+    requests.map(
+      request => {
+
+
+        const pending =
+          request.status ===
+          "pending";
+
+
+        const hours =
+          Math.round(
+            Number(
+              request.includedMinutes ||
+              0
+            ) /
+            60 *
+            10
+          ) /
+          10;
+
+
+        return `
+
+          <div
+            class="plan-card"
+            data-plan-request="${Number(
+              request.id
+            )}"
+          >
+
+
+            <div class="plan-head">
+
+
+              <div>
+
+                <div class="plan-name">
+
+                  ${escapeHtml(
+                    request.planName
+                  )}
+
+                </div>
+
+
+                <div class="plan-meta">
+
+                  Submitted by
+                  <strong>
+                    ${escapeHtml(
+                      request.promoterName ||
+                      "Promoter"
+                    )}
+                  </strong>
+
+                  ·
+
+                  ${escapeHtml(
+                    request.promoterCode ||
+                    ""
+                  )}
+
+                </div>
+
+              </div>
+
+
+              <span
+                class="badge ${
+                  escapeHtml(
+                    request.status
+                  )
+                }"
+              >
+
+                ${escapeHtml(
+                  request.status
+                )}
+
+              </span>
+
+
+            </div>
+
+
+
+            <div class="plan-stats">
+
+
+              <div class="stat">
+
+                <div class="muted">
+                  Price
+                </div>
+
+                <strong>
+
+                  ${money(
+                    request.priceCents,
+                    request.currency
+                  )}
+
+                  /
+
+                  ${escapeHtml(
+                    request.billingInterval
+                  )}
+
+                </strong>
+
+              </div>
+
+
+              <div class="stat">
+
+                <div class="muted">
+                  Included
+                </div>
+
+                <strong>
+                  ${hours} hours
+                </strong>
+
+              </div>
+
+
+              <div class="stat">
+
+                <div class="muted">
+                  Viewer Limit
+                </div>
+
+                <strong>
+
+                  ${Number(
+                    request.viewerLimit ||
+                    0
+                  )}
+
+                </strong>
+
+              </div>
+
+
+              <div class="stat">
+
+                <div class="muted">
+                  Plan Code
+                </div>
+
+                <strong>
+
+                  ${escapeHtml(
+                    request.planCode
+                  )}
+
+                </strong>
+
+              </div>
+
+
+            </div>
+
+
+
+            <div class="field">
+
+              <label>
+                Description
+              </label>
+
+              <div class="muted">
+
+                ${escapeHtml(
+                  request.description ||
+                  "No description."
+                )}
+
+              </div>
+
+            </div>
+
+
+
+            <div class="field">
+
+              <label>
+                Features
+              </label>
+
+              ${planFeaturesHtml(
+                request.features
+              )}
+
+            </div>
+
+
+
+            ${
+              request.note
+                ? `
+
+                  <div class="field">
+
+                    <label>
+                      Promoter Note
+                    </label>
+
+                    <div class="muted">
+
+                      ${escapeHtml(
+                        request.note
+                      )}
+
+                    </div>
+
+                  </div>
+
+                `
+                : ""
+            }
+
+
+
+            ${
+              pending
+                ? `
+
+                  <div class="review-box">
+
+
+                    <div class="field">
+
+                      <label>
+                        Approved Plan Name
+                      </label>
+
+                      <input
+                        id="review-name-${Number(
+                          request.id
+                        )}"
+                        value="${escapeHtml(
+                          request.planName
+                        )}"
+                      >
+
+                    </div>
+
+
+                    <div class="field">
+
+                      <label>
+                        Approved Plan Code
+                      </label>
+
+                      <input
+                        id="review-code-${Number(
+                          request.id
+                        )}"
+                        value="${escapeHtml(
+                          request.planCode
+                        )}"
+                      >
+
+                    </div>
+
+
+                    <div class="field">
+
+                      <label>
+                        Price
+                      </label>
+
+                      <input
+                        id="review-price-${Number(
+                          request.id
+                        )}"
+                        type="number"
+                        min="0"
+                        step=".01"
+                        value="${(
+                          Number(
+                            request.priceCents ||
+                            0
+                          ) /
+                          100
+                        ).toFixed(2)}"
+                      >
+
+                    </div>
+
+
+                    <div class="field">
+
+                      <label>
+                        Billing
+                      </label>
+
+                      <select
+                        id="review-billing-${Number(
+                          request.id
+                        )}"
+                      >
+
+                        <option
+                          value="month"
+                          ${
+                            request.billingInterval ===
+                            "month"
+                              ? "selected"
+                              : ""
+                          }
+                        >
+                          Monthly
+                        </option>
+
+                        <option
+                          value="year"
+                          ${
+                            request.billingInterval ===
+                            "year"
+                              ? "selected"
+                              : ""
+                          }
+                        >
+                          Annual
+                        </option>
+
+                      </select>
+
+                    </div>
+
+
+                    <div class="field">
+
+                      <label>
+                        Included Hours
+                      </label>
+
+                      <input
+                        id="review-hours-${Number(
+                          request.id
+                        )}"
+                        type="number"
+                        min="0"
+                        step=".5"
+                        value="${hours}"
+                      >
+
+                    </div>
+
+
+                    <div class="field">
+
+                      <label>
+                        Viewer Limit
+                      </label>
+
+                      <input
+                        id="review-viewers-${Number(
+                          request.id
+                        )}"
+                        type="number"
+                        min="1"
+                        value="${Number(
+                          request.viewerLimit ||
+                          1
+                        )}"
+                      >
+
+                    </div>
+
+
+                    <div class="field full">
+
+                      <label>
+                        Admin Feedback
+                      </label>
+
+                      <textarea
+                        id="review-feedback-${Number(
+                          request.id
+                        )}"
+                        placeholder="Optional message to promoter..."
+                      ></textarea>
+
+                    </div>
+
+
+                  </div>
+
+
+                  <div class="actions">
+
+
+                    <button
+                      class="red"
+                      type="button"
+                      onclick="reviewPlan(
+                        ${Number(
+                          request.id
+                        )},
+                        'reject'
+                      )"
+                    >
+                      Reject
+                    </button>
+
+
+                    <button
+                      class="green"
+                      type="button"
+                      onclick="reviewPlan(
+                        ${Number(
+                          request.id
+                        )},
+                        'approve'
+                      )"
+                    >
+                      Approve Plan
+                    </button>
+
+
+                  </div>
+
+
+                  <div
+                    id="review-message-${Number(
+                      request.id
+                    )}"
+                    class="message"
+                  ></div>
+
+                `
+                : `
+
+                  ${
+                    request.adminFeedback
+                      ? `
+
+                        <div class="field">
+
+                          <label>
+                            Admin Feedback
+                          </label>
+
+                          <div class="muted">
+
+                            ${escapeHtml(
+                              request.adminFeedback
+                            )}
+
+                          </div>
+
+                        </div>
+
+                      `
+                      : ""
+                  }
+
+                `
+            }
+
+
+          </div>
+
+        `;
+
+      }
+    )
+    .join("");
+}
+
+
+
+async function reviewPlan(
+  requestId,
+  action
+){
+
+  const message =
+    document.getElementById(
+      "review-message-" +
+      requestId
+    );
+
+
+  message.className =
+    "message";
+
+  message.textContent =
+    "";
+
+
+  try{
+
+
+    const body = {
+
+      requestId,
+
+      action,
+
+      adminFeedback:
+        document
+          .getElementById(
+            "review-feedback-" +
+            requestId
+          )
+          ?.value
+          .trim() ||
+        ""
+    };
+
+
+    if(
+      action ===
+      "approve"
+    ){
+
+      body.planName =
+        document
+          .getElementById(
+            "review-name-" +
+            requestId
+          )
+          .value
+          .trim();
+
+
+      body.planCode =
+        document
+          .getElementById(
+            "review-code-" +
+            requestId
+          )
+          .value
+          .trim();
+
+
+      body.priceCents =
+        Math.round(
+          Number(
+            document
+              .getElementById(
+                "review-price-" +
+                requestId
+              )
+              .value ||
+            0
+          ) *
+          100
+        );
+
+
+      body.billingInterval =
+        document
+          .getElementById(
+            "review-billing-" +
+            requestId
+          )
+          .value;
+
+
+      body.includedMinutes =
+        Math.round(
+          Number(
+            document
+              .getElementById(
+                "review-hours-" +
+                requestId
+              )
+              .value ||
+            0
+          ) *
+          60
+        );
+
+
+      body.viewerLimit =
+        Number(
+          document
+            .getElementById(
+              "review-viewers-" +
+              requestId
+            )
+            .value ||
+          1
+        );
+    }
+
+
+    const response =
+      await api(
+        "/promoter-admin/plan-request-review",
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify(
+              body
+            )
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if(!response.ok){
+
+      throw new Error(
+        data.error ||
+        "Unable to review plan."
+      );
+    }
+
+
+    message.textContent =
+      action ===
+      "approve"
+        ? "✓ Plan approved."
+        : "✓ Plan rejected.";
+
+
+    message.className =
+      "message good";
+
+
+    setTimeout(
+      async () => {
+
+        await loadPlanRequests();
+
+        await loadPromoters();
+
+      },
+      600
+    );
+
+
+  }catch(error){
+
+
+    message.textContent =
+      error.message ||
+      "Unable to review plan.";
+
+
+    message.className =
+      "message bad";
+  }
+}
+
 
 
 async function createPromoter(){
@@ -1091,38 +2038,44 @@ async function createPromoter(){
       "createButton"
     );
 
+
   const message =
     document.getElementById(
       "createMessage"
     );
+
 
   const inviteBox =
     document.getElementById(
       "inviteBox"
     );
 
+
   button.disabled =
     true;
+
 
   button.textContent =
     "Creating...";
 
+
   message.className =
     "message";
 
-  message.textContent =
-    "";
 
   inviteBox.classList.remove(
     "show"
   );
 
+
   try{
+
 
     const response =
       await api(
         "/promoter-admin/promoter-create",
         {
+
           method:
             "POST",
 
@@ -1198,12 +2151,15 @@ async function createPromoter(){
                   )
                   .value
                   .trim()
+
             })
         }
       );
 
+
     const data =
       await response.json();
+
 
     if(!response.ok){
 
@@ -1213,43 +2169,57 @@ async function createPromoter(){
       );
     }
 
+
     const inviteUrl =
       location.origin +
-      "/promoter/?invite=" +
+      "/promoter/index.html?invite=" +
       encodeURIComponent(
         data.inviteToken
       );
 
-    document.getElementById(
-      "inviteLink"
-    ).value =
-      inviteUrl;
+
+    document
+      .getElementById(
+        "inviteLink"
+      )
+      .value =
+        inviteUrl;
+
 
     inviteBox.classList.add(
       "show"
     );
 
+
     message.textContent =
       "✓ Promoter created.";
+
 
     message.className =
       "message good";
 
+
     await loadPromoters();
 
+
   }catch(error){
+
 
     message.textContent =
       error.message ||
       "Unable to create promoter.";
 
+
     message.className =
       "message bad";
 
+
   }finally{
+
 
     button.disabled =
       false;
+
 
     button.textContent =
       "Create Promoter";
@@ -1257,14 +2227,49 @@ async function createPromoter(){
 }
 
 
+
+async function showAdmin(){
+
+  hideAllViews();
+
+
+  Clerk.mountUserButton(
+    document.getElementById(
+      "userButton"
+    )
+  );
+
+
+  await Promise.all([
+
+    loadPromoters(),
+
+    loadPlanRequests()
+
+  ]);
+
+
+  document
+    .getElementById(
+      "shell"
+    )
+    .style.display =
+      "block";
+}
+
+
+
 async function start(){
 
   try{
 
+
     await Clerk.load();
+
 
     const token =
       await getToken();
+
 
     if(!token){
 
@@ -1273,176 +2278,38 @@ async function start(){
       return;
     }
 
+
     await verifyAdmin();
+
 
     await showAdmin();
 
+
   }catch(error){
+
 
     console.error(
       "Promoter admin startup failed:",
       error
     );
 
+
     hideAllViews();
 
-    document.getElementById(
-      "loading"
-    ).style.display =
-      "flex";
 
-    document.getElementById(
-      "loading"
-    ).innerHTML = `
-
-      <div>
-
-        <div
-          style="
-            font-size:25px;
-            font-weight:900;
-            margin-bottom:10px;
-          "
-        >
-          Administrator Access Required
-        </div>
-
-        <div class="muted">
-          ${escapeHtml(
-            error.message
-          )}
-        </div>
-
-        <button
-          type="button"
-          class="secondary"
-          style="margin-top:18px;"
-          onclick="location.reload()"
-        >
-          Try Again
-        </button>
-
-      </div>
-    `;
-  }
-}
-
-
-document.getElementById(
-  "createButton"
-).addEventListener(
-  "click",
-  createPromoter
-);
-
-
-document.getElementById(
-  "copyInviteButton"
-).addEventListener(
-  "click",
-  async function(){
-
-    const value =
-      document.getElementById(
-        "inviteLink"
-      ).value;
-
-    if(!value){
-      return;
-    }
-
-    await navigator
-      .clipboard
-      .writeText(
-        value
-      );
-
-    this.textContent =
-      "✓ Copied";
-
-    setTimeout(
-      () => {
-
-        this.textContent =
-          "Copy Invite Link";
-
-      },
-      1200
-    );
-  }
-);
-
-
-/*
-=========================================================
-WATCH CLERK SESSION CHANGES
-
-When sign-in completes inside this workers.dev page,
-reload this same page and enter the admin dashboard.
-=========================================================
-*/
-
-function installClerkListener(){
-
-  try{
-
-    Clerk.addListener(
-      async state => {
-
-        if(
-          state?.user &&
-          document.getElementById(
-            "loginView"
-          ).style.display !==
-            "none"
-        ){
-
-          const token =
-            await getToken();
-
-          if(token){
-
-            location.replace(
-              location.pathname +
-              location.search
-            );
-          }
-        }
-      }
-    );
-
-  }catch(error){
-
-    console.error(
-      "Unable to install Clerk listener:",
-      error
-    );
-  }
-}
-
-
-window.addEventListener(
-  "load",
-  async function(){
-
-    try{
-
-      await Clerk.load();
-
-      installClerkListener();
-
-      await start();
-
-    }catch(error){
-
-      console.error(
-        "Promoter admin load failed:",
-        error
-      );
-
-      document.getElementById(
+    document
+      .getElementById(
         "loading"
-      ).innerHTML = `
+      )
+      .style.display =
+        "flex";
+
+
+    document
+      .getElementById(
+        "loading"
+      )
+      .innerHTML = `
 
         <div>
 
@@ -1453,23 +2320,176 @@ window.addEventListener(
               margin-bottom:10px;
             "
           >
-            Unable to Load Sign In
+            Administrator Access Required
           </div>
 
           <div class="muted">
+
             ${escapeHtml(
-              error.message ||
-              "Clerk could not initialize."
+              error.message
             )}
+
           </div>
 
         </div>
+
       `;
+  }
+}
+
+
+
+document
+  .getElementById(
+    "createButton"
+  )
+  .addEventListener(
+    "click",
+    createPromoter
+  );
+
+
+
+document
+  .getElementById(
+    "copyInviteButton"
+  )
+  .addEventListener(
+    "click",
+    async function(){
+
+
+      const value =
+        document
+          .getElementById(
+            "inviteLink"
+          )
+          .value;
+
+
+      if(!value){
+
+        return;
+      }
+
+
+      await navigator
+        .clipboard
+        .writeText(
+          value
+        );
+
+
+      this.textContent =
+        "✓ Copied";
+
+
+      setTimeout(
+        () => {
+
+          this.textContent =
+            "Copy Invite Link";
+
+        },
+        1200
+      );
+
     }
+  );
+
+
+
+function installClerkListener(){
+
+  Clerk.addListener(
+    async state => {
+
+
+      if(
+        state?.user &&
+        document
+          .getElementById(
+            "loginView"
+          )
+          .style
+          .display !==
+          "none"
+      ){
+
+        location.reload();
+      }
+
+    }
+  );
+}
+
+
+
+window.addEventListener(
+  "load",
+  async function(){
+
+
+    try{
+
+
+      await Clerk.load();
+
+
+      installClerkListener();
+
+
+      await start();
+
+
+    }catch(error){
+
+
+      console.error(
+        "Promoter admin load failed:",
+        error
+      );
+
+
+      document
+        .getElementById(
+          "loading"
+        )
+        .innerHTML = `
+
+          <div>
+
+            <div
+              style="
+                font-size:25px;
+                font-weight:900;
+                margin-bottom:10px;
+              "
+            >
+              Unable to Load
+            </div>
+
+            <div class="muted">
+
+              ${escapeHtml(
+                error.message ||
+                "Unable to initialize."
+              )}
+
+            </div>
+
+          </div>
+
+        `;
+    }
+
   }
 );
 
+
 </script>
 
+
 </body>
+
 </html>
