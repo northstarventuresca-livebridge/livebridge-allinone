@@ -19,6 +19,15 @@ const REDIRECTS = new Map([
   ["/livebridge-privacy/", "/privacy/"],
   ["/livebridge-terms", "/terms/"],
   ["/livebridge-terms/", "/terms/"],
+
+  [
+    "/employee",
+    "https://livebridge-promoter-frontend-test.northstarventures-ca.workers.dev/promoter/index.html"
+  ],
+  [
+    "/employee/",
+    "https://livebridge-promoter-frontend-test.northstarventures-ca.workers.dev/promoter/index.html"
+  ],
 ]);
 
 const PAGES = new Map([
@@ -45,14 +54,27 @@ const PAGES = new Map([
   ["/offer/", "/offer/index.html"],
 ]);
 
-function preserveQueryRedirect(requestUrl, targetPath) {
-  const source = new URL(requestUrl);
-  const target = new URL(targetPath, source.origin);
-  target.search = source.search;
+function preserveQueryRedirect(
+  requestUrl,
+  targetPath
+) {
+  const source =
+    new URL(
+      requestUrl
+    );
+
+  const target =
+    new URL(
+      targetPath,
+      source.origin
+    );
+
+  target.search =
+    source.search;
 
   return Response.redirect(
     target.toString(),
-    301
+    302
   );
 }
 
