@@ -3,6 +3,10 @@
   "main": "./router.js",
   "compatibility_date": "2026-08-29",
 
+  "compatibility_flags": [
+    "global_fetch_strictly_public"
+  ],
+
   "durable_objects": {
     "bindings": [
       {
