@@ -50,6 +50,69 @@ body{
   }
 }
 
+.login-shell{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+}
+
+.login-layout{
+  width:min(1000px,100%);
+  display:grid;
+  grid-template-columns:1fr 440px;
+  gap:45px;
+  align-items:center;
+}
+
+.login-brand{
+  padding:20px;
+}
+
+.login-logo{
+  font-size:46px;
+  font-weight:900;
+  margin-bottom:8px;
+}
+
+.login-logo span{
+  background:linear-gradient(90deg,#35d3bd,#2996ff,#9f4cff);
+  -webkit-background-clip:text;
+  color:transparent;
+}
+
+.login-tagline{
+  font-size:21px;
+  font-weight:900;
+  margin-bottom:12px;
+}
+
+.login-description{
+  color:#91a8c0;
+  font-size:14px;
+  line-height:1.65;
+  max-width:500px;
+}
+
+.login-card{
+  min-height:520px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  border-radius:22px;
+  background:rgba(255,255,255,.045);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 30px 80px rgba(0,0,0,.25);
+}
+
+#signInMount{
+  width:100%;
+  display:flex;
+  justify-content:center;
+}
+
 .shell{
   width:min(1180px,calc(100% - 32px));
   margin:auto;
@@ -155,6 +218,11 @@ button{
   font-weight:900;
 }
 
+button:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
 .primary{
   background:linear-gradient(135deg,#288cf8,#7046df);
 }
@@ -224,6 +292,11 @@ button{
   font-weight:900;
 }
 
+.badge.off{
+  background:rgba(239,68,68,.12);
+  color:#f87171;
+}
+
 .empty{
   padding:25px 0;
   color:#8298af;
@@ -254,6 +327,28 @@ button{
 }
 
 @media(max-width:760px){
+
+  .login-layout{
+    grid-template-columns:1fr;
+    gap:12px;
+  }
+
+  .login-brand{
+    text-align:center;
+  }
+
+  .login-logo{
+    font-size:36px;
+  }
+
+  .login-description{
+    margin:auto;
+  }
+
+  .login-card{
+    min-height:440px;
+    padding:10px;
+  }
 
   .shell{
     width:min(100% - 20px,1180px);
@@ -289,7 +384,9 @@ button{
 <div id="app">
 
   <div id="loading" class="loading">
+
     <div>
+
       <div class="spinner"></div>
 
       <div style="font-size:22px;font-weight:900;">
@@ -299,15 +396,59 @@ button{
       <div class="muted" style="margin-top:5px;">
         Loading Promoter Administration...
       </div>
+
     </div>
+
   </div>
 
 
-  <div id="shell" class="shell" style="display:none;">
+  <div
+    id="loginView"
+    class="login-shell"
+    style="display:none;"
+  >
+
+    <div class="login-layout">
+
+      <div class="login-brand">
+
+        <div class="login-logo">
+          Live<span>Bridge</span>
+        </div>
+
+        <div class="login-tagline">
+          Promoter Administration
+        </div>
+
+        <div class="login-description">
+          Sign in with your existing LiveBridge administrator account.
+          This test portal uses the isolated promoter development environment.
+        </div>
+
+      </div>
+
+
+      <div class="login-card">
+
+        <div id="signInMount"></div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div
+    id="shell"
+    class="shell"
+    style="display:none;"
+  >
 
     <div class="topbar">
 
       <div>
+
         <div class="logo">
           Live<span>Bridge</span>
         </div>
@@ -315,6 +456,7 @@ button{
         <div class="subtitle">
           Promoter Administration — Test Environment
         </div>
+
       </div>
 
       <div id="userButton"></div>
@@ -336,47 +478,71 @@ button{
       <div class="grid">
 
         <div class="field">
-          <label>Promoter Name</label>
+
+          <label>
+            Promoter Name
+          </label>
+
           <input
             id="displayName"
             type="text"
             placeholder="Ryan Wyers"
           >
+
         </div>
 
 
         <div class="field">
-          <label>Email</label>
+
+          <label>
+            Email
+          </label>
+
           <input
             id="email"
             type="email"
             placeholder="name@example.com"
           >
+
         </div>
 
 
         <div class="field">
-          <label>Phone</label>
+
+          <label>
+            Phone
+          </label>
+
           <input
             id="phone"
             type="text"
             placeholder="780-555-1234"
           >
+
         </div>
 
 
         <div class="field">
-          <label>Promoter Code</label>
+
+          <label>
+            Promoter Code
+          </label>
+
           <input
             id="promoterCode"
             type="text"
             placeholder="RYAN01"
           >
+
         </div>
 
 
         <div class="field">
-          <label>Monthly Commission %</label>
+
+          <label>
+            Monthly Commission %
+          </label>
+
           <input
             id="monthlyCommission"
             type="number"
@@ -385,11 +551,16 @@ button{
             step="0.1"
             value="25"
           >
+
         </div>
 
 
         <div class="field">
-          <label>Annual Commission %</label>
+
+          <label>
+            Annual Commission %
+          </label>
+
           <input
             id="annualCommission"
             type="number"
@@ -398,11 +569,16 @@ button{
             step="0.1"
             value="15"
           >
+
         </div>
 
 
         <div class="field">
-          <label>Commission Hold Days</label>
+
+          <label>
+            Commission Hold Days
+          </label>
+
           <input
             id="holdDays"
             type="number"
@@ -411,15 +587,21 @@ button{
             step="1"
             value="30"
           >
+
         </div>
 
 
         <div class="field full">
-          <label>Private Admin Notes</label>
+
+          <label>
+            Private Admin Notes
+          </label>
+
           <textarea
             id="notes"
             placeholder="Optional notes..."
           ></textarea>
+
         </div>
 
       </div>
@@ -453,7 +635,10 @@ button{
           Promoter Invitation Ready
         </div>
 
-        <div class="muted" style="margin-top:4px;">
+        <div
+          class="muted"
+          style="margin-top:4px;"
+        >
           Send this secure link to the promoter.
         </div>
 
@@ -492,9 +677,11 @@ button{
       </div>
 
       <div id="promoters">
+
         <div class="empty">
           Loading promoters...
         </div>
+
       </div>
 
     </div>
@@ -518,7 +705,11 @@ const API =
   "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev";
 
 
-async function getToken(){
+let signInMounted =
+  false;
+
+
+async function getSession(){
 
   const sessions =
     Clerk.client?.sessions ||
@@ -560,11 +751,37 @@ async function getToken(){
       Clerk.session?.id !==
       session.id
     ){
+
       await Clerk.setActive({
         session:
           session.id
       });
     }
+
+    return session;
+
+  }catch(error){
+
+    console.error(
+      "Promoter admin session error:",
+      error
+    );
+
+    return null;
+  }
+}
+
+
+async function getToken(){
+
+  const session =
+    await getSession();
+
+  if(!session){
+    return null;
+  }
+
+  try{
 
     return await session.getToken();
 
@@ -589,6 +806,7 @@ async function api(
     await getToken();
 
   if(!token){
+
     throw new Error(
       "You are not signed in."
     );
@@ -596,6 +814,7 @@ async function api(
 
   const headers = {
     ...(options.headers || {}),
+
     "Authorization":
       "Bearer " +
       token
@@ -605,6 +824,7 @@ async function api(
     options.body &&
     !headers["Content-Type"]
   ){
+
     headers["Content-Type"] =
       "application/json";
   }
@@ -633,6 +853,65 @@ function escapeHtml(
 }
 
 
+function hideAllViews(){
+
+  document.getElementById(
+    "loading"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "loginView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "shell"
+  ).style.display =
+    "none";
+}
+
+
+function showLogin(){
+
+  hideAllViews();
+
+  document.getElementById(
+    "loginView"
+  ).style.display =
+    "flex";
+
+  const mount =
+    document.getElementById(
+      "signInMount"
+    );
+
+  if(
+    !signInMounted
+  ){
+
+    Clerk.mountSignIn(
+      mount,
+      {
+        routing:
+          "hash",
+
+        appearance:{
+
+          variables:{
+            colorPrimary:
+              "#2d97ff"
+          }
+        }
+      }
+    );
+
+    signInMounted =
+      true;
+  }
+}
+
+
 async function verifyAdmin(){
 
   const response =
@@ -644,6 +923,7 @@ async function verifyAdmin(){
     await response.json();
 
   if(!response.ok){
+
     throw new Error(
       data.error ||
       "Administrator access required."
@@ -654,12 +934,34 @@ async function verifyAdmin(){
 }
 
 
+async function showAdmin(){
+
+  hideAllViews();
+
+  Clerk.mountUserButton(
+    document.getElementById(
+      "userButton"
+    )
+  );
+
+  await loadPromoters();
+
+  document.getElementById(
+    "shell"
+  ).style.display =
+    "block";
+}
+
+
 async function loadPromoters(){
 
   const box =
     document.getElementById(
       "promoters"
     );
+
+  box.innerHTML =
+    '<div class="empty">Loading promoters...</div>';
 
   const response =
     await api(
@@ -670,6 +972,7 @@ async function loadPromoters(){
     await response.json();
 
   if(!response.ok){
+
     throw new Error(
       data.error ||
       "Unable to load promoters."
@@ -691,9 +994,11 @@ async function loadPromoters(){
   box.innerHTML =
     list.map(
       promoter => `
+
         <div class="promoter-row">
 
           <div>
+
             <div class="name">
               ${escapeHtml(
                 promoter.displayName
@@ -715,23 +1020,32 @@ async function loadPromoters(){
                 ""
               )}
             </div>
+
           </div>
 
+
           <div class="mobile-hide">
+
             ${Number(
               promoter.clientCount ||
               0
             )} clients
+
           </div>
 
+
           <div class="mobile-hide">
+
             ${Number(
               promoter.pendingPlanCount ||
               0
             )} pending plans
+
           </div>
 
+
           <div class="mobile-hide">
+
             $${(
               Number(
                 promoter.unpaidCommissionCents ||
@@ -739,16 +1053,28 @@ async function loadPromoters(){
               ) /
               100
             ).toFixed(2)}
+
           </div>
 
+
           <div>
-            <span class="badge">
+
+            <span
+              class="badge ${
+                promoter.active
+                  ? ""
+                  : "off"
+              }"
+            >
+
               ${
                 promoter.active
                   ? "Active"
                   : "Disabled"
               }
+
             </span>
+
           </div>
 
         </div>
@@ -783,6 +1109,9 @@ async function createPromoter(){
 
   message.className =
     "message";
+
+  message.textContent =
+    "";
 
   inviteBox.classList.remove(
     "show"
@@ -877,12 +1206,12 @@ async function createPromoter(){
       await response.json();
 
     if(!response.ok){
+
       throw new Error(
         data.error ||
         "Unable to create promoter."
       );
     }
-
 
     const inviteUrl =
       location.origin +
@@ -891,17 +1220,14 @@ async function createPromoter(){
         data.inviteToken
       );
 
-
     document.getElementById(
       "inviteLink"
     ).value =
       inviteUrl;
 
-
     inviteBox.classList.add(
       "show"
     );
-
 
     message.textContent =
       "✓ Promoter created.";
@@ -909,9 +1235,7 @@ async function createPromoter(){
     message.className =
       "message good";
 
-
     await loadPromoters();
-
 
   }catch(error){
 
@@ -929,6 +1253,77 @@ async function createPromoter(){
 
     button.textContent =
       "Create Promoter";
+  }
+}
+
+
+async function start(){
+
+  try{
+
+    await Clerk.load();
+
+    const token =
+      await getToken();
+
+    if(!token){
+
+      showLogin();
+
+      return;
+    }
+
+    await verifyAdmin();
+
+    await showAdmin();
+
+  }catch(error){
+
+    console.error(
+      "Promoter admin startup failed:",
+      error
+    );
+
+    hideAllViews();
+
+    document.getElementById(
+      "loading"
+    ).style.display =
+      "flex";
+
+    document.getElementById(
+      "loading"
+    ).innerHTML = `
+
+      <div>
+
+        <div
+          style="
+            font-size:25px;
+            font-weight:900;
+            margin-bottom:10px;
+          "
+        >
+          Administrator Access Required
+        </div>
+
+        <div class="muted">
+          ${escapeHtml(
+            error.message
+          )}
+        </div>
+
+        <button
+          type="button"
+          class="secondary"
+          style="margin-top:18px;"
+          onclick="location.reload()"
+        >
+          Try Again
+        </button>
+
+      </div>
+    `;
   }
 }
 
@@ -956,7 +1351,8 @@ document.getElementById(
       return;
     }
 
-    await navigator.clipboard
+    await navigator
+      .clipboard
       .writeText(
         value
       );
@@ -966,13 +1362,63 @@ document.getElementById(
 
     setTimeout(
       () => {
+
         this.textContent =
           "Copy Invite Link";
+
       },
       1200
     );
   }
 );
+
+
+/*
+=========================================================
+WATCH CLERK SESSION CHANGES
+
+When sign-in completes inside this workers.dev page,
+reload this same page and enter the admin dashboard.
+=========================================================
+*/
+
+function installClerkListener(){
+
+  try{
+
+    Clerk.addListener(
+      async state => {
+
+        if(
+          state?.user &&
+          document.getElementById(
+            "loginView"
+          ).style.display !==
+            "none"
+        ){
+
+          const token =
+            await getToken();
+
+          if(token){
+
+            location.replace(
+              location.pathname +
+              location.search
+            );
+          }
+        }
+      }
+    );
+
+  }catch(error){
+
+    console.error(
+      "Unable to install Clerk listener:",
+      error
+    );
+  }
+}
 
 
 window.addEventListener(
@@ -983,70 +1429,37 @@ window.addEventListener(
 
       await Clerk.load();
 
-      const token =
-        await getToken();
+      installClerkListener();
 
-      if(!token){
-
-        window.location.href =
-          "https://livebridge.ca/account/?returnTo=" +
-          encodeURIComponent(
-            location.href
-          );
-
-        return;
-      }
-
-
-      await verifyAdmin();
-
-
-      Clerk.mountUserButton(
-        document.getElementById(
-          "userButton"
-        )
-      );
-
-
-      await loadPromoters();
-
-
-      document.getElementById(
-        "loading"
-      ).style.display =
-        "none";
-
-
-      document.getElementById(
-        "shell"
-      ).style.display =
-        "block";
-
+      await start();
 
     }catch(error){
 
       console.error(
-        "Promoter admin failed:",
+        "Promoter admin load failed:",
         error
       );
-
 
       document.getElementById(
         "loading"
       ).innerHTML = `
+
         <div>
 
-          <div style="
-            font-size:25px;
-            font-weight:900;
-            margin-bottom:10px;
-          ">
-            Administrator Access Required
+          <div
+            style="
+              font-size:25px;
+              font-weight:900;
+              margin-bottom:10px;
+            "
+          >
+            Unable to Load Sign In
           </div>
 
           <div class="muted">
             ${escapeHtml(
-              error.message
+              error.message ||
+              "Clerk could not initialize."
             )}
           </div>
 
