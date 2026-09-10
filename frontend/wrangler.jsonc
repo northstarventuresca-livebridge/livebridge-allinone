@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "livebridge-production",
+  "name": "livebridge-allinone-frontend-test",
   "main": "./worker.js",
   "compatibility_date": "2026-09-06",
   "assets": {
