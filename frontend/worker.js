@@ -41,44 +41,125 @@ const PAGES = new Map([
   ["/privacy/", "/privacy/index.html"],
   ["/terms", "/terms/index.html"],
   ["/terms/", "/terms/index.html"],
+  ["/offer", "/offer/index.html"],
+  ["/offer/", "/offer/index.html"],
 ]);
 
 function preserveQueryRedirect(requestUrl, targetPath) {
   const source = new URL(requestUrl);
   const target = new URL(targetPath, source.origin);
   target.search = source.search;
-  return Response.redirect(target.toString(), 301);
+
+  return Response.redirect(
+    target.toString(),
+    301
+  );
 }
 
-async function fetchExactAsset(request, env, assetPath) {
-  const assetUrl = new URL(request.url);
-  assetUrl.pathname = assetPath;
-  return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+async function fetchExactAsset(
+  request,
+  env,
+  assetPath
+) {
+  const assetUrl =
+    new URL(
+      request.url
+    );
+
+  assetUrl.pathname =
+    assetPath;
+
+  return env.ASSETS.fetch(
+    new Request(
+      assetUrl.toString(),
+      request
+    )
+  );
 }
 
 export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const path = url.pathname;
+  async fetch(
+    request,
+    env
+  ) {
+    const url =
+      new URL(
+        request.url
+      );
 
-    const redirectTarget = REDIRECTS.get(path);
-    if (redirectTarget) {
-      return preserveQueryRedirect(request.url, redirectTarget);
+    const path =
+      url.pathname;
+
+    const redirectTarget =
+      REDIRECTS.get(
+        path
+      );
+
+    if(
+      redirectTarget
+    ) {
+      return preserveQueryRedirect(
+        request.url,
+        redirectTarget
+      );
     }
 
-    const assetPath = PAGES.get(path);
-    if (assetPath) {
-      return fetchExactAsset(request, env, assetPath);
+    const assetPath =
+      PAGES.get(
+        path
+      );
+
+    if(
+      assetPath
+    ) {
+      return fetchExactAsset(
+        request,
+        env,
+        assetPath
+      );
     }
 
-    // Allow exact static files if any are added later.
-    const direct = await env.ASSETS.fetch(request);
-    if (direct.status !== 404) return direct;
+    // Private offer route:
+    // /offer/<secure-token>
+    if(
+      path.startsWith(
+        "/offer/"
+      ) &&
+      path.length >
+        "/offer/".length
+    ) {
+      return fetchExactAsset(
+        request,
+        env,
+        "/offer/index.html"
+      );
+    }
 
-    const notFound = await fetchExactAsset(request, env, "/404.html");
-    return new Response(notFound.body, {
-      status: 404,
-      headers: notFound.headers,
-    });
+    const direct =
+      await env.ASSETS.fetch(
+        request
+      );
+
+    if(
+      direct.status !==
+      404
+    ) {
+      return direct;
+    }
+
+    const notFound =
+      await fetchExactAsset(
+        request,
+        env,
+        "/404.html"
+      );
+
+    return new Response(
+      notFound.body,
+      {
+        status:404,
+        headers:notFound.headers,
+      }
+    );
   },
 };
