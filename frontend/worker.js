@@ -43,12 +43,32 @@ const PAGES = new Map([
   ["/terms/", "/terms/index.html"],
   ["/offer", "/offer/index.html"],
   ["/offer/", "/offer/index.html"],
+
+  ["/promoter-admin", "/promoter-admin/index.html"],
+  ["/promoter-admin/", "/promoter-admin/index.html"],
+
+  ["/promoter", "/promoter/index.html"],
+  ["/promoter/", "/promoter/index.html"],
 ]);
 
-function preserveQueryRedirect(requestUrl, targetPath) {
-  const source = new URL(requestUrl);
-  const target = new URL(targetPath, source.origin);
-  target.search = source.search;
+function preserveQueryRedirect(
+  requestUrl,
+  targetPath
+) {
+
+  const source =
+    new URL(
+      requestUrl
+    );
+
+  const target =
+    new URL(
+      targetPath,
+      source.origin
+    );
+
+  target.search =
+    source.search;
 
   return Response.redirect(
     target.toString(),
@@ -61,6 +81,7 @@ async function fetchExactAsset(
   env,
   assetPath
 ) {
+
   const assetUrl =
     new URL(
       request.url
@@ -78,10 +99,12 @@ async function fetchExactAsset(
 }
 
 export default {
+
   async fetch(
     request,
     env
   ) {
+
     const url =
       new URL(
         request.url
@@ -98,6 +121,7 @@ export default {
     if(
       redirectTarget
     ) {
+
       return preserveQueryRedirect(
         request.url,
         redirectTarget
@@ -112,6 +136,7 @@ export default {
     if(
       assetPath
     ) {
+
       return fetchExactAsset(
         request,
         env,
@@ -119,8 +144,13 @@ export default {
       );
     }
 
-    // Private offer route:
-    // /offer/<secure-token>
+    /*
+    =====================================================
+    PRIVATE OFFER ROUTE
+    /offer/<secure-token>
+    =====================================================
+    */
+
     if(
       path.startsWith(
         "/offer/"
@@ -128,6 +158,7 @@ export default {
       path.length >
         "/offer/".length
     ) {
+
       return fetchExactAsset(
         request,
         env,
@@ -142,8 +173,9 @@ export default {
 
     if(
       direct.status !==
-      404
+        404
     ) {
+
       return direct;
     }
 
@@ -157,9 +189,12 @@ export default {
     return new Response(
       notFound.body,
       {
-        status:404,
-        headers:notFound.headers,
+        status:
+          404,
+
+        headers:
+          notFound.headers
       }
     );
-  },
+  }
 };
