@@ -1,4 +1,4 @@
-# LiveBridge Independent Site
+# LiveBridge Independent Site :)
 
 This repository contains ONLY the independent static LiveBridge website. 
 
