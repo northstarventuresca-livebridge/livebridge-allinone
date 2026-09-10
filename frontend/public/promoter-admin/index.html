@@ -1,0 +1,1062 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiveBridge Promoter Admin</title>
+
+<style>
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  background:#07111f;
+  color:#fff;
+  font-family:Arial,Helvetica,sans-serif;
+}
+
+#app{
+  min-height:100vh;
+  background:
+    radial-gradient(circle at top left,#153969 0%,transparent 30%),
+    radial-gradient(circle at top right,#321455 0%,transparent 30%),
+    #07111f;
+}
+
+.loading{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:30px;
+}
+
+.spinner{
+  width:46px;
+  height:46px;
+  border:4px solid rgba(255,255,255,.12);
+  border-top-color:#2d97ff;
+  border-radius:50%;
+  margin:0 auto 14px;
+  animation:spin .8s linear infinite;
+}
+
+@keyframes spin{
+  to{
+    transform:rotate(360deg);
+  }
+}
+
+.shell{
+  width:min(1180px,calc(100% - 32px));
+  margin:auto;
+  padding:28px 0 60px;
+}
+
+.topbar{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+  margin-bottom:22px;
+}
+
+.logo{
+  font-size:28px;
+  font-weight:900;
+}
+
+.logo span{
+  background:linear-gradient(90deg,#35d3bd,#2996ff,#9f4cff);
+  -webkit-background-clip:text;
+  color:transparent;
+}
+
+.subtitle{
+  color:#849ab3;
+  font-size:12px;
+  margin-top:4px;
+}
+
+.card{
+  border-radius:18px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.09);
+  padding:20px;
+  margin-bottom:16px;
+}
+
+.title{
+  font-size:20px;
+  font-weight:900;
+  margin-bottom:5px;
+}
+
+.muted{
+  color:#8da2ba;
+  font-size:12px;
+  line-height:1.55;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:13px;
+  margin-top:18px;
+}
+
+.field{
+  margin-bottom:2px;
+}
+
+.field.full{
+  grid-column:1 / -1;
+}
+
+.field label{
+  display:block;
+  color:#8ba0b8;
+  font-size:11px;
+  font-weight:800;
+  margin-bottom:6px;
+}
+
+.field input,
+.field textarea{
+  width:100%;
+  padding:11px 12px;
+  border-radius:9px;
+  border:1px solid rgba(255,255,255,.11);
+  background:#0e1c2d;
+  color:white;
+}
+
+.field textarea{
+  min-height:90px;
+  resize:vertical;
+}
+
+.actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:17px;
+}
+
+button{
+  border:none;
+  border-radius:10px;
+  padding:11px 15px;
+  cursor:pointer;
+  color:white;
+  font-weight:900;
+}
+
+.primary{
+  background:linear-gradient(135deg,#288cf8,#7046df);
+}
+
+.green{
+  background:#29d783;
+  color:#04150d;
+}
+
+.secondary{
+  background:#14253a;
+  border:1px solid rgba(255,255,255,.12);
+}
+
+.message{
+  display:none;
+  margin-top:14px;
+  padding:11px 13px;
+  border-radius:10px;
+  font-size:12px;
+}
+
+.message.good{
+  display:block;
+  background:rgba(34,197,94,.10);
+  color:#60ef9b;
+}
+
+.message.bad{
+  display:block;
+  background:rgba(239,68,68,.10);
+  color:#f87171;
+}
+
+.promoter-row{
+  display:grid;
+  grid-template-columns:1.2fr .8fr .7fr .7fr auto;
+  gap:12px;
+  align-items:center;
+  padding:14px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);
+  font-size:12px;
+}
+
+.promoter-row:last-child{
+  border-bottom:none;
+}
+
+.name{
+  font-weight:900;
+  font-size:14px;
+}
+
+.code{
+  color:#68e5c1;
+  font-size:10px;
+  margin-top:4px;
+}
+
+.badge{
+  display:inline-block;
+  padding:5px 8px;
+  border-radius:999px;
+  background:rgba(34,197,94,.12);
+  color:#62e69d;
+  font-size:10px;
+  font-weight:900;
+}
+
+.empty{
+  padding:25px 0;
+  color:#8298af;
+  text-align:center;
+}
+
+.invite-box{
+  display:none;
+  margin-top:18px;
+  padding:18px;
+  border-radius:15px;
+  background:rgba(45,151,255,.08);
+  border:1px solid rgba(45,151,255,.25);
+}
+
+.invite-box.show{
+  display:block;
+}
+
+.invite-link{
+  width:100%;
+  margin-top:9px;
+  padding:12px;
+  border-radius:9px;
+  border:1px solid rgba(255,255,255,.11);
+  background:#071725;
+  color:white;
+}
+
+@media(max-width:760px){
+
+  .shell{
+    width:min(100% - 20px,1180px);
+    padding-top:16px;
+  }
+
+  .topbar{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .grid{
+    grid-template-columns:1fr;
+  }
+
+  .field.full{
+    grid-column:auto;
+  }
+
+  .promoter-row{
+    grid-template-columns:1fr auto;
+  }
+
+  .mobile-hide{
+    display:none;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+  <div id="loading" class="loading">
+    <div>
+      <div class="spinner"></div>
+
+      <div style="font-size:22px;font-weight:900;">
+        LiveBridge
+      </div>
+
+      <div class="muted" style="margin-top:5px;">
+        Loading Promoter Administration...
+      </div>
+    </div>
+  </div>
+
+
+  <div id="shell" class="shell" style="display:none;">
+
+    <div class="topbar">
+
+      <div>
+        <div class="logo">
+          Live<span>Bridge</span>
+        </div>
+
+        <div class="subtitle">
+          Promoter Administration — Test Environment
+        </div>
+      </div>
+
+      <div id="userButton"></div>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="title">
+        Add Promoter
+      </div>
+
+      <div class="muted">
+        Creates a promoter profile and secure invitation.
+      </div>
+
+
+      <div class="grid">
+
+        <div class="field">
+          <label>Promoter Name</label>
+          <input
+            id="displayName"
+            type="text"
+            placeholder="Ryan Wyers"
+          >
+        </div>
+
+
+        <div class="field">
+          <label>Email</label>
+          <input
+            id="email"
+            type="email"
+            placeholder="name@example.com"
+          >
+        </div>
+
+
+        <div class="field">
+          <label>Phone</label>
+          <input
+            id="phone"
+            type="text"
+            placeholder="780-555-1234"
+          >
+        </div>
+
+
+        <div class="field">
+          <label>Promoter Code</label>
+          <input
+            id="promoterCode"
+            type="text"
+            placeholder="RYAN01"
+          >
+        </div>
+
+
+        <div class="field">
+          <label>Monthly Commission %</label>
+          <input
+            id="monthlyCommission"
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value="25"
+          >
+        </div>
+
+
+        <div class="field">
+          <label>Annual Commission %</label>
+          <input
+            id="annualCommission"
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value="15"
+          >
+        </div>
+
+
+        <div class="field">
+          <label>Commission Hold Days</label>
+          <input
+            id="holdDays"
+            type="number"
+            min="0"
+            max="180"
+            step="1"
+            value="30"
+          >
+        </div>
+
+
+        <div class="field full">
+          <label>Private Admin Notes</label>
+          <textarea
+            id="notes"
+            placeholder="Optional notes..."
+          ></textarea>
+        </div>
+
+      </div>
+
+
+      <div class="actions">
+
+        <button
+          class="green"
+          id="createButton"
+          type="button"
+        >
+          Create Promoter
+        </button>
+
+      </div>
+
+
+      <div
+        id="createMessage"
+        class="message"
+      ></div>
+
+
+      <div
+        id="inviteBox"
+        class="invite-box"
+      >
+
+        <div style="font-weight:900;font-size:16px;">
+          Promoter Invitation Ready
+        </div>
+
+        <div class="muted" style="margin-top:4px;">
+          Send this secure link to the promoter.
+        </div>
+
+        <input
+          id="inviteLink"
+          class="invite-link"
+          type="text"
+          readonly
+        >
+
+        <div class="actions">
+
+          <button
+            id="copyInviteButton"
+            class="primary"
+            type="button"
+          >
+            Copy Invite Link
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="card">
+
+      <div class="title">
+        Promoters
+      </div>
+
+      <div class="muted">
+        Promoter accounts, clients and pending plan requests.
+      </div>
+
+      <div id="promoters">
+        <div class="empty">
+          Loading promoters...
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="pk_test_c3RhYmxlLXN3aW5lLTY1NTQuY2xlcmsuYWNjb3VudHMuZGV2JA"
+  src="https://stable-swine-6554.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+</script>
+
+
+<script>
+
+const API =
+  "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev";
+
+
+async function getToken(){
+
+  const sessions =
+    Clerk.client?.sessions ||
+    Clerk.client?.signedInSessions ||
+    [];
+
+  let session =
+    Clerk.session ||
+    null;
+
+  if(!session){
+
+    const lastActiveId =
+      Clerk.client?.lastActiveSessionId ||
+      "";
+
+    session =
+      sessions.find(
+        item =>
+          item.id ===
+          lastActiveId
+      ) ||
+      sessions.find(
+        item =>
+          item.status ===
+          "active"
+      ) ||
+      sessions[0] ||
+      null;
+  }
+
+  if(!session){
+    return null;
+  }
+
+  try{
+
+    if(
+      Clerk.session?.id !==
+      session.id
+    ){
+      await Clerk.setActive({
+        session:
+          session.id
+      });
+    }
+
+    return await session.getToken();
+
+  }catch(error){
+
+    console.error(
+      "Promoter admin token error:",
+      error
+    );
+
+    return null;
+  }
+}
+
+
+async function api(
+  path,
+  options={}
+){
+
+  const token =
+    await getToken();
+
+  if(!token){
+    throw new Error(
+      "You are not signed in."
+    );
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    "Authorization":
+      "Bearer " +
+      token
+  };
+
+  if(
+    options.body &&
+    !headers["Content-Type"]
+  ){
+    headers["Content-Type"] =
+      "application/json";
+  }
+
+  return fetch(
+    API + path,
+    {
+      ...options,
+      headers
+    }
+  );
+}
+
+
+function escapeHtml(
+  value
+){
+
+  return String(
+    value || ""
+  )
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+
+async function verifyAdmin(){
+
+  const response =
+    await api(
+      "/promoter-admin/me"
+    );
+
+  const data =
+    await response.json();
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      "Administrator access required."
+    );
+  }
+
+  return data;
+}
+
+
+async function loadPromoters(){
+
+  const box =
+    document.getElementById(
+      "promoters"
+    );
+
+  const response =
+    await api(
+      "/promoter-admin/promoters"
+    );
+
+  const data =
+    await response.json();
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      "Unable to load promoters."
+    );
+  }
+
+  const list =
+    data.promoters ||
+    [];
+
+  if(!list.length){
+
+    box.innerHTML =
+      '<div class="empty">No promoters created yet.</div>';
+
+    return;
+  }
+
+  box.innerHTML =
+    list.map(
+      promoter => `
+        <div class="promoter-row">
+
+          <div>
+            <div class="name">
+              ${escapeHtml(
+                promoter.displayName
+              )}
+            </div>
+
+            <div class="code">
+              ${escapeHtml(
+                promoter.promoterCode
+              )}
+            </div>
+
+            <div
+              class="muted"
+              style="margin-top:3px;"
+            >
+              ${escapeHtml(
+                promoter.email ||
+                ""
+              )}
+            </div>
+          </div>
+
+          <div class="mobile-hide">
+            ${Number(
+              promoter.clientCount ||
+              0
+            )} clients
+          </div>
+
+          <div class="mobile-hide">
+            ${Number(
+              promoter.pendingPlanCount ||
+              0
+            )} pending plans
+          </div>
+
+          <div class="mobile-hide">
+            $${(
+              Number(
+                promoter.unpaidCommissionCents ||
+                0
+              ) /
+              100
+            ).toFixed(2)}
+          </div>
+
+          <div>
+            <span class="badge">
+              ${
+                promoter.active
+                  ? "Active"
+                  : "Disabled"
+              }
+            </span>
+          </div>
+
+        </div>
+      `
+    )
+    .join("");
+}
+
+
+async function createPromoter(){
+
+  const button =
+    document.getElementById(
+      "createButton"
+    );
+
+  const message =
+    document.getElementById(
+      "createMessage"
+    );
+
+  const inviteBox =
+    document.getElementById(
+      "inviteBox"
+    );
+
+  button.disabled =
+    true;
+
+  button.textContent =
+    "Creating...";
+
+  message.className =
+    "message";
+
+  inviteBox.classList.remove(
+    "show"
+  );
+
+  try{
+
+    const response =
+      await api(
+        "/promoter-admin/promoter-create",
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify({
+
+              displayName:
+                document
+                  .getElementById(
+                    "displayName"
+                  )
+                  .value
+                  .trim(),
+
+              email:
+                document
+                  .getElementById(
+                    "email"
+                  )
+                  .value
+                  .trim(),
+
+              phone:
+                document
+                  .getElementById(
+                    "phone"
+                  )
+                  .value
+                  .trim(),
+
+              promoterCode:
+                document
+                  .getElementById(
+                    "promoterCode"
+                  )
+                  .value
+                  .trim(),
+
+              monthlyCommissionPercent:
+                Number(
+                  document
+                    .getElementById(
+                      "monthlyCommission"
+                    )
+                    .value ||
+                  25
+                ),
+
+              annualCommissionPercent:
+                Number(
+                  document
+                    .getElementById(
+                      "annualCommission"
+                    )
+                    .value ||
+                  15
+                ),
+
+              commissionHoldDays:
+                Number(
+                  document
+                    .getElementById(
+                      "holdDays"
+                    )
+                    .value ||
+                  30
+                ),
+
+              notes:
+                document
+                  .getElementById(
+                    "notes"
+                  )
+                  .value
+                  .trim()
+            })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to create promoter."
+      );
+    }
+
+
+    const inviteUrl =
+      location.origin +
+      "/promoter/?invite=" +
+      encodeURIComponent(
+        data.inviteToken
+      );
+
+
+    document.getElementById(
+      "inviteLink"
+    ).value =
+      inviteUrl;
+
+
+    inviteBox.classList.add(
+      "show"
+    );
+
+
+    message.textContent =
+      "✓ Promoter created.";
+
+    message.className =
+      "message good";
+
+
+    await loadPromoters();
+
+
+  }catch(error){
+
+    message.textContent =
+      error.message ||
+      "Unable to create promoter.";
+
+    message.className =
+      "message bad";
+
+  }finally{
+
+    button.disabled =
+      false;
+
+    button.textContent =
+      "Create Promoter";
+  }
+}
+
+
+document.getElementById(
+  "createButton"
+).addEventListener(
+  "click",
+  createPromoter
+);
+
+
+document.getElementById(
+  "copyInviteButton"
+).addEventListener(
+  "click",
+  async function(){
+
+    const value =
+      document.getElementById(
+        "inviteLink"
+      ).value;
+
+    if(!value){
+      return;
+    }
+
+    await navigator.clipboard
+      .writeText(
+        value
+      );
+
+    this.textContent =
+      "✓ Copied";
+
+    setTimeout(
+      () => {
+        this.textContent =
+          "Copy Invite Link";
+      },
+      1200
+    );
+  }
+);
+
+
+window.addEventListener(
+  "load",
+  async function(){
+
+    try{
+
+      await Clerk.load();
+
+      const token =
+        await getToken();
+
+      if(!token){
+
+        window.location.href =
+          "https://livebridge.ca/account/?returnTo=" +
+          encodeURIComponent(
+            location.href
+          );
+
+        return;
+      }
+
+
+      await verifyAdmin();
+
+
+      Clerk.mountUserButton(
+        document.getElementById(
+          "userButton"
+        )
+      );
+
+
+      await loadPromoters();
+
+
+      document.getElementById(
+        "loading"
+      ).style.display =
+        "none";
+
+
+      document.getElementById(
+        "shell"
+      ).style.display =
+        "block";
+
+
+    }catch(error){
+
+      console.error(
+        "Promoter admin failed:",
+        error
+      );
+
+
+      document.getElementById(
+        "loading"
+      ).innerHTML = `
+        <div>
+
+          <div style="
+            font-size:25px;
+            font-weight:900;
+            margin-bottom:10px;
+          ">
+            Administrator Access Required
+          </div>
+
+          <div class="muted">
+            ${escapeHtml(
+              error.message
+            )}
+          </div>
+
+        </div>
+      `;
+    }
+  }
+);
+
+</script>
+
+</body>
+</html>
