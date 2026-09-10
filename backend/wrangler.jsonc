@@ -24,8 +24,8 @@
   "d1_databases": [
     {
       "binding": "TRANSLATIONS_DB",
-      "database_name": "livebridge-db",
-      "database_id": "3d757c96-ec18-4144-be5e-95cbf43a9b1f"
+      "database_name": "livebridge-promoter-test-db",
+      "database_id": "dd1929d6-527d-456a-985b-4013e51d361c"
     }
   ],
 
