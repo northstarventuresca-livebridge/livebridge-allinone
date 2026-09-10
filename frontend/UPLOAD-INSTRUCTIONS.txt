@@ -1,0 +1,15 @@
+LIVEBRIDGE MAJOR FIX
+
+Upload the CONTENTS of this folder to the ROOT of the GitHub repo livebridge-independent-site.
+The repo root should contain:
+- public/
+- worker.js
+- wrangler.jsonc
+- README.md
+- UPLOAD-INSTRUCTIONS.txt
+
+Cloudflare deploy command must be:
+npx wrangler deploy
+
+This package restores the known-good independent-site pages and adds explicit Worker routing so both new and legacy URLs work without relying on _redirects.
+Cloudflare reconnect build trigger

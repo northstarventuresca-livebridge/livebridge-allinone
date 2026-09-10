@@ -1,0 +1,2222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+<!-- =====================================================
+LIVEBRIDGE /clientpitch
+NO LOGIN REQUIRED
+Prerecorded demo audio -> real LiveBridge room YOUR-ORGANIZATION
+Production broadcaster code is not changed.
+===================================================== -->
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#07111f;color:white;font-family:Arial,Helvetica,sans-serif}
+#lb-livepitch{min-height:100vh;background:radial-gradient(circle at top left,#163d70 0%,transparent 30%),radial-gradient(circle at top right,#35145c 0%,transparent 27%),#07111f;padding:28px 18px 44px}
+.lb-livepitch-wrap{width:min(980px,100%);margin:auto}
+.lb-livepitch-brand{text-align:center;margin-bottom:26px}
+.lb-livepitch-logo{font-size:42px;font-weight:900;margin-bottom:6px}
+.lb-livepitch-logo span{background:linear-gradient(90deg,#34d4bd,#2897ff,#a14cff);-webkit-background-clip:text;color:transparent}
+.lb-livepitch-sub{color:#98acc2;font-size:15px}
+.lb-livepitch-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);border-radius:22px;padding:24px;box-shadow:0 22px 70px rgba(0,0,0,.26)}
+.lb-livepitch-top{text-align:center;margin-bottom:22px}
+.lb-livepitch-title{font-size:30px;font-weight:900;margin-bottom:6px}
+.lb-livepitch-room{color:#69e4c6;font-weight:900;font-size:14px;margin-bottom:8px}
+.lb-livepitch-status{display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border-radius:999px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.23);color:#67e8a0;font-size:12px;font-weight:900}
+.lb-livepitch-dot{width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px #22c55e}
+.lb-livepitch-section-label{color:#8297ae;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin:22px 0 10px}
+.lb-livepitch-live{width:100%;min-height:66px;border:none;border-radius:14px;cursor:pointer;color:white;font-size:17px;font-weight:900;background:linear-gradient(135deg,#2588ff,#6f43df);box-shadow:0 12px 30px rgba(37,136,255,.20)}
+.lb-live-mic-mute{
+  display:none;
+  width:100%;
+  min-height:58px;
+  margin-top:10px;
+  border:none;
+  border-radius:14px;
+  cursor:pointer;
+  color:white;
+  font-size:16px;
+  font-weight:900;
+  background:linear-gradient(135deg,#f59e0b,#d97706);
+}
+
+.lb-live-mic-mute.show{
+  display:block;
+}
+
+.lb-live-mic-mute.muted{
+  background:linear-gradient(135deg,#475569,#334155);
+}
+
+.lb-lang-block{margin-top:13px;padding:16px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08)}
+.lb-lang-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px}
+.lb-lang-title strong{font-size:16px}
+.lb-lang-title span{color:#8197ae;font-size:11px;font-weight:800}
+.lb-livepitch-test-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.lb-livepitch-test{min-height:105px;border:none;border-radius:16px;cursor:pointer;color:white;font-size:15px;font-weight:900;padding:14px;transition:.17s ease}
+.lb-livepitch-test:hover,.lb-livepitch-live:hover,.lb-livepitch-stop:hover,.lb-local-audio:hover,.lb-share-small-button:hover{transform:translateY(-2px)}
+.lb-livepitch-test span{display:block;font-size:25px;margin-bottom:7px}
+.lb-livepitch-test .lb-test-label{display:block;margin-top:7px;font-size:11px;font-weight:800;color:rgba(255,255,255,.82)}
+.lb-test-blue{background:linear-gradient(135deg,#0ea5e9,#2563eb)}
+.lb-test-green{background:linear-gradient(135deg,#14b8a6,#059669)}
+.lb-test-purple{background:linear-gradient(135deg,#a855f7,#7c3aed)}
+.lb-controls-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.lb-local-audio,.lb-livepitch-stop{min-height:60px;border:none;border-radius:14px;cursor:pointer;color:white;font-size:16px;font-weight:900}
+.lb-local-audio{background:linear-gradient(135deg,#f59e0b,#d97706)}
+.lb-local-audio.muted{background:linear-gradient(135deg,#475569,#334155)}
+.lb-livepitch-stop{background:linear-gradient(135deg,#ef4444,#b91c1c)}
+.lb-livepitch-now{margin-top:14px;padding:13px 14px;border-radius:12px;background:#0d1928;border:1px solid rgba(255,255,255,.09);color:#9fb2c6;font-size:13px;text-align:center}
+.lb-livepitch-help{margin-top:10px;color:#72879e;font-size:11px;line-height:1.5;text-align:center}
+.lb-share-card{margin-top:20px;padding:22px;border-radius:18px;background:rgba(15,118,80,.09);border:1px solid rgba(52,211,153,.32);display:grid;grid-template-columns:1fr 220px;gap:25px;align-items:center}
+.lb-share-title{color:#48f59a;font-size:24px;font-weight:900;margin-bottom:5px}
+.lb-share-copy{color:#c5d4e5;line-height:1.5;margin-bottom:15px}
+.lb-share-link-row{display:grid;grid-template-columns:1fr auto auto auto;gap:9px}
+.lb-share-link{background:#09241f;border:1px solid rgba(52,211,153,.30);color:#53f49a;border-radius:10px;padding:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800;font-size:12px}
+.lb-share-small-button{padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.13);background:#14263b;color:white;cursor:pointer;font-weight:800}
+.lb-share-small-button.green{background:#3dde83;color:#06120b;border:none}
+.lb-qr-wrap{text-align:center}
+.lb-qr-box{width:190px;height:190px;background:white;padding:8px;border-radius:12px;margin:auto}
+.lb-qr-box img{width:100%;height:100%;display:block}
+.lb-qr-caption{color:#98acc2;font-size:12px;margin-top:8px}
+@media(max-width:760px){.lb-livepitch-test-grid{grid-template-columns:1fr}.lb-controls-row{grid-template-columns:1fr}.lb-share-card{grid-template-columns:1fr}.lb-share-link-row{grid-template-columns:1fr}}
+</style>
+
+<div id="lb-livepitch">
+<div class="lb-livepitch-wrap">
+
+<div class="lb-livepitch-brand">
+  <div class="lb-livepitch-logo">Live<span>Bridge</span></div>
+  <div class="lb-livepitch-sub">Client Demonstration</div>
+</div>
+
+<div class="lb-livepitch-card">
+
+<div class="lb-livepitch-top">
+  <div class="lb-livepitch-title">LiveBridge Client Pitch</div>
+  <div class="lb-livepitch-room">Demo Room: YOUR-ORGANIZATION</div>
+  <div class="lb-livepitch-status"><span class="lb-livepitch-dot"></span>Ready for Demonstration</div>
+</div>
+
+<div class="lb-livepitch-section-label">Optional Live Test</div>
+<button type="button" id="lbLiveBroadcastTest" class="lb-livepitch-live">🎙 LIVE BROADCAST TEST</button>
+<button
+  type="button"
+  id="lbLiveMicMute"
+  class="lb-live-mic-mute"
+>
+  🔇 MUTE MICROPHONE
+</button>
+
+
+<div class="lb-livepitch-section-label">Prerecorded Demonstrations</div>
+
+<div class="lb-lang-block">
+  <div class="lb-lang-title">
+    <strong>🇨🇦 English Source Audio</strong>
+    <span>Broadcast source language: English</span>
+  </div>
+
+  <div class="lb-livepitch-test-grid">
+    <button type="button" id="lbTestEnglish1" class="lb-livepitch-test lb-test-blue">
+      <span>▶</span>PLAY TEST AUDIO 1
+      <small class="lb-test-label">Health and Safety</small>
+    </button>
+    <button type="button" id="lbTestEnglish2" class="lb-livepitch-test lb-test-green">
+      <span>▶</span>PLAY TEST AUDIO 2
+      <small class="lb-test-label">Church Encouragement</small>
+    </button>
+    <button type="button" id="lbTestEnglish3" class="lb-livepitch-test lb-test-purple">
+      <span>▶</span>PLAY TEST AUDIO 3
+      <small class="lb-test-label">Wedding Vows</small>
+    </button>
+  </div>
+</div>
+
+<div class="lb-lang-block">
+  <div class="lb-lang-title">
+    <strong>🇨🇦 French Source Audio</strong>
+    <span>Broadcast source language: French</span>
+  </div>
+
+  <div class="lb-livepitch-test-grid">
+    <button type="button" id="lbTestFrench1" class="lb-livepitch-test lb-test-blue">
+      <span>▶</span>PLAY TEST AUDIO 1
+      <small class="lb-test-label">Church Encouragement</small>
+    </button>
+    <button type="button" id="lbTestFrench2" class="lb-livepitch-test lb-test-green">
+      <span>▶</span>PLAY TEST AUDIO 2
+      <small class="lb-test-label">Health and Safety</small>
+    </button>
+    <button type="button" id="lbTestFrench3" class="lb-livepitch-test lb-test-purple">
+      <span>▶</span>PLAY TEST AUDIO 3
+      <small class="lb-test-label">Wedding Vows</small>
+    </button>
+  </div>
+</div>
+
+<div class="lb-controls-row">
+  <button type="button" id="lbLocalAudioToggle" class="lb-local-audio">🔊 LOCAL AUDIO ON</button>
+  <button type="button" id="lbStopTest" class="lb-livepitch-stop">■ STOP TEST</button>
+</div>
+
+<div id="lbLivePitchNow" class="lb-livepitch-now">Ready. No login required.</div>
+
+<div class="lb-livepitch-help">
+  Local Audio controls only what you hear on this device. Transmission continues when local audio is muted.
+</div>
+
+<div class="lb-share-card">
+  <div>
+    <div class="lb-share-title">Share This Demo Room</div>
+    <div class="lb-share-copy">Scan the QR code or open the link to experience LiveBridge from the listener side.</div>
+
+    <div class="lb-share-link-row">
+      <div class="lb-share-link" id="lbLivePitchShareURL"></div>
+      <button type="button" class="lb-share-small-button" id="lbLivePitchCopy">Copy Link</button>
+      <button type="button" class="lb-share-small-button green" id="lbLivePitchShare">Send / Share</button>
+      <button type="button" class="lb-share-small-button" id="lbLivePitchOpen">Open</button>
+    </div>
+  </div>
+
+  <div class="lb-qr-wrap">
+    <div class="lb-qr-box"><img id="lbLivePitchQR" alt="LiveBridge demo room QR code"></div>
+    <div class="lb-qr-caption">Scan to join the demo room</div>
+  </div>
+</div>
+
+</div>
+</div>
+</div>
+
+<script>
+(function(){
+
+  const PRODUCTION_WORKER =
+    "https://livebridge.northstarventures-ca.workers.dev";
+
+  const DEMO_WORKER =
+    "https://livebridge-livepitch-audio.northstarventures-ca.workers.dev";
+
+  const DEMO_ROOM =
+    "YOUR-ORGANIZATION";
+
+  const LISTENER_URL =
+    window.location.origin + "/t/?room=" +
+    encodeURIComponent(
+      DEMO_ROOM
+    );
+
+  /*
+    Page button order:
+    English: 1 Health and Safety, 2 Church Encouragement, 3 Wedding Vows
+    French: 1 Church Encouragement, 2 Health and Safety, 3 Wedding Vows
+  */
+  const AUDIO_FILES = {
+    "english-1": DEMO_WORKER + "/english-1",
+    "english-2": DEMO_WORKER + "/english-3",
+    "english-3": DEMO_WORKER + "/english-2",
+    "french-1": DEMO_WORKER + "/french-1",
+    "french-2": DEMO_WORKER + "/french-2",
+    "french-3": DEMO_WORKER + "/french-3"
+  };
+
+  let localAudioEnabled = true;
+  let currentAudio = null;
+  let currentAbortController = null;
+  let currentTimers = [];
+  let currentRunId = 0;
+  let messageId = 0;
+  let broadcastSessionId = "";
+
+  let liveMicStream = null;
+  let liveMediaRecorder = null;
+  let liveMicRunning = false;
+  let liveMicMuted = false;
+  let liveMicChunkNumber = 0;
+
+  let liveAudioContext = null;
+  let liveAnalyser = null;
+  let liveVadFrame = null;
+  let liveSpeechActive = false;
+  let liveSpeechStartedAt = 0;
+  let liveLastVoiceAt = 0;
+  let liveMicSendChain = Promise.resolve();
+
+
+  function setStatus(text){
+    document.getElementById("lbLivePitchNow").textContent = text;
+  }
+
+
+  function createSessionId(){
+    return "clientpitch_" + Date.now() + "_" + Math.random().toString(36).slice(2,10);
+  }
+
+
+  function encodeMonoWav(audioBuffer,startSample,endSample){
+
+    const sampleRate = audioBuffer.sampleRate;
+    const frameCount = Math.max(0,endSample-startSample);
+    const mono = new Float32Array(frameCount);
+
+    for(let channel=0;channel<audioBuffer.numberOfChannels;channel++){
+
+      const data = audioBuffer.getChannelData(channel);
+
+      for(let i=0;i<frameCount;i++){
+
+        mono[i] += (data[startSample+i] || 0) / audioBuffer.numberOfChannels;
+      }
+    }
+
+    const buffer = new ArrayBuffer(44 + frameCount*2);
+    const view = new DataView(buffer);
+
+    function writeString(offset,value){
+      for(let i=0;i<value.length;i++){
+        view.setUint8(offset+i,value.charCodeAt(i));
+      }
+    }
+
+    writeString(0,"RIFF");
+    view.setUint32(4,36+frameCount*2,true);
+    writeString(8,"WAVE");
+    writeString(12,"fmt ");
+    view.setUint32(16,16,true);
+    view.setUint16(20,1,true);
+    view.setUint16(22,1,true);
+    view.setUint32(24,sampleRate,true);
+    view.setUint32(28,sampleRate*2,true);
+    view.setUint16(32,2,true);
+    view.setUint16(34,16,true);
+    writeString(36,"data");
+    view.setUint32(40,frameCount*2,true);
+
+    let offset = 44;
+
+    for(let i=0;i<frameCount;i++){
+
+      const sample = Math.max(-1,Math.min(1,mono[i]));
+
+      view.setInt16(
+        offset,
+        sample < 0 ? sample*0x8000 : sample*0x7fff,
+        true
+      );
+
+      offset += 2;
+    }
+
+    return new Blob([buffer],{type:"audio/wav"});
+  }
+
+
+  async function prewarmAzureTTS(
+    text,
+    sourceLanguage,
+    runId
+  ){
+
+    if(
+      runId !==
+      currentRunId ||
+      !text
+    ){
+      return;
+    }
+
+
+    try{
+
+      /*
+        Warm the same Azure TTS route used by /translation1.
+        This does NOT delay text delivery because callers do not await it.
+        It simply starts audio generation/cache work slightly earlier.
+      */
+      await fetch(
+        DEMO_WORKER +
+        "/demo-azure-tts-test",
+        {
+          method:
+            "POST",
+
+          headers:{
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              text,
+              room:
+                DEMO_ROOM,
+              sourceLanguage
+            }),
+
+          signal:
+            currentAbortController
+              ?.signal
+        }
+      );
+
+    }catch(error){
+
+      if(
+        error?.name !==
+        "AbortError"
+      ){
+
+        console.warn(
+          "ClientPitch Azure prewarm skipped:",
+          error
+        );
+      }
+    }
+  }
+
+
+  async function sendDemoText(
+    text,
+    sourceLanguage,
+    chunkId,
+    runId
+  ){
+
+    if(
+      runId !==
+      currentRunId
+    ){
+      return;
+    }
+
+    const feedResponse =
+      await fetch(
+        DEMO_WORKER +
+        "/demo-source-final",
+        {
+          method:
+            "POST",
+
+          headers:{
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              text,
+              chunkId,
+              sourceLanguage
+            }),
+
+          signal:
+            currentAbortController
+              ?.signal
+        }
+      );
+
+
+    const feedData =
+      await feedResponse
+        .json();
+
+
+    if(
+      !feedResponse.ok ||
+      !feedData.success
+    ){
+
+      console.error(
+        "ClientPitch delivery failed:",
+        feedData
+      );
+
+      throw new Error(
+        feedData.error ||
+        "Demo delivery failed."
+      );
+    }
+  }
+
+
+  function splitIntoNaturalPhrases(
+    text
+  ){
+
+    const clean =
+      String(
+        text || ""
+      )
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+
+
+    if(!clean){
+      return [];
+    }
+
+
+    /*
+      Prefer complete sentences.
+      If one sentence is very long, split it at natural punctuation
+      instead of cutting every three seconds in the middle of words.
+    */
+    const sentences =
+      clean.match(
+        /[^.!?]+[.!?]+|[^.!?]+$/g
+      ) ||
+      [
+        clean
+      ];
+
+
+    const output =
+      [];
+
+
+    sentences.forEach(
+      function(sentence){
+
+        const trimmed =
+          sentence.trim();
+
+
+        if(
+          trimmed.length <=
+          180
+        ){
+
+          output.push(
+            trimmed
+          );
+
+          return;
+        }
+
+
+        const parts =
+          trimmed.split(
+            /(?<=[,;:])\s+/
+          );
+
+
+        let current =
+          "";
+
+
+        parts.forEach(
+          function(part){
+
+            const next =
+              current
+                ? current +
+                  " " +
+                  part
+                : part;
+
+
+            if(
+              next.length >
+                180 &&
+              current
+            ){
+
+              output.push(
+                current.trim()
+              );
+
+              current =
+                part;
+
+            }else{
+
+              current =
+                next;
+            }
+          }
+        );
+
+
+        if(
+          current.trim()
+        ){
+
+          output.push(
+            current.trim()
+          );
+        }
+      }
+    );
+
+
+    return output;
+  }
+
+
+  async function transcribeWholeFile(
+    arrayBuffer,
+    sourceLanguage
+  ){
+
+    const formData =
+      new FormData();
+
+
+    formData.append(
+      "audio",
+      new Blob(
+        [
+          arrayBuffer
+        ],
+        {
+          type:
+            "audio/wav"
+        }
+      ),
+      "clientpitch-full.wav"
+    );
+
+
+    formData.append(
+      "language",
+      sourceLanguage
+    );
+
+
+    const response =
+      await fetch(
+        DEMO_WORKER +
+        "/demo-transcribe-audio",
+        {
+          method:
+            "POST",
+
+          body:
+            formData,
+
+          signal:
+            currentAbortController
+              ?.signal
+        }
+      );
+
+
+    const data =
+      await response
+        .json();
+
+
+    if(
+      !response.ok ||
+      !data.success ||
+      !data.text
+    ){
+
+      throw new Error(
+        data.error ||
+        "Could not transcribe the prerecorded demo audio."
+      );
+    }
+
+
+    return String(
+      data.text
+    ).trim();
+  }
+
+
+  async function sendDemoStopSignal(
+    sessionId
+  ){
+
+    if(!sessionId){
+      return;
+    }
+
+
+    try{
+
+      await fetch(
+        DEMO_WORKER +
+        "/demo-stop",
+        {
+          method:
+            "POST",
+
+          headers:{
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              sessionId
+            }),
+
+          /*
+            Do NOT use the current transmission AbortController here.
+            STOP must still reach the listener after we cancel the
+            current /clientpitch work.
+          */
+          keepalive:
+            true
+        }
+      );
+
+    }catch(error){
+
+      console.warn(
+        "ClientPitch remote stop signal failed:",
+        error
+      );
+    }
+  }
+
+
+  async function stopTest(
+    showMessage = true,
+    sendRemoteStop = true
+  ){
+
+    const sessionToStop =
+      broadcastSessionId;
+
+
+    currentRunId +=
+      1;
+
+
+    if(
+      sendRemoteStop &&
+      sessionToStop
+    ){
+
+      sendDemoStopSignal(
+        sessionToStop
+      );
+    }
+
+
+    currentTimers.forEach(
+      timer =>
+        clearTimeout(
+          timer
+        )
+    );
+
+
+    currentTimers =
+      [];
+
+
+    if(
+      currentAbortController
+    ){
+
+      try{
+        currentAbortController.abort();
+      }catch{}
+
+
+      currentAbortController =
+        null;
+    }
+
+
+    if(
+      currentAudio
+    ){
+
+      try{
+
+        currentAudio.pause();
+
+        currentAudio.currentTime =
+          0;
+
+      }catch{}
+
+
+      currentAudio =
+        null;
+    }
+
+
+    if(showMessage){
+
+      setStatus(
+        "No test is currently running."
+      );
+    }
+  }
+
+
+  async function startPrerecordedTest(
+    key,
+    sourceLanguage,
+    label
+  ){
+
+    await stopLiveMicrophone();
+
+    await stopTest(
+      false
+    );
+
+
+    currentRunId +=
+      1;
+
+
+    const runId =
+      currentRunId;
+
+
+    currentAbortController =
+      new AbortController();
+
+
+    broadcastSessionId =
+      createSessionId();
+
+
+    messageId =
+      0;
+
+
+    setStatus(
+      "Preparing " +
+      label +
+      "..."
+    );
+
+
+    try{
+
+      const statusResponse =
+        await fetch(
+          DEMO_WORKER +
+          "/demo-status",
+          {
+            signal:
+              currentAbortController
+                .signal
+          }
+        );
+
+
+      const statusData =
+        await statusResponse
+          .json();
+
+
+      if(
+        !statusResponse.ok ||
+        !statusData.success
+      ){
+
+        throw new Error(
+          statusData.error ||
+          "Demo room binding is not ready."
+        );
+      }
+
+
+      const audioURL =
+        AUDIO_FILES[
+          key
+        ];
+
+
+      const audioResponse =
+        await fetch(
+          audioURL,
+          {
+            signal:
+              currentAbortController
+                .signal
+          }
+        );
+
+
+      if(
+        !audioResponse.ok
+      ){
+
+        throw new Error(
+          "Could not load the test audio file."
+        );
+      }
+
+
+      const arrayBuffer =
+        await audioResponse
+          .arrayBuffer();
+
+
+      /*
+        KEY FIX:
+        Transcribe the complete prerecorded recording once.
+        The previous demo chopped the WAV into exact 3-second pieces,
+        which could split a sentence or word at the boundary.
+      */
+      setStatus(
+        "Preparing clean transcript..."
+      );
+
+
+      const fullTranscript =
+        await transcribeWholeFile(
+          arrayBuffer,
+          sourceLanguage
+        );
+
+
+      if(
+        runId !==
+        currentRunId
+      ){
+        return;
+      }
+
+
+      const phrases =
+        splitIntoNaturalPhrases(
+          fullTranscript
+        );
+
+
+      if(
+        !phrases.length
+      ){
+
+        throw new Error(
+          "The demo audio produced no transcript."
+        );
+      }
+
+
+      const audioContext =
+        new (
+          window.AudioContext ||
+          window.webkitAudioContext
+        )();
+
+
+      const decoded =
+        await audioContext
+          .decodeAudioData(
+            arrayBuffer.slice(0)
+          );
+
+
+      const duration =
+        decoded.duration;
+
+
+      await audioContext.close();
+
+
+      if(
+        runId !==
+        currentRunId
+      ){
+        return;
+      }
+
+
+      const audio =
+        new Audio(
+          audioURL
+        );
+
+
+      audio.preload =
+        "auto";
+
+
+      audio.muted =
+        !localAudioEnabled;
+
+
+      currentAudio =
+        audio;
+
+
+      audio.addEventListener(
+        "ended",
+        function(){
+
+          if(
+            runId !==
+            currentRunId
+          ){
+            return;
+          }
+
+
+          setTimeout(
+            function(){
+
+              if(
+                runId ===
+                currentRunId
+              ){
+
+                stopTest(
+                  false,
+                  false
+                );
+
+
+                setStatus(
+                  label +
+                  " finished."
+                );
+              }
+
+            },
+            5000
+          );
+        }
+      );
+
+
+      await audio.play();
+
+
+      setStatus(
+        label +
+        (
+          localAudioEnabled
+            ? " playing locally + transmitting through LiveBridge."
+            : " transmitting through LiveBridge with local audio muted."
+        )
+      );
+
+
+      /*
+        IMPORTANT:
+        Do NOT dump the entire prerecorded transcript into the room
+        in the first few seconds.
+
+        When every phrase is sent immediately, a listener who changes
+        language halfway through the recording has already received
+        the remaining queue in the OLD language. Reconnecting cannot
+        retroactively change those already-delivered messages.
+
+        Instead, send phrases progressively across the actual duration
+        of the source recording. That keeps future phrases "live", so a
+        listener can change language mid-file and the next incoming
+        phrases are delivered using the newly selected language.
+      */
+
+      const phraseWeights =
+        phrases.map(
+          phrase =>
+            Math.max(
+              1,
+              phrase
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .length
+            )
+        );
+
+
+      const totalWeight =
+        phraseWeights.reduce(
+          (sum, value) =>
+            sum + value,
+          0
+        );
+
+
+      let elapsedWeight =
+        0;
+
+
+      phrases.forEach(
+        function(
+          phrase,
+          index
+        ){
+
+          /*
+            Estimate this phrase's position in the recording by its
+            share of the transcript word count. Keep a small head-start
+            so translation/TTS can prepare before the local source audio
+            reaches the same point.
+          */
+          const progress =
+            totalWeight
+              ? elapsedWeight / totalWeight
+              : index / Math.max(1, phrases.length);
+
+
+          const delayMs =
+            Math.max(
+              0,
+              Math.round(
+                (duration * 1000 * progress) -
+                450
+              )
+            );
+
+
+          elapsedWeight +=
+            phraseWeights[index];
+
+
+          const prewarmTimer =
+            setTimeout(
+              function(){
+
+                if(
+                  runId ===
+                  currentRunId
+                ){
+
+                  prewarmAzureTTS(
+                    phrase,
+                    sourceLanguage,
+                    runId
+                  );
+                }
+              },
+              Math.max(
+                0,
+                delayMs -
+                700
+              )
+            );
+
+
+          currentTimers.push(
+            prewarmTimer
+          );
+
+
+          const timer =
+            setTimeout(
+              function(){
+
+                if(
+                  runId !==
+                  currentRunId
+                ){
+                  return;
+                }
+
+
+                messageId +=
+                  1;
+
+
+                const chunkId =
+                  broadcastSessionId +
+                  "-" +
+                  messageId;
+
+
+                sendDemoText(
+                  phrase,
+                  sourceLanguage,
+                  chunkId,
+                  runId
+                )
+                .catch(
+                  function(error){
+
+                    if(
+                      error?.name !==
+                      "AbortError"
+                    ){
+
+                      console.error(
+                        "ClientPitch phrase failed:",
+                        error
+                      );
+
+
+                      setStatus(
+                        "Transmission error — " +
+                        (
+                          error.message ||
+                          String(error)
+                        )
+                      );
+                    }
+                  }
+                );
+
+              },
+              delayMs
+            );
+
+
+          currentTimers.push(
+            timer
+          );
+        }
+      );
+
+
+    }catch(error){
+
+      if(
+        error?.name !==
+        "AbortError"
+      ){
+
+        console.error(
+          "ClientPitch test failed:",
+          error
+        );
+
+
+        setStatus(
+          "FAILED — " +
+          (
+            error.message ||
+            String(error)
+          )
+        );
+      }
+
+
+      await stopTest(
+        false
+      );
+    }
+  }
+
+
+
+  async function sendLiveMicBlob(
+    blob,
+    runId
+  ){
+
+    if(
+      runId !==
+      currentRunId ||
+      !blob ||
+      blob.size < 500
+    ){
+      return;
+    }
+
+
+    const formData =
+      new FormData();
+
+
+    formData.append(
+      "audio",
+      blob,
+      "clientpitch-live.webm"
+    );
+
+
+    formData.append(
+      "language",
+      "en"
+    );
+
+
+    const transcriptionResponse =
+      await fetch(
+        DEMO_WORKER +
+        "/demo-transcribe-audio",
+        {
+          method:
+            "POST",
+
+          body:
+            formData,
+
+          signal:
+            currentAbortController
+              ?.signal
+        }
+      );
+
+
+    const transcription =
+      await transcriptionResponse
+        .json();
+
+
+    if(
+      runId !==
+      currentRunId
+    ){
+      return;
+    }
+
+
+    if(
+      !transcriptionResponse.ok ||
+      !transcription.success ||
+      !transcription.text
+    ){
+      return;
+    }
+
+
+    liveMicChunkNumber +=
+      1;
+
+
+    const chunkId =
+      broadcastSessionId +
+      "-live-" +
+      liveMicChunkNumber;
+
+
+    prewarmAzureTTS(
+      transcription.text,
+      "en",
+      runId
+    );
+
+
+    await sendDemoText(
+      transcription.text,
+      "en",
+      chunkId,
+      runId
+    );
+  }
+
+
+  function getSupportedLiveMimeType(){
+
+    const preferredTypes = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/ogg;codecs=opus"
+    ];
+
+
+    for(
+      const type
+      of preferredTypes
+    ){
+
+      if(
+        window.MediaRecorder
+          ?.isTypeSupported?.(
+            type
+          )
+      ){
+        return type;
+      }
+    }
+
+
+    return "";
+  }
+
+
+  function beginSentenceRecording(
+    runId
+  ){
+
+    if(
+      !liveMicRunning ||
+      liveMicMuted ||
+      liveSpeechActive ||
+      !liveMicStream ||
+      runId !==
+      currentRunId
+    ){
+      return;
+    }
+
+
+    const mimeType =
+      getSupportedLiveMimeType();
+
+
+    const recorder =
+      mimeType
+        ? new MediaRecorder(
+            liveMicStream,
+            {
+              mimeType
+            }
+          )
+        : new MediaRecorder(
+            liveMicStream
+          );
+
+
+    const pieces =
+      [];
+
+
+    recorder.addEventListener(
+      "dataavailable",
+      function(event){
+
+        if(
+          event.data &&
+          event.data.size > 0
+        ){
+
+          pieces.push(
+            event.data
+          );
+        }
+      }
+    );
+
+
+    recorder.addEventListener(
+      "stop",
+      function(){
+
+        if(
+          !pieces.length ||
+          runId !==
+          currentRunId
+        ){
+          return;
+        }
+
+
+        const blob =
+          new Blob(
+            pieces,
+            {
+              type:
+                recorder.mimeType ||
+                "audio/webm"
+            }
+          );
+
+
+        /*
+          Keep sentence delivery in exact speaking order.
+          Each sentence is a complete standalone recording,
+          so later sentences do not depend on the first WebM header.
+        */
+        liveMicSendChain =
+          liveMicSendChain
+            .then(
+              function(){
+
+                return sendLiveMicBlob(
+                  blob,
+                  runId
+                );
+              }
+            )
+            .catch(
+              function(error){
+
+                if(
+                  error?.name !==
+                  "AbortError"
+                ){
+
+                  console.error(
+                    "ClientPitch live sentence failed:",
+                    error
+                  );
+                }
+              }
+            );
+      }
+    );
+
+
+    recorder.addEventListener(
+      "error",
+      function(event){
+
+        console.error(
+          "ClientPitch live microphone recorder error:",
+          event.error ||
+          event
+        );
+      }
+    );
+
+
+    liveMediaRecorder =
+      recorder;
+
+    liveSpeechActive =
+      true;
+
+    liveSpeechStartedAt =
+      performance.now();
+
+    liveLastVoiceAt =
+      liveSpeechStartedAt;
+
+
+    recorder.start();
+  }
+
+
+  function finishSentenceRecording(){
+
+    if(
+      !liveSpeechActive
+    ){
+      return;
+    }
+
+
+    liveSpeechActive =
+      false;
+
+
+    const recorder =
+      liveMediaRecorder;
+
+
+    liveMediaRecorder =
+      null;
+
+
+    if(
+      recorder &&
+      recorder.state !==
+      "inactive"
+    ){
+
+      try{
+        recorder.stop();
+      }catch{}
+    }
+  }
+
+
+  function startVoiceActivityDetection(
+    stream,
+    runId
+  ){
+
+    const AudioCtx =
+      window.AudioContext ||
+      window.webkitAudioContext;
+
+
+    liveAudioContext =
+      new AudioCtx();
+
+
+    const source =
+      liveAudioContext
+        .createMediaStreamSource(
+          stream
+        );
+
+
+    liveAnalyser =
+      liveAudioContext
+        .createAnalyser();
+
+
+    liveAnalyser.fftSize =
+      1024;
+
+
+    liveAnalyser.smoothingTimeConstant =
+      0.15;
+
+
+    source.connect(
+      liveAnalyser
+    );
+
+
+    const data =
+      new Uint8Array(
+        liveAnalyser.fftSize
+      );
+
+
+    /*
+      Sentence-end settings:
+      - about 0.65s of silence ends the sentence
+      - hard maximum 14s prevents a recording from running forever
+      - threshold is intentionally conservative for speech
+    */
+    const SILENCE_MS =
+      650;
+
+    const MAX_SENTENCE_MS =
+      14000;
+
+    const VOICE_RMS_THRESHOLD =
+      0.022;
+
+
+    function monitor(){
+
+      if(
+        !liveMicRunning ||
+        runId !==
+        currentRunId
+      ){
+        return;
+      }
+
+
+      if(
+        liveMicMuted
+      ){
+
+        liveVadFrame =
+          requestAnimationFrame(
+            monitor
+          );
+
+        return;
+      }
+
+
+      liveAnalyser
+        .getByteTimeDomainData(
+          data
+        );
+
+
+      let sumSquares =
+        0;
+
+
+      for(
+        let i = 0;
+        i < data.length;
+        i += 1
+      ){
+
+        const sample =
+          (
+            data[i] -
+            128
+          ) /
+          128;
+
+
+        sumSquares +=
+          sample *
+          sample;
+      }
+
+
+      const rms =
+        Math.sqrt(
+          sumSquares /
+          data.length
+        );
+
+
+      const now =
+        performance.now();
+
+
+      if(
+        rms >=
+        VOICE_RMS_THRESHOLD
+      ){
+
+        liveLastVoiceAt =
+          now;
+
+
+        if(
+          !liveSpeechActive
+        ){
+
+          beginSentenceRecording(
+            runId
+          );
+        }
+
+      }else if(
+        liveSpeechActive
+      ){
+
+        const silentFor =
+          now -
+          liveLastVoiceAt;
+
+        const sentenceAge =
+          now -
+          liveSpeechStartedAt;
+
+
+        if(
+          silentFor >=
+            SILENCE_MS ||
+          sentenceAge >=
+            MAX_SENTENCE_MS
+        ){
+
+          finishSentenceRecording();
+        }
+      }
+
+
+      liveVadFrame =
+        requestAnimationFrame(
+          monitor
+        );
+    }
+
+
+    monitor();
+  }
+
+
+  async function stopLiveMicrophone(){
+
+    liveMicRunning =
+      false;
+
+    liveMicMuted =
+      false;
+
+
+    if(
+      liveVadFrame
+    ){
+
+      cancelAnimationFrame(
+        liveVadFrame
+      );
+
+      liveVadFrame =
+        null;
+    }
+
+
+    finishSentenceRecording();
+
+
+    if(
+      liveAudioContext
+    ){
+
+      try{
+        await liveAudioContext.close();
+      }catch{}
+
+
+      liveAudioContext =
+        null;
+
+      liveAnalyser =
+        null;
+    }
+
+
+    const muteButton =
+      document.getElementById(
+        "lbLiveMicMute"
+      );
+
+
+    if(muteButton){
+
+      muteButton.classList.remove(
+        "show",
+        "muted"
+      );
+
+      muteButton.textContent =
+        "🔇 MUTE MICROPHONE";
+    }
+
+
+    if(
+      liveMicStream
+    ){
+
+      liveMicStream
+        .getTracks()
+        .forEach(
+          track =>
+            track.stop()
+        );
+
+
+      liveMicStream =
+        null;
+    }
+
+
+    const button =
+      document.getElementById(
+        "lbLiveBroadcastTest"
+      );
+
+
+    if(button){
+
+      button.textContent =
+        "🎙 LIVE BROADCAST TEST";
+
+      button.style.background =
+        "";
+    }
+  }
+
+
+  async function startLiveMicrophone(){
+
+    await stopTest(
+      false
+    );
+
+
+    await stopLiveMicrophone();
+
+
+    currentRunId +=
+      1;
+
+
+    const runId =
+      currentRunId;
+
+
+    currentAbortController =
+      new AbortController();
+
+
+    broadcastSessionId =
+      createSessionId();
+
+
+    liveMicChunkNumber =
+      0;
+
+
+    setStatus(
+      "Requesting microphone..."
+    );
+
+
+    try{
+
+      const statusResponse =
+        await fetch(
+          DEMO_WORKER +
+          "/demo-status",
+          {
+            signal:
+              currentAbortController
+                .signal
+          }
+        );
+
+
+      const statusData =
+        await statusResponse
+          .json();
+
+
+      if(
+        !statusResponse.ok ||
+        !statusData.success
+      ){
+
+        throw new Error(
+          statusData.error ||
+          "Demo room binding is not ready."
+        );
+      }
+
+
+      const stream =
+        await navigator.mediaDevices
+          .getUserMedia({
+            audio:{
+              echoCancellation:true,
+              noiseSuppression:true,
+              autoGainControl:true
+            }
+          });
+
+
+      if(
+        runId !==
+        currentRunId
+      ){
+
+        stream
+          .getTracks()
+          .forEach(
+            track =>
+              track.stop()
+          );
+
+        return;
+      }
+
+
+      liveMicStream =
+        stream;
+
+
+      liveMicRunning =
+        true;
+
+      liveSpeechActive =
+        false;
+
+      liveMicSendChain =
+        Promise.resolve();
+
+
+      /*
+        Listen continuously, but only RECORD while you are actually
+        speaking. A short natural pause ends the sentence and sends it
+        immediately. Then the next sentence starts automatically.
+      */
+      startVoiceActivityDetection(
+        stream,
+        runId
+      );
+
+
+      const button =
+        document.getElementById(
+          "lbLiveBroadcastTest"
+        );
+
+
+      button.textContent =
+        "🔴 LIVE MICROPHONE ACTIVE";
+
+
+      button.style.background =
+        "linear-gradient(135deg,#ef4444,#b91c1c)";
+
+
+      const muteButton =
+        document.getElementById(
+          "lbLiveMicMute"
+        );
+
+
+      if(muteButton){
+
+        muteButton.classList.add(
+          "show"
+        );
+
+        muteButton.classList.remove(
+          "muted"
+        );
+
+        muteButton.textContent =
+          "🔇 MUTE MICROPHONE";
+      }
+
+
+      liveMicMuted =
+        false;
+
+
+      setStatus(
+        "LIVE — speak one sentence at a time. A short pause sends each sentence automatically."
+      );
+
+
+    }catch(error){
+
+      await stopLiveMicrophone();
+
+
+      if(
+        error?.name ===
+        "NotAllowedError"
+      ){
+
+        setStatus(
+          "Microphone permission was denied."
+        );
+
+      }else{
+
+        setStatus(
+          "FAILED — " +
+          (
+            error.message ||
+            String(error)
+          )
+        );
+      }
+    }
+  }
+
+
+  document.getElementById("lbLivePitchShareURL").textContent = LISTENER_URL;
+
+  document.getElementById("lbLivePitchQR").src =
+    "https://api.qrserver.com/v1/create-qr-code/" +
+    "?size=300x300&margin=5&data=" +
+    encodeURIComponent(LISTENER_URL);
+
+
+  document.getElementById("lbLivePitchCopy").onclick =
+    async function(){
+
+      await navigator.clipboard.writeText(LISTENER_URL);
+
+      const old = this.textContent;
+
+      this.textContent = "✓ Copied";
+
+      setTimeout(()=>this.textContent=old,1500);
+    };
+
+
+  document.getElementById("lbLivePitchShare").onclick =
+    async function(){
+
+      if(navigator.share){
+
+        try{
+
+          await navigator.share({
+            title:"LiveBridge Demo Room",
+            text:"Join the LiveBridge demonstration.",
+            url:LISTENER_URL
+          });
+
+        }catch{}
+
+      }else{
+
+        await navigator.clipboard.writeText(LISTENER_URL);
+
+        alert("Demo room link copied.");
+      }
+    };
+
+
+  document.getElementById("lbLivePitchOpen").onclick =
+    function(){
+      window.open(LISTENER_URL,"_blank");
+    };
+
+
+  document.getElementById("lbLocalAudioToggle").onclick =
+    function(){
+
+      localAudioEnabled = !localAudioEnabled;
+
+      this.classList.toggle(
+        "muted",
+        !localAudioEnabled
+      );
+
+      this.textContent =
+        localAudioEnabled
+          ? "🔊 LOCAL AUDIO ON"
+          : "🔇 LOCAL AUDIO MUTED";
+
+      if(currentAudio){
+        currentAudio.muted = !localAudioEnabled;
+      }
+
+      setStatus(
+        currentAudio
+          ? (
+              localAudioEnabled
+                ? "Local audio ON. LiveBridge transmission continues."
+                : "Local audio MUTED. LiveBridge transmission continues."
+            )
+          : (
+              localAudioEnabled
+                ? "Local playback is ON."
+                : "Local playback is MUTED."
+            )
+      );
+    };
+
+
+  document.getElementById("lbTestEnglish1").onclick =
+    ()=>startPrerecordedTest(
+      "english-1","en","English — Health and Safety"
+    );
+
+  document.getElementById("lbTestEnglish2").onclick =
+    ()=>startPrerecordedTest(
+      "english-2","en","English — Church Encouragement"
+    );
+
+  document.getElementById("lbTestEnglish3").onclick =
+    ()=>startPrerecordedTest(
+      "english-3","en","English — Wedding Vows"
+    );
+
+  document.getElementById("lbTestFrench1").onclick =
+    ()=>startPrerecordedTest(
+      "french-1","fr","French — Church Encouragement"
+    );
+
+  document.getElementById("lbTestFrench2").onclick =
+    ()=>startPrerecordedTest(
+      "french-3","fr","French — Health and Safety"
+    );
+
+  document.getElementById("lbTestFrench3").onclick =
+    ()=>startPrerecordedTest(
+      "french-2","fr","French — Wedding Vows"
+    );
+
+  document.getElementById(
+    "lbLiveMicMute"
+  ).onclick =
+    function(){
+
+      if(
+        !liveMicRunning ||
+        !liveMicStream
+      ){
+        return;
+      }
+
+
+      liveMicMuted =
+        !liveMicMuted;
+
+
+      if(
+        liveMicMuted
+      ){
+
+        /*
+          Finish any sentence currently being captured, then VAD stays
+          paused while muted. The live session itself remains active.
+        */
+        finishSentenceRecording();
+      }
+
+
+      this.classList.toggle(
+        "muted",
+        liveMicMuted
+      );
+
+
+      this.textContent =
+        liveMicMuted
+          ? "🎙 UNMUTE MICROPHONE"
+          : "🔇 MUTE MICROPHONE";
+
+
+      setStatus(
+        liveMicMuted
+          ? "LIVE — microphone MUTED. Broadcast remains active."
+          : "LIVE — microphone ON. Speak your next sentence."
+      );
+    };
+
+
+  document.getElementById("lbStopTest").onclick =
+    async function(){
+
+      await stopLiveMicrophone();
+
+      await stopTest(
+        true
+      );
+    };
+
+
+  document.getElementById("lbLiveBroadcastTest").onclick =
+    async function(){
+
+      if(
+        liveMicRunning
+      ){
+
+        await stopLiveMicrophone();
+
+        await stopTest(
+          true
+        );
+
+        return;
+      }
+
+
+      await startLiveMicrophone();
+    };
+
+
+  window.addEventListener(
+    "pagehide",
+    function(){
+
+      try{
+
+        if(
+          liveMediaRecorder &&
+          liveMediaRecorder.state !==
+          "inactive"
+        ){
+          liveMediaRecorder.stop();
+        }
+
+      }catch{}
+
+
+      if(
+        liveVadFrame
+      ){
+
+        cancelAnimationFrame(
+          liveVadFrame
+        );
+      }
+
+
+      if(
+        liveAudioContext
+      ){
+
+        try{
+          liveAudioContext.close();
+        }catch{}
+      }
+
+
+      if(
+        liveMicStream
+      ){
+
+        liveMicStream
+          .getTracks()
+          .forEach(
+            track =>
+              track.stop()
+          );
+      }
+    }
+  );
+
+})();
+</script>
+</body>
+</html>

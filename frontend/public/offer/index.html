@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LiveBridge Private Proposal</title>
+<style>
+*{box-sizing:border-box}
+:root{
+  --ink:#0c1b2a;
+  --ink2:#153149;
+  --muted:#6f8294;
+  --line:#dfe7ee;
+  --soft:#f4f7f9;
+  --paper:#ffffff;
+  --accent:#1797d5;
+  --accent2:#47c9d8;
+}
+html,body{margin:0;min-height:100%;font-family:Inter,Arial,Helvetica,sans-serif;background:#f3f5f7;color:var(--ink)}
+body{min-height:100vh}
+.page{max-width:1180px;margin:0 auto;padding:34px 24px 56px}
+.header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:28px}
+.logo{font-size:28px;font-weight:900;letter-spacing:-1px;color:#0b2135}
+.logo span{color:var(--accent)}
+.headerMeta{font-size:12px;color:#7c8d9b}
+.proposal{
+  overflow:hidden;
+  border:1px solid #dce5ec;
+  border-radius:24px;
+  background:var(--paper);
+  box-shadow:0 18px 60px rgba(19,42,61,.09);
+}
+.proposalTop{height:6px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.content{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.72fr)}
+.main{padding:54px 56px 52px;border-right:1px solid var(--line)}
+.kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#658096;font-weight:900;margin-bottom:17px}
+.forLine{font-size:15px;color:#63798c;margin-bottom:26px}
+.forLine strong{color:#18364e}
+.plan{font-size:48px;line-height:1.05;letter-spacing:-1.7px;font-weight:900;color:#0a2135;margin:0 0 14px}
+.description{font-size:18px;line-height:1.65;color:#5f7486;max-width:700px;margin-bottom:38px}
+.priceBlock{display:flex;align-items:flex-end;gap:11px;padding:28px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.price{font-size:52px;font-weight:900;letter-spacing:-1.5px;line-height:1}
+.interval{font-size:16px;font-weight:700;color:#6c8192;padding-bottom:7px}
+.summaryGrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:28px}
+.summary{padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:#fbfcfd}
+.summaryLabel{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#8293a2;font-weight:900;margin-bottom:8px}
+.summaryValue{font-size:23px;font-weight:900;color:#122c42}
+.noteWrap{margin-top:32px}
+.noteTitle{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#8596a4;font-weight:900;margin-bottom:9px}
+.note{border-left:3px solid var(--accent);padding:3px 0 3px 16px;color:#596f82;font-size:15px;line-height:1.6}
+.side{padding:46px 38px;background:#fafcfd}
+.sideTitle{font-size:14px;font-weight:900;color:#18364e;margin-bottom:18px}
+.featureList{display:grid;gap:13px;margin-bottom:34px}
+.feature{display:flex;align-items:flex-start;gap:11px;color:#465f73;font-size:14px;line-height:1.45}
+.featureDot{width:18px;height:18px;flex:0 0 18px;border-radius:50%;background:#e7f6fb;border:1px solid #bfe7f1;display:flex;align-items:center;justify-content:center;color:#1687b8;font-size:11px;font-weight:900;margin-top:1px}
+.detailBox{padding:16px 18px;border-radius:13px;background:#f1f5f8;border:1px solid #e1e8ee;margin-bottom:20px}
+.detailLabel{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#8495a3;font-weight:900;margin-bottom:5px}
+.detailText{font-size:13px;line-height:1.5;color:#526a7c}
+.cta{width:100%;border:0;border-radius:12px;padding:16px 18px;background:#102f49;color:#fff;font-size:15px;font-weight:900;cursor:pointer;transition:.15s ease}
+.cta:hover{background:#173d5c;transform:translateY(-1px)}
+.cta:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.secure{display:flex;gap:7px;align-items:center;justify-content:center;color:#8b9aa6;font-size:11px;margin-top:12px}
+.lock{width:8px;height:8px;border-radius:50%;background:#37b99a}
+.error{margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid #f0c7c7;background:#fff6f6;color:#a33a3a;font-size:13px}
+.loading{padding:90px 40px;text-align:center;color:#738695}
+.footer{text-align:center;color:#95a3ae;font-size:11px;margin-top:18px}
+@media(max-width:860px){
+  .content{grid-template-columns:1fr}
+  .main{border-right:0;border-bottom:1px solid var(--line)}
+}
+@media(max-width:620px){
+  .page{padding:20px 12px 36px}
+  .header{padding:0 6px}
+  .headerMeta{display:none}
+  .main{padding:34px 24px}
+  .side{padding:30px 24px}
+  .plan{font-size:38px}
+  .description{font-size:16px}
+  .price{font-size:42px}
+  .summaryGrid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="logo">Live<span>Bridge</span></div>
+    <div class="headerMeta">Private pricing proposal · Secure checkout</div>
+  </div>
+
+  <div class="proposal">
+    <div class="proposalTop"></div>
+    <div id="offerRoot" class="loading">Loading your private proposal…</div>
+  </div>
+
+  <div class="footer">LiveBridge · Real-time multilingual communication for live events and organizations</div>
+</div>
+
+<script>
+const WORKER="https://livebridge.northstarventures-ca.workers.dev";
+let currentOffer=null;
+
+function esc(v){
+  return String(v??"").replace(/[&<>"']/g,c=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+function tokenFromUrl(){
+  const parts=location.pathname.split("/").filter(Boolean);
+  if(parts[0]==="offer"&&parts[1]&&parts[1]!=="index.html") return parts[1];
+  return new URLSearchParams(location.search).get("token")||"";
+}
+function money(plan){
+  return new Intl.NumberFormat("en-CA",{
+    style:"currency",
+    currency:plan.currency||"CAD"
+  }).format(Number(plan.priceCents||0)/100);
+}
+function hours(minutes){
+  const n=Math.max(0,Number(minutes||0));
+  if(n===60)return "1 hour";
+  if(n%60===0)return (n/60)+" hours";
+  return (n/60).toFixed(1)+" hours";
+}
+function expiryText(ts){
+  if(!ts)return "No fixed expiration date";
+  return new Date(ts).toLocaleString([],{dateStyle:"long",timeStyle:"short"});
+}
+function renderUnavailable(message){
+  document.getElementById("offerRoot").innerHTML=`
+    <div class="loading">
+      <div style="font-size:25px;font-weight:900;color:#20384c;margin-bottom:10px;">Proposal unavailable</div>
+      <div>${esc(message)}</div>
+    </div>`;
+}
+function renderOffer(offer){
+  currentOffer=offer;
+  const p=offer.plan||{};
+  const features=Array.isArray(p.features)?p.features:[];
+  const defaultFeatures=[
+    "Real-time translated captions and audio",
+    "Secure organization-specific access",
+    "Listener capacity matched to your plan",
+    "LiveBridge support and account management"
+  ];
+  const shown=(features.length?features:defaultFeatures).slice(0,6);
+
+  document.getElementById("offerRoot").className="content";
+  document.getElementById("offerRoot").innerHTML=`
+    <section class="main">
+      <div class="kicker">Private pricing proposal</div>
+      ${offer.recipientName?`<div class="forLine">Prepared exclusively for <strong>${esc(offer.recipientName)}</strong></div>`:""}
+      <h1 class="plan">${esc(p.planName||"LiveBridge Plan")}</h1>
+      <div class="description">${esc(p.description||"A tailored LiveBridge subscription designed for live multilingual communication across your organization.")}</div>
+
+      <div class="priceBlock">
+        <div class="price">${esc(money(p))}</div>
+        <div class="interval">per ${esc(p.billingInterval||"month")}</div>
+      </div>
+
+      <div class="summaryGrid">
+        <div class="summary">
+          <div class="summaryLabel">Included translation time</div>
+          <div class="summaryValue">${esc(hours(p.includedMinutes))}</div>
+        </div>
+        <div class="summary">
+          <div class="summaryLabel">Simultaneous listeners</div>
+          <div class="summaryValue">${Number(p.viewerLimit||0)}</div>
+        </div>
+      </div>
+
+      ${offer.note&&String(offer.note).trim().length>4?`
+        <div class="noteWrap">
+          <div class="noteTitle">Message from LiveBridge</div>
+          <div class="note">${esc(offer.note)}</div>
+        </div>
+      `:""}
+    </section>
+
+    <aside class="side">
+      <div class="sideTitle">What’s included</div>
+      <div class="featureList">
+        ${shown.map(f=>`
+          <div class="feature">
+            <div class="featureDot">✓</div>
+            <div>${esc(f)}</div>
+          </div>`).join("")}
+      </div>
+
+      <div class="detailBox">
+        <div class="detailLabel">Proposal validity</div>
+        <div class="detailText">${esc(expiryText(offer.expirationTimestamp))}</div>
+      </div>
+
+      ${offer.recipientEmailRestricted?`
+        <div class="detailBox">
+          <div class="detailLabel">Access</div>
+          <div class="detailText">This proposal is restricted to the invited email address.</div>
+        </div>`:""}
+
+      <button id="claimButton" class="cta">Continue to secure checkout</button>
+      <div class="secure"><span class="lock"></span>Payments securely processed by Stripe</div>
+      <div id="claimError"></div>
+    </aside>`;
+  document.getElementById("claimButton").addEventListener("click",claimOffer);
+}
+async function loadOffer(){
+  const token=tokenFromUrl();
+  if(!token){renderUnavailable("This proposal link is incomplete.");return;}
+  try{
+    const r=await fetch(WORKER+"/offer?token="+encodeURIComponent(token));
+    const d=await r.json();
+    if(!r.ok||!d.offer)throw new Error(d.error||"This proposal could not be loaded.");
+    if(!d.offer.active){
+      renderUnavailable(
+        d.offer.expired?"This proposal has expired.":
+        d.offer.exhausted?"This proposal has already been redeemed.":
+        "This proposal is no longer active."
+      );
+      return;
+    }
+    renderOffer(d.offer);
+  }catch(e){
+    renderUnavailable(e.message||"Unable to load this private proposal.");
+  }
+}
+async function claimOffer(){
+  const button=document.getElementById("claimButton");
+  const box=document.getElementById("claimError");
+  button.disabled=true;
+  button.textContent="Opening secure checkout…";
+  box.innerHTML="";
+  try{
+    const r=await fetch(WORKER+"/stripe/create-offer-checkout-session",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({token:currentOffer.token})
+    });
+    const d=await r.json();
+    if(!r.ok||!d.checkoutUrl)throw new Error(d.error||"Unable to open checkout.");
+    location.href=d.checkoutUrl;
+  }catch(e){
+    box.innerHTML=`<div class="error">${esc(e.message||"Unable to open checkout.")}</div>`;
+    button.disabled=false;
+    button.textContent="Continue to secure checkout";
+  }
+}
+loadOffer();
+</script>
+</body>
+</html>

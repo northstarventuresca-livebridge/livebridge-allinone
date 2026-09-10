@@ -1,0 +1,1678 @@
+<!doctype html>
+<!-- LiveBridge v1.0.18 livebridge.ca short URLs + localized translation share -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+<style>
+  * { box-sizing: border-box; }
+
+  .lbs-wrap {
+    min-height: 100vh;
+    padding: 22px 14px 44px;
+    background:
+      radial-gradient(circle at top left, rgba(50, 200, 100, .08), transparent 28%),
+      linear-gradient(180deg, #020912 0%, #07101f 100%);
+    color: #fff;
+    font-family: Inter, Arial, sans-serif;
+  }
+
+  .lbs-shell {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  .lbs-brand {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:18px;
+    font-weight:900;
+    font-size:clamp(22px,4vw,34px);
+  }
+
+  .lbs-brand-icon {
+    color:#45df75;
+    font-size:28px;
+  }
+
+  .lbs-brand-accent {
+    color:#45df75;
+  }
+
+  .lbs-live-panel {
+    border:1px solid rgba(69,223,117,.35);
+    background:
+      radial-gradient(circle at left center, rgba(69,223,117,.09), transparent 34%),
+      rgba(7,20,28,.88);
+    border-radius:18px;
+    padding:22px;
+  }
+
+  .lbs-live-grid {
+    display:grid;
+    grid-template-columns:1.1fr 3fr;
+    gap:18px;
+    align-items:stretch;
+  }
+
+  .lbs-live-left {
+    padding:8px 18px 8px 4px;
+    border-right:1px solid rgba(255,255,255,.1);
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+
+  .lbs-live-status {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    font-size:clamp(24px,4vw,40px);
+    line-height:1;
+    font-weight:900;
+    color:#45df75;
+  }
+
+  .lbs-dot {
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:#69717c;
+    box-shadow:0 0 0 6px rgba(255,255,255,.04);
+  }
+
+  .lbs-dot.live {
+    background:#45df75;
+    box-shadow:
+      0 0 0 6px rgba(69,223,117,.10),
+      0 0 22px rgba(69,223,117,.65);
+  }
+
+  .lbs-room-small {
+    margin-top:28px;
+    font-size:12px;
+    opacity:.72;
+  }
+
+  .lbs-room-big {
+    font-size:clamp(24px,4vw,34px);
+    font-weight:900;
+    margin-top:4px;
+  }
+
+  .lbs-live-note {
+    margin-top:14px;
+    font-size:13px;
+    opacity:.65;
+    line-height:1.45;
+  }
+
+  .lbs-metric-grid {
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:8px;
+  }
+
+  .lbs-metric {
+    min-width:0;
+    border-radius:13px;
+    border:1px solid rgba(255,255,255,.08);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
+    padding:18px 12px;
+    text-align:center;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+
+  .lbs-metric-icon {
+    font-size:27px;
+    margin-bottom:7px;
+  }
+
+  .lbs-metric:nth-child(1) .lbs-metric-icon,
+  .lbs-metric:nth-child(1) .lbs-metric-value {
+    color:#45df75;
+  }
+
+  .lbs-metric:nth-child(2) .lbs-metric-icon,
+  .lbs-metric:nth-child(2) .lbs-metric-value {
+    color:#438dff;
+  }
+
+  .lbs-metric:nth-child(3) .lbs-metric-icon,
+  .lbs-metric:nth-child(3) .lbs-metric-value {
+    color:#bc58ff;
+  }
+
+  .lbs-metric:nth-child(4) .lbs-metric-icon,
+  .lbs-metric:nth-child(4) .lbs-metric-value {
+    color:#ffc329;
+  }
+
+  .lbs-metric-value {
+    font-size:clamp(24px,4vw,36px);
+    font-weight:900;
+    line-height:1.05;
+    overflow-wrap:anywhere;
+  }
+
+  .lbs-metric-label {
+    margin-top:9px;
+    font-size:12px;
+    font-weight:800;
+  }
+
+  .lbs-metric-sub {
+    margin-top:5px;
+    font-size:11px;
+    opacity:.56;
+  }
+
+  .lbs-section-head {
+    margin:26px 0 12px;
+  }
+
+  .lbs-section-title {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:22px;
+    font-weight:900;
+  }
+
+  .lbs-section-title-icon {
+    color:#45df75;
+  }
+
+  .lbs-section-sub {
+    margin-top:4px;
+    font-size:13px;
+    opacity:.62;
+  }
+
+  .lbs-language-box {
+    border:1px solid rgba(255,255,255,.11);
+    border-radius:16px;
+    overflow:hidden;
+    background:rgba(9,22,35,.84);
+  }
+
+  .lbs-language-row {
+    display:grid;
+    grid-template-columns:1fr 78px;
+    min-height:82px;
+    border-top:1px solid rgba(255,255,255,.09);
+  }
+
+  .lbs-language-row:first-child {
+    border-top:0;
+  }
+
+  .lbs-language-main {
+    padding:14px 18px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    min-width:0;
+  }
+
+  .lbs-flag {
+    width:42px;
+    height:29px;
+    border-radius:3px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(255,255,255,.06);
+    font-size:26px;
+    flex:0 0 auto;
+  }
+
+  .lbs-language-info {
+    flex:1;
+    min-width:0;
+  }
+
+  .lbs-language-name {
+    font-size:17px;
+    font-weight:850;
+  }
+
+  .lbs-bar-track {
+    height:7px;
+    margin-top:10px;
+    border-radius:999px;
+    background:rgba(255,255,255,.08);
+    overflow:hidden;
+    max-width:520px;
+  }
+
+  .lbs-bar {
+    height:100%;
+    border-radius:999px;
+    background:linear-gradient(90deg,#45df75,#7bf39b);
+    width:0%;
+  }
+
+  .lbs-language-numbers {
+    border-left:1px solid rgba(255,255,255,.08);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .lbs-language-count {
+    font-size:22px;
+    font-weight:900;
+    color:#45df75;
+  }
+
+  .lbs-language-percent {
+    margin-top:3px;
+    font-size:12px;
+    color:#45df75;
+    opacity:.9;
+  }
+
+  .lbs-empty {
+    padding:24px;
+    opacity:.58;
+  }
+
+  .lbs-footer-row {
+    margin-top:14px;
+    display:flex;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    font-size:12px;
+    opacity:.58;
+  }
+
+  .lbs-share {
+    margin-top:28px;
+    padding:22px;
+    border:1px solid rgba(69,223,117,.34);
+    border-radius:18px;
+    background:
+      radial-gradient(circle at right center, rgba(69,223,117,.08), transparent 36%),
+      rgba(7,20,28,.86);
+  }
+
+  .lbs-share-grid {
+    display:grid;
+    grid-template-columns:1.35fr .65fr;
+    gap:24px;
+    align-items:center;
+  }
+
+  .lbs-share-title {
+    font-size:26px;
+    font-weight:900;
+    color:#45df75;
+    margin-bottom:8px;
+  }
+
+  .lbs-share-copy {
+    line-height:1.5;
+    opacity:.72;
+    max-width:650px;
+  }
+
+  .lbs-url-box {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:16px;
+  }
+
+  .lbs-url {
+    flex:1;
+    min-width:240px;
+    padding:13px 14px;
+    border-radius:11px;
+    border:1px solid rgba(69,223,117,.25);
+    background:rgba(69,223,117,.07);
+    color:#7bf39b;
+    font-weight:800;
+    overflow-wrap:anywhere;
+  }
+
+  .lbs-btn {
+    border:0;
+    border-radius:11px;
+    padding:13px 16px;
+    font-weight:850;
+    cursor:pointer;
+  }
+
+  .lbs-btn-copy {
+    background:rgba(255,255,255,.09);
+    color:#fff;
+    border:1px solid rgba(255,255,255,.1);
+  }
+
+  .lbs-btn-share {
+    background:#45df75;
+    color:#031109;
+  }
+
+  .lbs-qr-wrap {
+    text-align:center;
+  }
+
+  .lbs-qr {
+    width:min(215px,100%);
+    padding:10px;
+    background:#fff;
+    border-radius:14px;
+  }
+
+  .lbs-qr-caption {
+    margin-top:8px;
+    font-size:12px;
+    opacity:.6;
+  }
+
+  .lbs-error {
+    display:none;
+    margin-top:14px;
+    padding:12px 14px;
+    border-radius:11px;
+    border:1px solid rgba(255,85,85,.18);
+    background:rgba(255,85,85,.09);
+    font-size:12px;
+  }
+
+  @media(max-width:900px) {
+    .lbs-live-grid {
+      grid-template-columns:1fr;
+    }
+
+    .lbs-live-left {
+      border-right:0;
+      border-bottom:1px solid rgba(255,255,255,.1);
+      padding:4px 0 18px;
+    }
+
+    .lbs-metric-grid {
+      grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+  }
+
+  @media(max-width:650px) {
+    .lbs-wrap {
+      padding:16px 10px 34px;
+    }
+
+    .lbs-live-panel {
+      padding:16px;
+    }
+
+    .lbs-metric-grid {
+      grid-template-columns:1fr 1fr;
+    }
+
+    .lbs-share-grid {
+      grid-template-columns:1fr;
+    }
+
+    .lbs-language-row {
+      grid-template-columns:1fr 64px;
+    }
+
+    .lbs-language-main {
+      padding:12px;
+      gap:10px;
+    }
+
+    .lbs-flag {
+      width:34px;
+      font-size:22px;
+    }
+  }
+  .lbs-share-language-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin:14px 0 12px;
+    flex-wrap:wrap;
+  }
+
+  .lbs-share-language-label{
+    font-size:12px;
+    font-weight:800;
+    opacity:.78;
+  }
+
+  .lbs-share-language-select{
+    min-width:210px;
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,.12);
+    background:#102338;
+    color:#fff;
+    font-weight:800;
+  }
+
+  .lbs-share-language-note{
+    font-size:11px;
+    opacity:.56;
+  }
+
+  .lbs-share-preview{
+    display:none;
+    margin-top:16px;
+    border:1px solid rgba(69,223,117,.28);
+    border-radius:14px;
+    overflow:hidden;
+    background:#061321;
+  }
+
+  .lbs-share-preview.show{
+    display:block;
+  }
+
+  .lbs-share-preview img{
+    width:100%;
+    display:block;
+  }
+
+  .lbs-share-preview-actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    padding:10px;
+    background:#0a1928;
+  }
+
+  .lbs-share-preview-actions button{
+    padding:10px 12px;
+    border-radius:9px;
+    border:1px solid rgba(255,255,255,.12);
+    background:#13263c;
+    color:white;
+    cursor:pointer;
+    font-weight:800;
+    font-size:12px;
+  }
+
+</style>
+
+<div class="lbs-wrap">
+  <div class="lbs-shell">
+
+    <div class="lbs-brand">
+      <span class="lbs-brand-icon">📡</span>
+      <span>LiveBridge <span class="lbs-brand-accent">Live Stats</span></span>
+    </div>
+
+    <div class="lbs-live-panel">
+      <div class="lbs-live-grid">
+
+        <div class="lbs-live-left">
+          <div class="lbs-live-status">
+            <span class="lbs-dot" id="liveDot"></span>
+            <span id="liveStatus">CHECKING</span>
+          </div>
+
+          <div class="lbs-room-small">Room:</div>
+          <div class="lbs-room-big" id="roomLabel">TRANSLATION</div>
+
+          <div class="lbs-live-note" id="liveNote">
+            Checking the current LiveBridge room…
+          </div>
+        </div>
+
+        <div class="lbs-metric-grid">
+
+          <div class="lbs-metric">
+            <div class="lbs-metric-icon">👥</div>
+            <div class="lbs-metric-value" id="listenerCount">0</div>
+            <div class="lbs-metric-label">Current Listeners</div>
+            <div class="lbs-metric-sub">Connected now</div>
+          </div>
+
+          <div class="lbs-metric">
+            <div class="lbs-metric-icon">🌐</div>
+            <div class="lbs-metric-value" id="languageCount">0</div>
+            <div class="lbs-metric-label">Active Languages</div>
+            <div class="lbs-metric-sub">Connected now</div>
+          </div>
+
+          <div class="lbs-metric">
+            <div class="lbs-metric-icon">📈</div>
+            <div class="lbs-metric-value" id="largestGroupCount">0</div>
+            <div class="lbs-metric-label">Largest Group</div>
+            <div class="lbs-metric-sub" id="largestLanguage">—</div>
+          </div>
+
+          <div class="lbs-metric">
+            <div class="lbs-metric-icon">⏱</div>
+            <div class="lbs-metric-value" id="observedDuration">00:00:00</div>
+            <div class="lbs-metric-label">Live Observed</div>
+            <div class="lbs-metric-sub">Since this dashboard detected listeners</div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="lbs-error" id="errorBox"></div>
+    </div>
+
+    <div class="lbs-section-head">
+      <div class="lbs-section-title">
+        <span class="lbs-section-title-icon">📊</span>
+        Listeners by Language
+      </div>
+      <div class="lbs-section-sub">
+        Real-time breakdown of connected listeners
+      </div>
+    </div>
+
+    <div class="lbs-language-box" id="languageList">
+      <div class="lbs-empty">Waiting for live room information…</div>
+    </div>
+
+    <div class="lbs-footer-row">
+      <div>↻ Auto-refreshing every 5 seconds</div>
+      <div id="lastUpdated">Connecting…</div>
+    </div>
+
+    <div class="lbs-share">
+      <div class="lbs-share-grid">
+        <div>
+          <div class="lbs-share-title">Send This Live Stats Link</div>
+
+          <div class="lbs-share-copy">
+            Share this page with someone so they can remotely watch the
+            current listener count and language activity in real time.
+          </div>
+
+          <div class="lbs-share-language-row">
+            <div class="lbs-share-language-label">Share invite language</div>
+            <select class="lbs-share-language-select" id="statsShareLanguage">
+              <option value="en">English</option>
+              <option value="fr">Français — French</option>
+              <option value="es">Español — Spanish</option>
+              <option value="de">Deutsch — German</option>
+              <option value="pt">Português — Portuguese</option>
+              <option value="it">Italiano — Italian</option>
+              <option value="nl">Nederlands — Dutch</option>
+              <option value="pl">Polski — Polish</option>
+              <option value="uk">Українська — Ukrainian</option>
+              <option value="ru">Русский — Russian</option>
+              <option value="ar">العربية — Arabic</option>
+              <option value="zh">中文 — Chinese</option>
+              <option value="ja">日本語 — Japanese</option>
+              <option value="ko">한국어 — Korean</option>
+              <option value="hi">हिन्दी — Hindi</option>
+            </select>
+            <div class="lbs-share-language-note">Invite text and graphic use this language.</div>
+          </div>
+
+          <div class="lbs-url-box">
+            <div class="lbs-url" id="statsShareURL">
+              /live-stats/
+            </div>
+
+            <button class="lbs-btn lbs-btn-copy" id="copyStatsLink">
+              Copy Link
+            </button>
+
+            <button class="lbs-btn lbs-btn-share" id="shareStatsLink">
+              Send / Share
+            </button>
+          </div>
+
+          <div class="lbs-share-preview" id="statsSharePreview">
+            <img id="statsSharePreviewImage" alt="LiveBridge Live Stats invite preview">
+            <div class="lbs-share-preview-actions">
+              <button id="downloadStatsGraphic" type="button">Download Graphic</button>
+              <button id="copyStatsInviteText" type="button">Copy Invite Text</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbs-qr-wrap">
+          <img
+            class="lbs-qr"
+            id="statsQRCode"
+            alt="QR code for LiveBridge live stats"
+          >
+          <div class="lbs-qr-caption">Scan to open Live Stats</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="lbs-share">
+      <div class="lbs-share-grid">
+        <div>
+          <div class="lbs-share-title">Share the Live Translation</div>
+
+          <div class="lbs-share-copy">
+            Send this link or QR code to someone who needs to join the
+            TRANSLATION room and listen or read the live translation.
+          </div>
+
+          <div class="lbs-share-language-row">
+            <div class="lbs-share-language-label">Share invite language</div>
+            <select class="lbs-share-language-select" id="translationShareLanguage">
+              <option value="en">English</option>
+              <option value="fr">Français — French</option>
+              <option value="es">Español — Spanish</option>
+              <option value="de">Deutsch — German</option>
+              <option value="pt">Português — Portuguese</option>
+              <option value="it">Italiano — Italian</option>
+              <option value="nl">Nederlands — Dutch</option>
+              <option value="pl">Polski — Polish</option>
+              <option value="uk">Українська — Ukrainian</option>
+              <option value="ru">Русский — Russian</option>
+              <option value="ar">العربية — Arabic</option>
+              <option value="zh">中文 — Chinese</option>
+              <option value="ja">日本語 — Japanese</option>
+              <option value="ko">한국어 — Korean</option>
+              <option value="hi">हिन्दी — Hindi</option>
+            </select>
+            <div class="lbs-share-language-note">Invite text and graphic use this language.</div>
+          </div>
+
+          <div class="lbs-url-box">
+            <div class="lbs-url" id="translationShareURL">
+              /t/?room=TRANSLATION
+            </div>
+
+            <button class="lbs-btn lbs-btn-copy" id="copyTranslationLink">
+              Copy Link
+            </button>
+
+            <button class="lbs-btn lbs-btn-share" id="shareTranslationLink">
+              Send / Share
+            </button>
+          </div>
+
+          <div class="lbs-share-preview" id="translationSharePreview">
+            <img id="translationSharePreviewImage" alt="LiveBridge translation invite preview">
+            <div class="lbs-share-preview-actions">
+              <button id="downloadTranslationGraphic" type="button">Download Graphic</button>
+              <button id="copyTranslationInviteText" type="button">Copy Invite Text</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="lbs-qr-wrap">
+          <img
+            class="lbs-qr"
+            id="translationQRCode"
+            alt="QR code for LiveBridge translation room"
+          >
+          <div class="lbs-qr-caption">Scan to join Live Translation</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const LIVEBRIDGE_WORKER =
+  "https://livebridge.northstarventures-ca.workers.dev";
+
+const ROOM_ID = "TRANSLATION";
+const REFRESH_EVERY_MS = 5000;
+
+const STATS_SHARE_URL =
+  "https://livebridge.ca/live-stats/";
+
+function getTranslationShareURL(){
+  const lang =
+    String(
+      document.getElementById(
+        "translationShareLanguage"
+      )?.value ||
+      "en"
+    )
+    .trim()
+    .toLowerCase();
+
+  return (
+    "https://livebridge.ca/t/?room=" +
+    encodeURIComponent(
+      ROOM_ID
+    ) +
+    "&lang=" +
+    encodeURIComponent(
+      lang
+    )
+  );
+}
+
+let observedLiveStart = null;
+
+const LANGUAGE_NAMES = {
+  en: "English",
+  fr: "French",
+  es: "Spanish",
+  de: "German",
+  pt: "Portuguese",
+  it: "Italian",
+  pl: "Polish",
+  ru: "Russian",
+  uk: "Ukrainian",
+  nl: "Dutch",
+  cs: "Czech",
+  fil: "Filipino",
+  tl: "Filipino",
+  he: "Hebrew",
+  iw: "Hebrew",
+  yo: "Yoruba",
+  ig: "Igbo",
+  ha: "Hausa"
+};
+
+const LANGUAGE_FLAGS = {
+  en: "🇬🇧",
+  fr: "🇫🇷",
+  es: "🇪🇸",
+  de: "🇩🇪",
+  pt: "🇵🇹",
+  it: "🇮🇹",
+  pl: "🇵🇱",
+  ru: "🇷🇺",
+  uk: "🇺🇦",
+  nl: "🇳🇱",
+  cs: "🇨🇿",
+  fil: "🇵🇭",
+  tl: "🇵🇭",
+  he: "🇮🇱",
+  iw: "🇮🇱",
+  yo: "🌍",
+  ig: "🌍",
+  ha: "🌍"
+};
+
+function friendlyLanguage(code) {
+  const normalized = String(code || "").toLowerCase();
+  return LANGUAGE_NAMES[normalized] ||
+    normalized.toUpperCase() ||
+    "Unknown";
+}
+
+function friendlyFlag(code) {
+  return LANGUAGE_FLAGS[String(code || "").toLowerCase()] || "🌐";
+}
+
+function formatObservedDuration(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return hours + ":" + minutes + ":" + seconds;
+}
+
+function updateObservedClock() {
+  const el = document.getElementById("observedDuration");
+
+  if (!observedLiveStart) {
+    el.textContent = "00:00:00";
+    return;
+  }
+
+  el.textContent =
+    formatObservedDuration(Date.now() - observedLiveStart);
+}
+
+setInterval(updateObservedClock, 1000);
+
+function setOffline(message) {
+  document.getElementById("liveDot").classList.remove("live");
+  document.getElementById("liveStatus").textContent = "OFFLINE";
+  document.getElementById("liveNote").textContent =
+    "No listeners are currently connected.";
+
+  document.getElementById("listenerCount").textContent = "0";
+  document.getElementById("languageCount").textContent = "0";
+  document.getElementById("largestLanguage").textContent = "—";
+  document.getElementById("largestGroupCount").textContent = "0";
+  document.getElementById("languageList").innerHTML =
+    '<div class="lbs-empty">No listeners are currently connected.</div>';
+
+  observedLiveStart = null;
+  updateObservedClock();
+
+  if (message) {
+    const error = document.getElementById("errorBox");
+    error.textContent = message;
+    error.style.display = "block";
+  }
+}
+
+function renderStatus(data) {
+  const info = data.durableObject || data;
+  const listeners = Number(info.listeners || 0);
+  const languages = info.languages || {};
+
+  const entries = Object.entries(languages)
+    .filter(([, count]) => Number(count) > 0)
+    .sort((a,b) => Number(b[1]) - Number(a[1]));
+
+  document.getElementById("errorBox").style.display = "none";
+  document.getElementById("listenerCount").textContent = listeners;
+  document.getElementById("languageCount").textContent = entries.length;
+
+  if (listeners > 0) {
+    document.getElementById("liveDot").classList.add("live");
+    document.getElementById("liveStatus").textContent = "LIVE NOW";
+    document.getElementById("liveNote").textContent =
+      "The LiveBridge translation room currently has connected listeners.";
+
+    if (!observedLiveStart) {
+      observedLiveStart = Date.now();
+    }
+  } else {
+    document.getElementById("liveDot").classList.remove("live");
+    document.getElementById("liveStatus").textContent = "NO LISTENERS";
+    document.getElementById("liveNote").textContent =
+      "The room is available, but nobody is connected right now.";
+
+    observedLiveStart = null;
+    updateObservedClock();
+  }
+
+  document.getElementById("largestLanguage").textContent =
+    entries.length ? friendlyLanguage(entries[0][0]) : "—";
+
+  document.getElementById("largestGroupCount").textContent =
+    entries.length ? entries[0][1] : "0";
+
+  const list = document.getElementById("languageList");
+
+  if (!entries.length) {
+    list.innerHTML =
+      '<div class="lbs-empty">No active listener languages right now.</div>';
+    return;
+  }
+
+  list.innerHTML = "";
+
+  entries.forEach(([language, count]) => {
+    const percentage =
+      listeners > 0
+        ? Math.round((Number(count) / listeners) * 100)
+        : 0;
+
+    const row = document.createElement("div");
+    row.className = "lbs-language-row";
+
+    const main = document.createElement("div");
+    main.className = "lbs-language-main";
+
+    const flag = document.createElement("div");
+    flag.className = "lbs-flag";
+    flag.textContent = friendlyFlag(language);
+
+    const infoWrap = document.createElement("div");
+    infoWrap.className = "lbs-language-info";
+
+    const name = document.createElement("div");
+    name.className = "lbs-language-name";
+    name.textContent = friendlyLanguage(language);
+
+    const track = document.createElement("div");
+    track.className = "lbs-bar-track";
+
+    const bar = document.createElement("div");
+    bar.className = "lbs-bar";
+    bar.style.width = Math.max(4, percentage) + "%";
+
+    track.appendChild(bar);
+    infoWrap.appendChild(name);
+    infoWrap.appendChild(track);
+
+    main.appendChild(flag);
+    main.appendChild(infoWrap);
+
+    const numbers = document.createElement("div");
+    numbers.className = "lbs-language-numbers";
+
+    const total = document.createElement("div");
+    total.className = "lbs-language-count";
+    total.textContent = count;
+
+    const percent = document.createElement("div");
+    percent.className = "lbs-language-percent";
+    percent.textContent = percentage + "%";
+
+    numbers.appendChild(total);
+    numbers.appendChild(percent);
+
+    row.appendChild(main);
+    row.appendChild(numbers);
+    list.appendChild(row);
+  });
+}
+
+async function refreshLiveBridgeStats() {
+  try {
+    const response = await fetch(
+      LIVEBRIDGE_WORKER +
+      "/room-status?room=" +
+      encodeURIComponent(ROOM_ID),
+      { cache: "no-store" }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        "Worker returned status " +
+        response.status
+      );
+    }
+
+    const data =
+      await response.json();
+
+    if (!data.success) {
+      throw new Error(
+        data.error ||
+        "Room status unavailable"
+      );
+    }
+
+    renderStatus(data);
+
+    document.getElementById("lastUpdated").textContent =
+      "Last updated: " +
+      new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+
+  } catch (error) {
+    console.error(
+      "LiveBridge stats error:",
+      error
+    );
+
+    setOffline(
+      "Could not reach the LiveBridge room status."
+    );
+
+    document.getElementById("lastUpdated").textContent =
+      "Connection problem";
+  }
+}
+
+const SHARE_TRANSLATIONS = {
+  en:{liveTitle:"View LiveBridge Live Stats",liveSubtitle:"Watch listener activity in real time",liveMessage:"View the current LiveBridge listener count and language activity in real time.",translationTitle:"Join Our Live Broadcast Now",translationSubtitle:"Listen in your own language",translationMessage:"We’re live now. Join our LiveBridge broadcast and listen in your own language.",room:"ROOM"},
+  fr:{liveTitle:"Voir les statistiques LiveBridge",liveSubtitle:"Suivez l’activité des auditeurs en temps réel",liveMessage:"Consultez en temps réel le nombre d’auditeurs LiveBridge et les langues actives.",translationTitle:"Rejoignez notre diffusion en direct",translationSubtitle:"Écoutez dans votre propre langue",translationMessage:"Nous sommes en direct. Rejoignez notre diffusion LiveBridge et écoutez dans votre propre langue.",room:"SALLE"},
+  es:{liveTitle:"Ver estadísticas de LiveBridge",liveSubtitle:"Vea la actividad de los oyentes en tiempo real",liveMessage:"Vea en tiempo real la cantidad de oyentes de LiveBridge y la actividad por idioma.",translationTitle:"Únase a nuestra transmisión en vivo",translationSubtitle:"Escuche en su propio idioma",translationMessage:"Estamos en vivo. Únase a nuestra transmisión de LiveBridge y escuche en su propio idioma.",room:"SALA"},
+  de:{liveTitle:"LiveBridge-Livestatistiken ansehen",liveSubtitle:"Höreraktivität in Echtzeit verfolgen",liveMessage:"Sehen Sie die aktuelle LiveBridge-Hörerzahl und Sprachaktivität in Echtzeit.",translationTitle:"Jetzt unserer Live-Übertragung beitreten",translationSubtitle:"Hören Sie in Ihrer eigenen Sprache",translationMessage:"Wir sind jetzt live. Treten Sie unserer LiveBridge-Übertragung bei und hören Sie in Ihrer eigenen Sprache.",room:"RAUM"},
+  pt:{liveTitle:"Ver estatísticas ao vivo do LiveBridge",liveSubtitle:"Acompanhe a atividade dos ouvintes em tempo real",liveMessage:"Veja em tempo real o número atual de ouvintes do LiveBridge e a atividade por idioma.",translationTitle:"Entre na nossa transmissão ao vivo",translationSubtitle:"Ouça no seu próprio idioma",translationMessage:"Estamos ao vivo. Entre na nossa transmissão LiveBridge e ouça no seu próprio idioma.",room:"SALA"},
+  it:{liveTitle:"Visualizza le statistiche LiveBridge",liveSubtitle:"Guarda l’attività degli ascoltatori in tempo reale",liveMessage:"Visualizza in tempo reale il numero di ascoltatori LiveBridge e l’attività per lingua.",translationTitle:"Partecipa alla nostra diretta",translationSubtitle:"Ascolta nella tua lingua",translationMessage:"Siamo in diretta. Partecipa alla nostra trasmissione LiveBridge e ascolta nella tua lingua.",room:"STANZA"},
+  nl:{liveTitle:"Bekijk LiveBridge-livegegevens",liveSubtitle:"Bekijk luisteractiviteit in realtime",liveMessage:"Bekijk het actuele aantal LiveBridge-luisteraars en taalactiviteit in realtime.",translationTitle:"Doe nu mee met onze live-uitzending",translationSubtitle:"Luister in uw eigen taal",translationMessage:"We zijn nu live. Doe mee met onze LiveBridge-uitzending en luister in uw eigen taal.",room:"KAMER"},
+  pl:{liveTitle:"Zobacz statystyki LiveBridge na żywo",liveSubtitle:"Śledź aktywność słuchaczy w czasie rzeczywistym",liveMessage:"Zobacz aktualną liczbę słuchaczy LiveBridge i aktywność językową w czasie rzeczywistym.",translationTitle:"Dołącz do naszej transmisji na żywo",translationSubtitle:"Słuchaj w swoim języku",translationMessage:"Jesteśmy na żywo. Dołącz do transmisji LiveBridge i słuchaj w swoim języku.",room:"POKÓJ"},
+  uk:{liveTitle:"Переглянути статистику LiveBridge",liveSubtitle:"Стежте за активністю слухачів у реальному часі",liveMessage:"Переглядайте поточну кількість слухачів LiveBridge та мовну активність у реальному часі.",translationTitle:"Приєднуйтесь до нашої прямої трансляції",translationSubtitle:"Слухайте своєю мовою",translationMessage:"Ми вже в ефірі. Приєднуйтесь до трансляції LiveBridge і слухайте своєю мовою.",room:"КІМНАТА"},
+  ru:{liveTitle:"Посмотреть статистику LiveBridge",liveSubtitle:"Следите за активностью слушателей в реальном времени",liveMessage:"Смотрите текущее количество слушателей LiveBridge и языковую активность в реальном времени.",translationTitle:"Присоединяйтесь к нашей прямой трансляции",translationSubtitle:"Слушайте на своем языке",translationMessage:"Мы уже в эфире. Присоединяйтесь к трансляции LiveBridge и слушайте на своем языке.",room:"КОМНАТА"},
+  ar:{liveTitle:"عرض إحصاءات LiveBridge المباشرة",liveSubtitle:"شاهد نشاط المستمعين في الوقت الفعلي",liveMessage:"شاهد عدد مستمعي LiveBridge الحالي ونشاط اللغات في الوقت الفعلي.",translationTitle:"انضم إلى البث المباشر الآن",translationSubtitle:"استمع بلغتك الخاصة",translationMessage:"نحن على الهواء الآن. انضم إلى بث LiveBridge واستمع بلغتك الخاصة.",room:"الغرفة"},
+  zh:{liveTitle:"查看 LiveBridge 实时统计",liveSubtitle:"实时查看听众活动",liveMessage:"实时查看当前 LiveBridge 听众数量和语言活动。",translationTitle:"立即加入我们的直播",translationSubtitle:"用您自己的语言收听",translationMessage:"我们正在直播。加入 LiveBridge 直播，用您自己的语言收听。",room:"房间"},
+  ja:{liveTitle:"LiveBridge ライブ統計を見る",liveSubtitle:"リスナーの状況をリアルタイムで確認",liveMessage:"LiveBridge の現在のリスナー数と言語アクティビティをリアルタイムで確認できます。",translationTitle:"ライブ配信に今すぐ参加",translationSubtitle:"あなたの言語でお聴きください",translationMessage:"現在ライブ配信中です。LiveBridgeに参加して、あなたの言語でお聴きください。",room:"ルーム"},
+  ko:{liveTitle:"LiveBridge 실시간 통계 보기",liveSubtitle:"청취자 활동을 실시간으로 확인하세요",liveMessage:"현재 LiveBridge 청취자 수와 언어 활동을 실시간으로 확인하세요.",translationTitle:"지금 라이브 방송에 참여하세요",translationSubtitle:"자신의 언어로 들으세요",translationMessage:"지금 라이브 중입니다. LiveBridge 방송에 참여해 자신의 언어로 들으세요.",room:"방"},
+  hi:{liveTitle:"LiveBridge लाइव आँकड़े देखें",liveSubtitle:"श्रोता गतिविधि को रीयल टाइम में देखें",liveMessage:"LiveBridge के वर्तमान श्रोता और भाषा गतिविधि को रीयल टाइम में देखें।",translationTitle:"अभी हमारे लाइव प्रसारण से जुड़ें",translationSubtitle:"अपनी भाषा में सुनें",translationMessage:"हम अभी लाइव हैं। हमारे LiveBridge प्रसारण से जुड़ें और अपनी भाषा में सुनें।",room:"रूम"}
+};
+
+
+function wrapShareText(ctx,text,maxWidth){
+  const words=String(text).split(/\s+/), lines=[];
+  let line="";
+  for(const word of words){
+    const test=line?line+" "+word:word;
+    if(ctx.measureText(test).width>maxWidth && line){
+      lines.push(line);
+      line=word;
+    }else{
+      line=test;
+    }
+  }
+  if(line) lines.push(line);
+  return lines;
+}
+
+
+async function makeUnifiedShareGraphic({
+  url,
+  languageSelectId,
+  mode
+}){
+
+  const lang =
+    document.getElementById(
+      languageSelectId
+    )?.value || "en";
+
+  const t =
+    SHARE_TRANSLATIONS[lang] ||
+    SHARE_TRANSLATIONS.en;
+
+  const isStats =
+    mode === "stats";
+
+  const title =
+    isStats
+      ? t.liveTitle
+      : t.translationTitle;
+
+  const subtitle =
+    isStats
+      ? t.liveSubtitle
+      : t.translationSubtitle;
+
+  const message =
+    isStats
+      ? t.liveMessage
+      : t.translationMessage;
+
+  const qr =
+    new Image();
+
+  qr.crossOrigin =
+    "anonymous";
+
+  qr.src =
+    "https://api.qrserver.com/v1/create-qr-code/" +
+    "?size=500x500&margin=8&data=" +
+    encodeURIComponent(url);
+
+  await new Promise(
+    (resolve,reject)=>{
+      qr.onload=resolve;
+      qr.onerror=reject;
+    }
+  );
+
+  const canvas =
+    document.createElement(
+      "canvas"
+    );
+
+  canvas.width=1600;
+  canvas.height=1000;
+
+  const ctx =
+    canvas.getContext(
+      "2d"
+    );
+
+  const g =
+    ctx.createLinearGradient(
+      0,0,1600,1000
+    );
+
+  g.addColorStop(0,"#061325");
+  g.addColorStop(.65,"#0a2747");
+  g.addColorStop(1,"#04111e");
+
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,1600,1000);
+
+  ctx.font="900 70px Arial";
+  ctx.fillStyle="#fff";
+  ctx.fillText("Live",70,105);
+
+  ctx.fillStyle="#42f5a1";
+  ctx.fillText("Bridge",205,105);
+
+  ctx.font="700 20px Arial";
+  ctx.fillStyle="#90a9c4";
+  ctx.fillText(
+    isStats
+      ? "Live broadcast statistics"
+      : "Live multilingual translation",
+    72,
+    145
+  );
+
+  ctx.font="900 78px Arial";
+  ctx.fillStyle="#fff";
+
+  let y=275;
+
+  for(
+    const line of
+      wrapShareText(
+        ctx,
+        title,
+        930
+      )
+  ){
+    ctx.fillText(
+      line,
+      70,
+      y
+    );
+    y+=88;
+  }
+
+  ctx.font="700 46px Arial";
+  ctx.fillStyle="#42f5a1";
+
+  for(
+    const line of
+      wrapShareText(
+        ctx,
+        subtitle,
+        900
+      )
+  ){
+    ctx.fillText(
+      line,
+      72,
+      y
+    );
+    y+=56;
+  }
+
+  ctx.fillStyle="#fff";
+  ctx.beginPath();
+  ctx.roundRect(
+    1110,
+    180,
+    365,
+    365,
+    24
+  );
+  ctx.fill();
+
+  ctx.drawImage(
+    qr,
+    1132,
+    202,
+    321,
+    321
+  );
+
+  ctx.font="800 26px Arial";
+  ctx.fillStyle="#fff";
+  ctx.fillText(
+    isStats
+      ? "Scan QR to view stats"
+      : "Scan QR to join live",
+    1130,
+    600
+  );
+
+  ctx.fillStyle=
+    "rgba(3,19,34,.82)";
+  ctx.strokeStyle=
+    "#24d98b";
+  ctx.lineWidth=2;
+
+  ctx.beginPath();
+  ctx.roundRect(
+    70,
+    700,
+    1460,
+    165,
+    24
+  );
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.font="800 20px Arial";
+  ctx.fillStyle="#42f5a1";
+  ctx.fillText(
+    isStats ? "LIVE STATS" : t.room,
+    105,
+    742
+  );
+
+  ctx.font="900 44px Arial";
+  ctx.fillStyle="#fff";
+  ctx.fillText(
+    isStats ? "LIVEBRIDGE" : ROOM_ID,
+    105,
+    805
+  );
+
+  ctx.font="700 24px Arial";
+  ctx.fillStyle="#42f5a1";
+
+  const urlLines =
+    wrapShareText(
+      ctx,
+      url,
+      1000
+    );
+
+  urlLines
+    .slice(0,2)
+    .forEach(
+      (line,i)=>{
+        ctx.fillText(
+          line,
+          430,
+          755+(i*34)
+        );
+      }
+    );
+
+  ctx.font="700 20px Arial";
+  ctx.fillStyle="#91a8c0";
+  ctx.fillText(
+    "English  •  Français  •  Español  •  Deutsch  •  Português  •  中文  •  العربية  •  + many more",
+    74,
+    930
+  );
+
+  const blob =
+    await new Promise(
+      resolve =>
+        canvas.toBlob(
+          resolve,
+          "image/png",
+          .96
+        )
+    );
+
+  return {
+    canvas,
+    blob,
+    filename:
+      "LiveBridge-" +
+      (isStats ? "Live-Stats" : ROOM_ID) +
+      "-" +
+      lang +
+      ".png",
+    message:
+      message +
+      (
+        isStats
+          ? "\n\n"
+          : "\n\n" +
+            t.room +
+            ": " +
+            ROOM_ID +
+            "\n"
+      ) +
+      url
+  };
+}
+
+
+function configureShareBlock({
+  url,
+  urlElementId,
+  qrElementId,
+  copyButtonId,
+  shareButtonId,
+  languageSelectId,
+  previewId,
+  previewImageId,
+  downloadButtonId,
+  copyInviteTextButtonId,
+  mode
+}) {
+
+  const resolveURL =
+    () =>
+      typeof url === "function"
+        ? url()
+        : url;
+
+  const urlElement =
+    document.getElementById(
+      urlElementId
+    );
+
+  const qrElement =
+    document.getElementById(
+      qrElementId
+    );
+
+  const copyButton =
+    document.getElementById(
+      copyButtonId
+    );
+
+  const shareButton =
+    document.getElementById(
+      shareButtonId
+    );
+
+  if (urlElement) {
+    urlElement.textContent =
+      url;
+  }
+
+  if (qrElement) {
+    qrElement.src =
+      "https://api.qrserver.com/v1/create-qr-code/" +
+      "?size=500x500&margin=5&data=" +
+      encodeURIComponent(resolveURL());
+  }
+
+  async function preview(){
+
+    const generated =
+      await makeUnifiedShareGraphic({
+        url:
+          resolveURL(),
+        languageSelectId,
+        mode
+      });
+
+    document.getElementById(
+      previewImageId
+    ).src =
+      generated.canvas.toDataURL(
+        "image/png"
+      );
+
+    document.getElementById(
+      previewId
+    ).classList.add(
+      "show"
+    );
+
+    window[
+      mode === "stats"
+        ? "currentStatsShareInvite"
+        : "currentTranslationShareInvite"
+    ] =
+      generated;
+
+    return generated;
+  }
+
+  if (copyButton) {
+    copyButton.addEventListener(
+      "click",
+      async () => {
+
+        try {
+
+          await navigator.clipboard.writeText(
+            url
+          );
+
+          const original =
+            copyButton.textContent;
+
+          copyButton.textContent =
+            "✓ Copied";
+
+          setTimeout(
+            () => {
+              copyButton.textContent =
+                original;
+            },
+            1500
+          );
+
+        } catch (error) {
+
+          prompt(
+            "Copy this link:",
+            resolveURL()
+          );
+        }
+      }
+    );
+  }
+
+  if (shareButton) {
+    shareButton.addEventListener(
+      "click",
+      async () => {
+
+        try {
+
+          const generated =
+            await preview();
+
+          const file =
+            new File(
+              [generated.blob],
+              generated.filename,
+              {
+                type:"image/png"
+              }
+            );
+
+          if(
+            navigator.share &&
+            navigator.canShare &&
+            navigator.canShare({
+              files:[file]
+            })
+          ){
+
+            await navigator.share({
+              title:
+                "LiveBridge",
+              text:
+                generated.message,
+              files:
+                [file]
+            });
+
+            return;
+          }
+
+          if(
+            navigator.share
+          ){
+
+            await navigator.share({
+              title:
+                "LiveBridge",
+              text:
+                generated.message,
+              url:
+                resolveURL()
+            });
+
+            return;
+          }
+
+          await navigator.clipboard.writeText(
+            generated.message
+          );
+
+          alert(
+            "Invite text copied. The share graphic is shown below."
+          );
+
+        } catch (error) {
+
+          if(
+            error?.name !==
+            "AbortError"
+          ){
+
+            console.error(
+              "LiveBridge share failed:",
+              error
+            );
+
+            alert(
+              "The share graphic preview is shown below."
+            );
+          }
+        }
+      }
+    );
+  }
+
+  document.getElementById(
+    languageSelectId
+  )?.addEventListener(
+    "change",
+    async () => {
+
+      if (urlElement) {
+        urlElement.textContent =
+          resolveURL();
+      }
+
+      if (qrElement) {
+        qrElement.src =
+          "https://api.qrserver.com/v1/create-qr-code/" +
+          "?size=500x500&margin=5&data=" +
+          encodeURIComponent(
+            resolveURL()
+          );
+      }
+
+      if(
+        document.getElementById(
+          previewId
+        )?.classList.contains(
+          "show"
+        )
+      ){
+        await preview();
+      }
+    }
+  );
+
+  document.getElementById(
+    downloadButtonId
+  )?.addEventListener(
+    "click",
+    async () => {
+
+      const cacheKey =
+        mode === "stats"
+          ? "currentStatsShareInvite"
+          : "currentTranslationShareInvite";
+
+      const generated =
+        window[cacheKey] ||
+        await preview();
+
+      const link =
+        document.createElement(
+          "a"
+        );
+
+      link.href =
+        generated.canvas.toDataURL(
+          "image/png"
+        );
+
+      link.download =
+        generated.filename;
+
+      link.click();
+    }
+  );
+
+  document.getElementById(
+    copyInviteTextButtonId
+  )?.addEventListener(
+    "click",
+    async function(){
+
+      const cacheKey =
+        mode === "stats"
+          ? "currentStatsShareInvite"
+          : "currentTranslationShareInvite";
+
+      const generated =
+        window[cacheKey] ||
+        await preview();
+
+      await navigator.clipboard.writeText(
+        generated.message
+      );
+
+      const old =
+        this.textContent;
+
+      this.textContent =
+        "✓ Copied";
+
+      setTimeout(
+        () =>
+          this.textContent =
+            old,
+        1500
+      );
+    }
+  );
+}
+
+
+document.getElementById(
+  "roomLabel"
+).textContent = ROOM_ID;
+
+configureShareBlock({
+  url:
+    STATS_SHARE_URL,
+  urlElementId:
+    "statsShareURL",
+  qrElementId:
+    "statsQRCode",
+  copyButtonId:
+    "copyStatsLink",
+  shareButtonId:
+    "shareStatsLink",
+  languageSelectId:
+    "statsShareLanguage",
+  previewId:
+    "statsSharePreview",
+  previewImageId:
+    "statsSharePreviewImage",
+  downloadButtonId:
+    "downloadStatsGraphic",
+  copyInviteTextButtonId:
+    "copyStatsInviteText",
+  mode:
+    "stats"
+});
+
+configureShareBlock({
+  url:
+    getTranslationShareURL,
+  urlElementId:
+    "translationShareURL",
+  qrElementId:
+    "translationQRCode",
+  copyButtonId:
+    "copyTranslationLink",
+  shareButtonId:
+    "shareTranslationLink",
+  languageSelectId:
+    "translationShareLanguage",
+  previewId:
+    "translationSharePreview",
+  previewImageId:
+    "translationSharePreviewImage",
+  downloadButtonId:
+    "downloadTranslationGraphic",
+  copyInviteTextButtonId:
+    "copyTranslationInviteText",
+  mode:
+    "translation"
+});
+
+refreshLiveBridgeStats();
+
+setInterval(
+  refreshLiveBridgeStats,
+  REFRESH_EVERY_MS
+);
+</script>
+
+</body>
+</html>

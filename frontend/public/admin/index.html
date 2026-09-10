@@ -1,0 +1,6828 @@
+<!doctype html>
+<!-- LiveBridge v1.0.18 Admin Plan Manager additive UI -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+<style>
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:#07111f;
+  color:#fff;
+  font-family:Arial,Helvetica,sans-serif;
+}
+
+#lb-admin{
+  min-height:100vh;
+  background:
+    radial-gradient(circle at top left,#153969 0%,transparent 30%),
+    radial-gradient(circle at top right,#321455 0%,transparent 30%),
+    #07111f;
+}
+
+.lb-loading{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+
+.lb-spinner{
+  width:46px;
+  height:46px;
+  border:4px solid rgba(255,255,255,.12);
+  border-top-color:#2d97ff;
+  border-radius:50%;
+  margin:0 auto 14px;
+  animation:spin .8s linear infinite;
+}
+
+@keyframes spin{
+  to{transform:rotate(360deg)}
+}
+
+.lb-shell{
+  min-height:100vh;
+  display:grid;
+  grid-template-columns:250px 1fr;
+}
+
+.lb-sidebar{
+  padding:22px 16px;
+  border-right:1px solid rgba(255,255,255,.08);
+  background:rgba(0,0,0,.22);
+}
+
+.lb-logo{
+  font-size:27px;
+  font-weight:900;
+}
+
+.lb-logo span{
+  background:linear-gradient(90deg,#35d3bd,#2996ff,#9f4cff);
+  -webkit-background-clip:text;
+  color:transparent;
+}
+
+.lb-admin-label{
+  color:#83a0be;
+  font-size:12px;
+  margin-top:2px;
+  margin-bottom:24px;
+}
+
+.lb-admin-user{
+  padding:14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.05);
+  margin-bottom:18px;
+}
+
+.lb-small-label{
+  color:#71879f;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  margin-bottom:5px;
+}
+
+.lb-admin-name{
+  font-weight:800;
+  margin-bottom:3px;
+}
+
+.lb-admin-email{
+  color:#91a6bd;
+  font-size:11px;
+  word-break:break-word;
+}
+
+.lb-side-button{
+  width:100%;
+  padding:12px;
+  margin-bottom:7px;
+  border:none;
+  border-radius:10px;
+  text-align:left;
+  cursor:pointer;
+  color:#b9c9da;
+  background:transparent;
+  font-weight:800;
+}
+
+.lb-side-button:hover,
+.lb-side-button.active{
+  background:rgba(45,151,255,.13);
+  color:white;
+}
+
+.lb-divider{
+  height:1px;
+  margin:14px 0;
+  background:rgba(255,255,255,.08);
+}
+
+.lb-main{
+  padding:26px;
+  min-width:0;
+}
+
+.lb-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:22px;
+  gap:15px;
+}
+
+.lb-title{
+  font-size:30px;
+  font-weight:900;
+}
+
+.lb-subtitle{
+  color:#879db6;
+  margin-top:4px;
+  font-size:13px;
+}
+
+.lb-grid4{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:13px;
+  margin-bottom:17px;
+}
+
+.lb-card{
+  border-radius:16px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.09);
+  padding:18px;
+}
+
+.lb-metric{
+  font-size:29px;
+  font-weight:900;
+  margin-bottom:5px;
+}
+
+.lb-muted{
+  color:#8da2ba;
+  font-size:12px;
+}
+
+.lb-table-card{
+  padding:0;
+  overflow:hidden;
+}
+
+.lb-table-header{
+  padding:18px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.lb-card-title{
+  font-size:17px;
+  font-weight:900;
+}
+
+.lb-search{
+  width:250px;
+  max-width:100%;
+  padding:10px 12px;
+  border-radius:9px;
+  border:1px solid rgba(255,255,255,.10);
+  background:#101f31;
+  color:white;
+}
+
+.lb-client-row{
+  display:grid;
+  grid-template-columns:
+    1.5fr
+    .75fr
+    .7fr
+    .7fr
+    .65fr
+    .65fr
+    .65fr
+    auto;
+  gap:12px;
+  align-items:center;
+  padding:14px 18px;
+  border-bottom:1px solid rgba(255,255,255,.07);
+  font-size:12px;
+}
+  .lb-client-row > div{
+  text-align:center;
+}
+
+.lb-client-row > div:first-child{
+  text-align:left;
+}
+
+.lb-client-row > div:last-child{
+  text-align:right;
+}
+
+.lb-client-row.head{
+  color:#7890aa;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+  background:rgba(255,255,255,.025);
+}
+
+.lb-client-row:last-child{
+  border-bottom:none;
+}
+
+.lb-org-name{
+  font-weight:900;
+  color:white;
+}
+
+.lb-room{
+  color:#7ee3c4;
+  font-size:10px;
+  margin-top:3px;
+}
+
+.lb-status{
+  display:inline-block;
+  padding:5px 8px;
+  border-radius:8px;
+  font-size:10px;
+  font-weight:900;
+}
+
+.lb-status.active{
+  background:rgba(34,197,94,.12);
+  color:#5df09a;
+}
+
+.lb-status.suspended{
+  background:rgba(234,179,8,.12);
+  color:#facc15;
+}
+
+.lb-status.disabled{
+  background:rgba(239,68,68,.12);
+  color:#f87171;
+}
+
+.lb-button{
+  border:none;
+  border-radius:9px;
+  padding:10px 13px;
+  cursor:pointer;
+  color:white;
+  font-weight:800;
+}
+
+.lb-button.primary{
+  background:linear-gradient(135deg,#288cf8,#7046df);
+}
+
+.lb-button.secondary{
+  background:#14253a;
+  border:1px solid rgba(255,255,255,.12);
+}
+
+
+.lb-button.danger{
+  background:rgba(239,68,68,.12);
+  color:#ff9a9a;
+  border:1px solid rgba(239,68,68,.35);
+}
+
+.lb-button.danger:hover{
+  background:rgba(239,68,68,.2);
+}
+
+.lb-button.green{
+  background:#29d783;
+  color:#04150d;
+}
+
+.lb-button.red{
+  background:#8c2934;
+}
+
+.lb-empty{
+  padding:30px;
+  text-align:center;
+  color:#8096ad;
+}
+
+.lb-detail{
+  display:none;
+}
+
+.lb-back{
+  margin-bottom:16px;
+}
+
+.lb-detail-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+
+.lb-detail-heading{
+  font-size:22px;
+  font-weight:900;
+  margin-bottom:4px;
+}
+
+.lb-detail-room{
+  color:#64e3bf;
+  margin-bottom:17px;
+}
+
+.lb-form-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:13px;
+}
+
+.lb-field{
+  margin-bottom:13px;
+}
+
+.lb-field label{
+  display:block;
+  color:#8ba0b8;
+  font-size:11px;
+  font-weight:800;
+  margin-bottom:6px;
+}
+
+.lb-field input,
+.lb-field select,
+.lb-field textarea{
+  width:100%;
+  padding:11px 12px;
+  border-radius:9px;
+  border:1px solid rgba(255,255,255,.11);
+  background:#0e1c2d;
+  color:white;
+}
+
+.lb-field textarea{
+  min-height:100px;
+  resize:vertical;
+}
+
+.lb-quick-buttons{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+
+.lb-info-row{
+  display:flex;
+  justify-content:space-between;
+  gap:15px;
+  padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);
+  font-size:12px;
+}
+
+.lb-info-row:last-child{
+  border-bottom:none;
+}
+
+.lb-info-row span:first-child{
+  color:#8096ad;
+}
+
+.lb-save-bar{
+  display:flex;
+  gap:10px;
+  justify-content:flex-end;
+  margin-top:16px;
+}
+
+.lb-history-row{
+  display:grid;
+  grid-template-columns:1.4fr .8fr .7fr .7fr .8fr;
+  gap:12px;
+  padding:12px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);
+  font-size:11px;
+}
+
+.lb-history-mode{
+  display:flex;
+  gap:8px;
+  margin-bottom:12px;
+}
+
+.lb-history-mode button{
+  border:1px solid rgba(255,255,255,.12);
+  background:#14253a;
+  color:#9db1c6;
+  border-radius:8px;
+  padding:8px 10px;
+  cursor:pointer;
+  font-size:10px;
+  font-weight:900;
+}
+
+.lb-history-mode button.active{
+  color:white;
+  border-color:rgba(45,151,255,.5);
+  background:rgba(45,151,255,.15);
+}
+
+.lb-history-advanced-row{
+  display:none;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  padding:10px 0 14px;
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+
+#detailHistory.advanced .lb-history-advanced-row{
+  display:grid;
+}
+
+.lb-history-detail-stat{
+  padding:9px 10px;
+  border-radius:9px;
+  background:rgba(255,255,255,.035);
+  border:1px solid rgba(255,255,255,.06);
+}
+
+.lb-history-detail-label{
+  color:#71879f;
+  font-size:9px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  margin-bottom:4px;
+}
+
+.lb-history-detail-value{
+  font-size:11px;
+  font-weight:900;
+  color:#dce9f5;
+}
+
+.lb-history-row.head{
+  text-transform:uppercase;
+  color:#7790aa;
+  font-size:9px;
+  font-weight:900;
+}
+
+.lb-message{
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:9px;
+  display:none;
+  font-size:12px;
+}
+
+.lb-message.good{
+  display:block;
+  background:rgba(34,197,94,.10);
+  color:#60ef9b;
+}
+
+.lb-message.bad{
+  display:block;
+  background:rgba(239,68,68,.10);
+  color:#f87171;
+}
+
+@media(max-width:1100px){
+  .lb-grid4{grid-template-columns:1fr 1fr}
+
+  .lb-client-row{
+    grid-template-columns:1.4fr .8fr .7fr .7fr auto;
+  }
+
+  .hide-medium{
+    display:none;
+  }
+}
+
+@media(max-width:760px){
+  .lb-shell{
+    grid-template-columns:1fr;
+  }
+
+  .lb-sidebar{
+    border-right:none;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+
+  .lb-main{
+    padding:16px;
+  }
+
+  .lb-grid4,
+  .lb-detail-grid,
+  .lb-form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .lb-client-row{
+    grid-template-columns:1fr auto;
+  }
+
+  .lb-client-row.head{
+    display:none;
+  }
+
+  .hide-mobile{
+    display:none;
+  }
+
+  .lb-topbar{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
+
+.lb-plan-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+}
+
+.lb-plan-card{
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.05);
+  padding:16px;
+}
+
+.lb-plan-card.inactive{
+  opacity:.65;
+}
+
+.lb-plan-name{
+  font-size:18px;
+  font-weight:900;
+  margin-bottom:4px;
+}
+
+.lb-plan-code{
+  color:#6f88a2;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  margin-bottom:12px;
+}
+
+.lb-plan-meta{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin:12px 0;
+}
+
+.lb-plan-meta-box{
+  padding:10px;
+  border-radius:10px;
+  background:rgba(255,255,255,.035);
+  border:1px solid rgba(255,255,255,.06);
+}
+
+.lb-plan-meta-label{
+  color:#6f88a2;
+  font-size:9px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  margin-bottom:3px;
+}
+
+.lb-plan-meta-value{
+  font-weight:900;
+  font-size:13px;
+}
+
+.lb-plan-flags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin:10px 0 14px;
+}
+
+.lb-plan-flag{
+  display:inline-block;
+  padding:5px 8px;
+  border-radius:999px;
+  font-size:9px;
+  font-weight:900;
+  background:rgba(45,151,255,.12);
+  color:#8fc5ff;
+}
+
+.lb-plan-flag.green{
+  background:rgba(34,197,94,.12);
+  color:#5df09a;
+}
+
+.lb-plan-flag.yellow{
+  background:rgba(234,179,8,.12);
+  color:#facc15;
+}
+
+.lb-plan-flag.red{
+  background:rgba(239,68,68,.12);
+  color:#f87171;
+}
+
+.lb-plan-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.lb-plan-form{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:13px;
+}
+
+.lb-plan-form .full{
+  grid-column:1 / -1;
+}
+
+.lb-plan-checkbox{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:11px 12px;
+  border:1px solid rgba(255,255,255,.10);
+  background:#0e1c2d;
+  border-radius:9px;
+}
+
+.lb-plan-checkbox input{
+  width:auto;
+}
+
+.lb-plan-modal{
+  position:fixed;
+  inset:0;
+  z-index:999999;
+  background:rgba(2,8,18,.84);
+  backdrop-filter:blur(5px);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+
+.lb-plan-modal.show{
+  display:flex;
+}
+
+.lb-plan-modal-card{
+  width:100%;
+  max-width:760px;
+  max-height:92vh;
+  overflow:auto;
+  background:#101d2d;
+  border:1px solid rgba(255,255,255,.13);
+  border-radius:20px;
+  padding:24px;
+  box-shadow:0 25px 70px rgba(0,0,0,.45);
+}
+
+.lb-plan-features{
+  min-height:120px;
+  resize:vertical;
+}
+
+.lb-plan-price-note{
+  margin-top:7px;
+  color:#72889f;
+  font-size:10px;
+  line-height:1.5;
+}
+
+@media(max-width:1050px){
+  .lb-plan-grid{
+    grid-template-columns:1fr 1fr;
+  }
+}
+
+@media(max-width:760px){
+  .lb-plan-grid,
+  .lb-plan-form{
+    grid-template-columns:1fr;
+  }
+
+  .lb-plan-form .full{
+    grid-column:auto;
+  }
+}
+
+
+  .lb-feature-override-item{
+    display:flex;
+    gap:9px;
+    align-items:flex-start;
+    padding:11px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,.09);
+    background:#0e1c2d;
+    cursor:pointer;
+    color:#dbe8f5;
+    text-transform:none;
+    letter-spacing:0;
+  }
+  .lb-feature-override-item input{
+    width:auto;
+    margin:2px 0 0;
+    accent-color:#29d783;
+  }
+  .lb-feature-override-item strong{
+    display:block;
+    color:white;
+    font-size:12px;
+    margin-bottom:3px;
+  }
+  .lb-feature-override-item small{
+    display:block;
+    color:#839ab3;
+    font-size:10px;
+    line-height:1.4;
+  }
+
+</style>
+
+
+<div id="lb-admin">
+
+  <div id="adminLoading" class="lb-loading">
+    <div>
+      <div class="lb-spinner"></div>
+      <div style="font-size:22px;font-weight:900;">
+        LiveBridge Admin
+      </div>
+      <div class="lb-muted" style="margin-top:5px;">
+        Verifying administrator access...
+      </div>
+    </div>
+  </div>
+
+
+  <div id="adminShell" class="lb-shell" style="display:none;">
+
+    <aside class="lb-sidebar">
+
+      <div class="lb-logo">
+        Live<span>Bridge</span>
+      </div>
+
+      <div class="lb-admin-label">
+        Administration
+      </div>
+
+
+      <div class="lb-admin-user">
+
+        <div class="lb-small-label">
+          Administrator
+        </div>
+
+        <div class="lb-admin-name" id="adminName">
+          —
+        </div>
+
+        <div class="lb-admin-email" id="adminEmail">
+          —
+        </div>
+
+      </div>
+
+
+      <button
+        class="lb-side-button active"
+        id="showClientsButton"
+      >
+        👥 Client Accounts
+      </button>
+
+      <button
+        class="lb-side-button"
+        onclick="window.location.href='/account'"
+      >
+        🏠 My Account Dashboard
+      </button>
+
+      <button
+        class="lb-side-button"
+        id="showAdminsButton"
+      >
+        🛡 Administrators
+      </button>
+
+      <button
+        class="lb-side-button"
+        id="showPlansButton"
+      >
+        💳 Plans
+      </button>
+
+      <div class="lb-divider"></div>
+
+      <button
+        class="lb-side-button"
+        id="refreshAdminButton"
+      >
+        ↻ Refresh Data
+      </button>
+
+      <button
+        class="lb-side-button"
+        id="adminLogoutButton"
+      >
+        ↪ Logout
+      </button>
+
+    </aside>
+
+
+    <main class="lb-main">
+
+      <div id="clientListView">
+
+        <div class="lb-topbar">
+
+          <div>
+            <div class="lb-title">
+              Client Accounts
+            </div>
+
+            <div class="lb-subtitle">
+              Manage LiveBridge organizations, plans and usage.
+            </div>
+          </div>
+
+          <div id="adminUserButton"></div>
+
+        </div>
+
+
+        <div class="lb-grid4">
+
+          <div class="lb-card">
+            <div class="lb-metric" id="totalClients">0</div>
+            <div class="lb-muted">Total Clients</div>
+          </div>
+
+          <div class="lb-card">
+            <div class="lb-metric" id="activeClients">0</div>
+            <div class="lb-muted">Active Accounts</div>
+          </div>
+
+          <div class="lb-card">
+            <div class="lb-metric" id="totalBroadcasts">0</div>
+            <div class="lb-muted">Total Broadcasts</div>
+          </div>
+
+          <div class="lb-card">
+            <div class="lb-metric" id="totalListenerSessions">0</div>
+            <div class="lb-muted">Listener Sessions</div>
+          </div>
+
+        </div>
+
+
+        <div class="lb-card lb-table-card">
+
+          <div class="lb-table-header">
+
+            <div class="lb-card-title">
+              Organizations
+            </div>
+
+            <input
+              id="clientSearch"
+              class="lb-search"
+              placeholder="Search clients..."
+            >
+
+          </div>
+
+
+          <div class="lb-client-row head">
+
+            <div>Organization</div>
+            <div>Plan</div>
+            <div>Hours Left</div>
+            <div>Viewer Limit</div>
+            <div class="hide-medium">Broadcasts</div>
+            <div class="hide-medium">Peak</div>
+            <div class="hide-medium">Status</div>
+            <div></div>
+
+          </div>
+
+
+          <div id="clientRows">
+            <div class="lb-empty">
+              Loading clients...
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+
+
+      <div id="adminAccessView" style="display:none;">
+
+        <div class="lb-topbar">
+
+          <div>
+            <div class="lb-title">
+              Administrators
+            </div>
+
+            <div class="lb-subtitle">
+              Grant or remove access to the LiveBridge administration dashboard.
+            </div>
+          </div>
+
+          <div id="adminAccessUserButton"></div>
+
+        </div>
+
+
+        <div class="lb-card">
+
+          <div class="lb-card-title">
+            Administrator Access
+          </div>
+
+          <div class="lb-muted" style="margin-bottom:16px;">
+            Any LiveBridge customer account can be granted administrator access.
+          </div>
+
+          <div id="adminAccessRows" class="lb-admin-access-list">
+            <div class="lb-empty">
+              Loading administrator accounts...
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+
+
+      <div id="plansView" style="display:none;">
+
+        <div class="lb-topbar">
+          <div>
+            <div class="lb-title">
+              Plans
+            </div>
+
+            <div class="lb-subtitle">
+              Manage LiveBridge pricing, included hours, viewer limits and public visibility.
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button
+              class="lb-button green"
+              id="createPlanButton"
+              type="button"
+            >
+              + Add Plan
+            </button>
+
+            <div id="plansUserButton"></div>
+          </div>
+        </div>
+
+        <div class="lb-card" style="margin-bottom:16px;">
+          <div class="lb-card-title">
+            Central Plan Catalog
+          </div>
+
+          <div class="lb-muted" style="margin-top:7px;line-height:1.6;">
+            These plans are stored in LiveBridge D1. The landing page and Stripe Checkout will be connected to this catalog after the plan manager is verified.
+          </div>
+        </div>
+
+        <div id="plansGrid" class="lb-plan-grid">
+          <div class="lb-empty">
+            Loading plans...
+          </div>
+        </div>
+
+      </div>
+
+
+      <div
+        id="planEditorModal"
+        class="lb-plan-modal"
+      >
+        <div class="lb-plan-modal-card">
+
+          <div class="lb-topbar" style="margin-bottom:18px;">
+            <div>
+              <div class="lb-card-title" id="planEditorTitle">
+                Add Plan
+              </div>
+
+              <div class="lb-muted" style="margin-top:5px;">
+                Changes save to the centralized D1 plan catalog.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="lb-button secondary"
+              id="closePlanEditor"
+            >
+              Close
+            </button>
+          </div>
+
+          <input type="hidden" id="planEditId">
+
+          <div class="lb-plan-form">
+
+            <div class="lb-field">
+              <label>Plan Name</label>
+              <input
+                type="text"
+                id="planEditName"
+                placeholder="Example: Growth"
+              >
+            </div>
+
+            <div class="lb-field">
+              <label>Plan Code</label>
+              <input
+                type="text"
+                id="planEditCode"
+                placeholder="growth"
+              >
+            </div>
+
+            <div class="lb-field">
+              <label>Price (CAD)</label>
+              <input
+                type="number"
+                id="planEditPrice"
+                min="0"
+                step="0.01"
+                placeholder="49.00"
+              >
+              <div class="lb-plan-price-note">
+                Custom/private plans automatically create and maintain their Stripe Product and recurring Price.
+              </div>
+            </div>
+
+            <div class="lb-field">
+              <label>Billing Interval</label>
+              <select id="planEditBillingInterval">
+                <option value="month">Monthly</option>
+                <option value="year">Yearly</option>
+              </select>
+            </div>
+
+            <div class="lb-field">
+              <label>Included Minutes</label>
+              <input
+                type="number"
+                id="planEditMinutes"
+                min="0"
+                step="1"
+              >
+            </div>
+
+            <div class="lb-field">
+              <label>Viewer Limit</label>
+              <input
+                type="number"
+                id="planEditViewers"
+                min="1"
+                step="1"
+              >
+            </div>
+
+            <div class="lb-field">
+              <label>Display Order</label>
+              <input
+                type="number"
+                id="planEditOrder"
+                step="1"
+              >
+            </div>
+
+            <div class="lb-field">
+              <label>Currency</label>
+              <select id="planEditCurrency">
+                <option value="CAD">CAD</option>
+                <option value="USD">USD</option>
+              </select>
+            </div>
+
+            <div class="lb-field full">
+              <label>Description</label>
+              <textarea
+                id="planEditDescription"
+                placeholder="Short public description for this plan."
+              ></textarea>
+            </div>
+
+            <div class="lb-field full">
+              <label>Features — one per line</label>
+              <textarea
+                id="planEditFeatures"
+                class="lb-plan-features"
+                placeholder="Live translation&#10;AI Notes&#10;Broadcast history"
+              ></textarea>
+            </div>
+
+            <div class="lb-plan-checkbox">
+              <input
+                type="checkbox"
+                id="planEditPublic"
+              >
+              <label for="planEditPublic" style="margin:0;">
+                Publicly visible
+              </label>
+            </div>
+
+            <div class="lb-plan-checkbox">
+              <input
+                type="checkbox"
+                id="planEditActive"
+              >
+              <label for="planEditActive" style="margin:0;">
+                Active
+              </label>
+            </div>
+
+            <div class="lb-plan-checkbox">
+              <input
+                type="checkbox"
+                id="planEditCustom"
+              >
+              <label for="planEditCustom" style="margin:0;">
+                Custom / private plan
+              </label>
+            </div>
+
+            <div class="lb-field">
+              <label>Stripe Product ID</label>
+              <input
+                type="text"
+                id="planEditStripeProduct"
+                placeholder="Created automatically for custom plans"
+                readonly
+              >
+            </div>
+
+            <div class="lb-field">
+              <label>Stripe Price ID</label>
+              <input
+                type="text"
+                id="planEditStripePrice"
+                placeholder="Created automatically for custom plans"
+                readonly
+              >
+            </div>
+
+          </div>
+
+          <div class="lb-save-bar">
+            <button
+              type="button"
+              class="lb-button secondary"
+              id="cancelPlanEditor"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              class="lb-button green"
+              id="savePlanButton"
+            >
+              Save Plan
+            </button>
+          </div>
+
+          <div
+            id="planSaveMessage"
+            class="lb-message"
+          ></div>
+
+        </div>
+      </div>
+
+
+
+      <div id="offerCreatorModal" class="lb-plan-modal">
+        <div class="lb-plan-modal-card" style="max-width:760px;">
+
+          <div class="lb-topbar" style="margin-bottom:18px;">
+            <div>
+              <div class="lb-card-title">Create Private Offer</div>
+              <div class="lb-muted" id="offerPlanSummary" style="margin-top:5px;"></div>
+            </div>
+            <button type="button" class="lb-button secondary" id="closeOfferCreator">Close</button>
+          </div>
+
+          <input type="hidden" id="offerPlanId">
+
+          <div id="offerFormArea">
+            <div class="lb-plan-form">
+              <div class="lb-field">
+                <label>Recipient / Organization</label>
+                <input type="text" id="offerRecipientName" placeholder="Example Organization">
+              </div>
+
+              <div class="lb-field">
+                <label>Restrict to Email (optional)</label>
+                <input type="email" id="offerRecipientEmail" placeholder="name@example.com">
+              </div>
+
+              <div class="lb-field">
+                <label>Expiration (optional)</label>
+                <input type="datetime-local" id="offerExpiration">
+              </div>
+
+              <div class="lb-field">
+                <label>Maximum Redemptions</label>
+                <input type="number" id="offerMaxRedemptions" min="1" max="1000" step="1" value="1">
+              </div>
+
+              <div class="lb-plan-checkbox">
+                <input type="checkbox" id="offerSingleUse" checked>
+                <label for="offerSingleUse" style="margin:0;">Single-use offer</label>
+              </div>
+
+              <div class="lb-field full">
+                <label>Optional Note</label>
+                <textarea id="offerNote" placeholder="A short personal note for this offer."></textarea>
+              </div>
+            </div>
+
+            <div class="lb-save-bar">
+              <button type="button" class="lb-button green" id="createOfferButton">Create Offer</button>
+            </div>
+          </div>
+
+          <div id="offerResultArea" style="display:none;">
+            <div style="border:1px solid rgba(96,198,255,.24);border-radius:20px;padding:22px;background:radial-gradient(circle at top right,rgba(69,174,255,.15),transparent 34%),linear-gradient(145deg,#0b1c30,#102b48);color:white;box-shadow:0 18px 42px rgba(0,0,0,.22);">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                <div style="width:9px;height:9px;border-radius:50%;background:#40e6ab;box-shadow:0 0 13px rgba(64,230,171,.55);"></div>
+                <div style="font-weight:950;font-size:21px;">Private Offer Ready</div>
+              </div>
+              <div id="offerResultRecipient" style="color:#9fb9d1;margin-bottom:16px;font-size:12px;"></div>
+              <div style="padding:14px;border-radius:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);">
+                <div style="font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#79a6c9;font-weight:900;margin-bottom:6px;">Secure Offer Link</div>
+                <input id="offerResultLink" type="text" readonly style="width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid rgba(255,255,255,.10);border-radius:9px;background:#071725;color:#eaf5ff;">
+              </div>
+              <div style="display:grid;grid-template-columns:170px 1fr;gap:18px;align-items:center;margin-top:18px;">
+                <div style="width:170px;height:170px;background:white;border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 28px rgba(0,0,0,.18);">
+                  <img id="offerQrImage" alt="Offer QR Code" width="150" height="150" style="display:block;">
+                </div>
+                <div>
+                  <div style="font-weight:900;font-size:15px;margin-bottom:6px;">Ready to send</div>
+                  <div style="color:#94abc0;font-size:11px;line-height:1.6;margin-bottom:14px;">Share the secure link directly, or download the polished client-facing offer graphic with the QR code embedded.</div>
+                  <div style="display:flex;gap:9px;flex-wrap:wrap;">
+                    <button type="button" class="lb-button primary" id="copyOfferLinkButton">Copy Offer Link</button>
+                    <button type="button" class="lb-button secondary" id="shareOfferButton">Send / Share</button>
+                    <button type="button" class="lb-button green" id="downloadOfferGraphicButton">Download Premium Graphic</button>
+                    <button type="button" class="lb-button secondary" id="createAnotherOfferButton">Create Another</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="offerCreateMessage" class="lb-message"></div>
+        </div>
+      </div>
+
+
+      <div id="clientDetailView" class="lb-detail">
+
+        <button
+          class="lb-button secondary lb-back"
+          id="backToClients"
+        >
+          ← Back to Clients
+        </button>
+
+
+        <div class="lb-detail-heading" id="detailOrganization">
+          Organization
+        </div>
+
+        <div class="lb-detail-room" id="detailRoom">
+          —
+        </div>
+
+
+        <div class="lb-grid4">
+
+          <div class="lb-card">
+            <div class="lb-metric" id="detailIncludedHours">0h</div>
+            <div class="lb-muted">Included Hours</div>
+          </div>
+
+          <div class="lb-card">
+            <div class="lb-metric" id="detailUsedHours">0h</div>
+            <div class="lb-muted">Used Hours</div>
+          </div>
+
+          <div class="lb-card">
+            <div class="lb-metric" id="detailRemainingHours">0h</div>
+            <div class="lb-muted">Hours Remaining</div>
+          </div>
+
+          <div class="lb-card">
+            <div class="lb-metric" id="detailViewerLimit">0</div>
+            <div class="lb-muted">Effective Viewer Limit</div>
+          </div>
+
+        </div>
+
+
+        <div class="lb-detail-grid">
+
+          <div class="lb-card">
+
+            <div class="lb-card-title" style="margin-bottom:15px;">
+              Account Controls
+            </div>
+
+
+            <div class="lb-card-title" style="margin:6px 0 14px;">
+              Customer Profile
+            </div>
+
+            <div class="lb-form-grid" style="margin-bottom:22px;">
+
+              <div class="lb-field">
+                <label>Organization Name</label>
+                <input type="text" id="editOrganizationName">
+              </div>
+
+              <div class="lb-field">
+                <label>Account Holder</label>
+                <input type="text" id="editAccountHolder">
+              </div>
+
+              <div class="lb-field">
+                <label>Email Address</label>
+                <input type="email" id="editEmail">
+                <div class="lb-muted" style="margin-top:6px;">
+                  Contact/profile email
+                </div>
+              </div>
+
+              <div class="lb-field">
+                <label>Account Email Address</label>
+                <input type="email" id="editAccountEmail">
+                <div class="lb-muted" style="margin-top:6px;">
+                  Login email
+                </div>
+              </div>
+
+              <div class="lb-field">
+                <label>Phone</label>
+                <input type="text" id="editPhone">
+              </div>
+
+            </div>
+
+            <div class="lb-card-title" style="margin:0 0 14px;">
+              Plan & Access
+            </div>
+
+            <div class="lb-form-grid">
+
+              <div class="lb-field">
+                <label>Plan</label>
+
+                <select id="editPlan">
+                  <option value="starter">
+                    Starter — 5h / 25 viewers
+                  </option>
+
+                  <option value="growth">
+                    Growth — 10h / 50 viewers
+                  </option>
+
+                  <option value="pro">
+                    Pro — 20h / 100 viewers
+                  </option>
+
+                  <option value="free-demo">
+                    Free Demo — 20h / 100 viewers
+                  </option>
+                </select>
+              </div>
+
+
+              <div class="lb-field">
+                <label>Account Status</label>
+
+                <select id="editStatus">
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="disabled">Disabled</option>
+                </select>
+              </div>
+
+
+              <div class="lb-field">
+                <label>Included Minutes</label>
+                <input type="number" min="0" id="editIncludedMinutes">
+              </div>
+
+
+              <div class="lb-field">
+                <label>Bonus Minutes</label>
+                <input type="number" min="0" id="editBonusMinutes">
+              </div>
+
+
+              <div class="lb-field">
+                <label>Base Viewer Limit</label>
+                <input type="number" min="1" id="editViewerLimit">
+              </div>
+
+
+              <div class="lb-field">
+                <label>
+                  Viewer Override
+                  <span style="font-weight:400;color:#647a91;">
+                    (blank = plan limit)
+                  </span>
+                </label>
+
+                <input
+                  type="number"
+                  min="1"
+                  id="editViewerOverride"
+                  placeholder="No override"
+                >
+              </div>
+
+              <div class="lb-field">
+                <label>Church Features</label>
+
+                <label style="
+                  display:flex;
+                  align-items:flex-start;
+                  gap:10px;
+                  padding:12px;
+                  border-radius:10px;
+                  border:1px solid rgba(255,255,255,.11);
+                  background:#0e1c2d;
+                  cursor:pointer;
+                  text-transform:none;
+                  letter-spacing:0;
+                  font-size:12px;
+                  line-height:1.45;
+                  color:#dbe8f5;
+                ">
+                  <input
+                    type="checkbox"
+                    id="editScriptureEnabled"
+                    style="
+                      width:auto;
+                      margin:2px 0 0;
+                      accent-color:#29d783;
+                    "
+                  >
+                  <span>
+                    <strong style="color:white;">
+                      Enable Scripture Detection
+                    </strong>
+                    <br>
+                    <span style="color:#839ab3;">
+                      Turns Scripture Detection on for this organization. Growth and Pro include this feature at the plan level.
+                    </span>
+                  </span>
+                </label>
+
+                <label style="
+                  display:flex;
+                  align-items:flex-start;
+                  gap:10px;
+                  padding:12px;
+                  margin-top:9px;
+                  border-radius:10px;
+                  border:1px solid rgba(255,193,7,.20);
+                  background:rgba(255,193,7,.055);
+                  cursor:pointer;
+                  text-transform:none;
+                  letter-spacing:0;
+                  font-size:12px;
+                  line-height:1.45;
+                  color:#dbe8f5;
+                ">
+                  <input
+                    type="checkbox"
+                    id="editScripturePlanOverride"
+                    style="
+                      width:auto;
+                      margin:2px 0 0;
+                      accent-color:#f6c344;
+                    "
+                  >
+                  <span>
+                    <strong style="color:#ffd978;">
+                      Override Plan Restriction
+                    </strong>
+                    <br>
+                    <span style="color:#9aaec2;">
+                      Allows Scripture Detection even when this organization's plan does not normally include it.
+                    </span>
+                  </span>
+                </label>
+
+                <div
+                  id="editScriptureEffectiveStatus"
+                  style="
+                    margin-top:8px;
+                    color:#839ab3;
+                    font-size:11px;
+                    line-height:1.45;
+                  "
+                >
+                  Effective access will appear here.
+                </div>
+              </div>
+
+            </div>
+
+
+            <div
+              style="
+                margin-top:18px;
+                padding:16px;
+                border-radius:14px;
+                border:1px solid rgba(73,169,255,.20);
+                background:rgba(24,90,150,.08);
+              "
+            >
+              <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
+                Feature Overrides
+              </div>
+
+              <div style="color:#8fa8bf;font-size:11px;line-height:1.5;margin-bottom:13px;">
+                Turn on any individual feature below to grant it to this organization even when its normal plan does not include it.
+              </div>
+
+              <div
+                id="featureOverrideGrid"
+                style="
+                  display:grid;
+                  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+                  gap:9px;
+                "
+              >
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideTranscriptAccess">
+                  <span><strong>Post-broadcast Transcripts</strong><small>Includes up to 30 days of transcript access when manually granted.</small></span>
+                </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideTranscriptEmail">
+                  <span><strong>Email Transcript + AI Summary</strong><small>Allows transcript and AI notes email after broadcast.</small></span>
+                </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideScheduledBroadcasts">
+                  <span><strong>Scheduled Broadcasts</strong><small>Allows scheduled broadcast setup on any plan.</small></span>
+                </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideDetailedAnalytics">
+                  <span><strong>Detailed Listener Analytics</strong><small>Unlocks detailed broadcast/listener and language analytics.</small></span>
+                </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideReportExport">
+                  <span><strong>Analytics / Report Export</strong><small>Marks this organization as allowed to use downloadable reporting.</small></span>
+                </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overridePrioritySupport">
+                  <span><strong>Priority Email Support</strong><small>Marks this organization for priority support access.</small></span>
+                </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideCustomOnboarding">
+                  <span><strong>Custom Onboarding / Configuration</strong><small>Marks this organization for custom setup support.</small></span>
+                </label>
+              </div>
+
+              <div
+                id="featureOverrideSummary"
+                style="
+                  margin-top:11px;
+                  color:#91a9bf;
+                  font-size:11px;
+                  line-height:1.5;
+                "
+              >
+                No additional feature overrides enabled.
+              </div>
+            </div>
+
+
+            <div class="lb-small-label" style="margin-top:5px;">
+              Quick Bonus Time
+            </div>
+
+            <div class="lb-quick-buttons">
+
+              <button class="lb-button secondary bonus-btn" data-minutes="60">
+                +1 Hour
+              </button>
+
+              <button class="lb-button secondary bonus-btn" data-minutes="300">
+                +5 Hours
+              </button>
+
+              <button class="lb-button secondary bonus-btn" data-minutes="600">
+                +10 Hours
+              </button>
+
+            </div>
+
+
+            <div class="lb-small-label" style="margin-top:18px;">
+              Quick Viewer Override
+            </div>
+
+            <div class="lb-quick-buttons">
+
+              <button class="lb-button secondary viewer-btn" data-viewers="25">
+                25
+              </button>
+
+              <button class="lb-button secondary viewer-btn" data-viewers="50">
+                50
+              </button>
+
+              <button class="lb-button secondary viewer-btn" data-viewers="100">
+                100
+              </button>
+
+              <button class="lb-button secondary viewer-btn" data-viewers="250">
+                250
+              </button>
+
+              <button class="lb-button secondary" id="clearViewerOverride">
+                Use Plan Limit
+              </button>
+
+            </div>
+
+
+            <div class="lb-field" style="margin-top:18px;">
+              <label>Default Room Name</label>
+
+              <input
+                id="editRoomName"
+                type="text"
+                placeholder="Example: GREAT-CHURCH"
+                autocomplete="off"
+              >
+
+              <div class="lb-muted" style="margin-top:7px;">
+                Admin-only override. Organization name stays unchanged.
+              </div>
+            </div>
+
+
+            <div class="lb-field" style="margin-top:18px;">
+              <label>Private Admin Notes</label>
+
+              <textarea
+                id="editAdminNotes"
+                placeholder="Notes about this organization..."
+              ></textarea>
+            </div>
+
+
+            <div class="lb-save-bar">
+
+              <button
+                class="lb-button green"
+                id="saveClientButton"
+              >
+                Save Changes
+              </button>
+
+              <button
+                class="lb-button danger"
+                id="deleteClientButton"
+                type="button"
+              >
+                Delete LiveBridge Account
+              </button>
+
+            </div>
+
+            <div id="saveMessage" class="lb-message"></div>
+
+          </div>
+
+
+          <div>
+
+            <div class="lb-card">
+
+              <div class="lb-card-title" style="margin-bottom:10px;">
+                Customer Information
+              </div>
+
+              <div class="lb-info-row">
+                <span>Account Holder</span>
+                <strong id="detailHolder">—</strong>
+              </div>
+
+              <div class="lb-info-row">
+                <span>Email</span>
+                <strong id="detailEmail">—</strong>
+              </div>
+
+              <div class="lb-info-row">
+                <span>Phone</span>
+                <strong id="detailPhone">—</strong>
+              </div>
+
+              <div class="lb-info-row">
+                <span>Room</span>
+                <strong id="detailRoomInfo">—</strong>
+              </div>
+
+              <div class="lb-info-row">
+                <span>Plan</span>
+                <strong id="detailPlanName">—</strong>
+              </div>
+
+              <div class="lb-info-row">
+                <span>Billing Status</span>
+                <strong id="detailBilling">—</strong>
+              </div>
+
+            </div>
+
+
+            <div class="lb-card" style="margin-top:16px;">
+
+              <div class="lb-card-title" style="margin-bottom:12px;">
+                Recent Broadcasts Data
+              </div>
+
+              <div class="lb-history-mode">
+                <button
+                  type="button"
+                  id="historySimpleButton"
+                  class="active"
+                >
+                  Simple
+                </button>
+
+                <button
+                  type="button"
+                  id="historyAdvancedButton"
+                >
+                  Advanced
+                </button>
+              </div>
+
+              <div class="lb-history-row head">
+                <div>Date</div>
+                <div>Duration</div>
+                <div>Listeners</div>
+                <div>Peak</div>
+                <div>Requests</div>
+              </div>
+
+              <div id="detailHistory">
+                <div class="lb-empty">
+                  No broadcast history.
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+</div>
+
+
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="pk_test_c3RhYmxlLXN3aW5lLTY1NTQuY2xlcmsuYWNjb3VudHMuZGV2JA"
+  src="https://stable-swine-6554.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+</script>
+
+
+<script>
+
+const ADMIN_WORKER =
+  "https://livebridge.northstarventures-ca.workers.dev";
+
+let adminOrganizations = [];
+let selectedOrganization = null;
+let adminPlans = [];
+let selectedPlan = null;
+let lastCreatedOffer = null;
+
+
+async function getAdminToken(){
+
+  const sessions =
+    Clerk.client?.sessions ||
+    Clerk.client?.signedInSessions ||
+    [];
+
+  let session =
+    Clerk.session || null;
+
+  if(!session){
+
+    const lastActiveId =
+      Clerk.client?.lastActiveSessionId ||
+      "";
+
+    session =
+      sessions.find(item =>
+        item.id === lastActiveId
+      ) ||
+      sessions.find(item =>
+        item.status === "active"
+      ) ||
+      sessions[0] ||
+      null;
+  }
+
+  if(!session){
+    return null;
+  }
+
+  try{
+
+    if(
+      Clerk.session?.id !==
+      session.id
+    ){
+      await Clerk.setActive({
+        session:session.id
+      });
+    }
+
+    return await session.getToken();
+
+  }catch(error){
+
+    console.error(
+      "LiveBridge admin token error:",
+      error
+    );
+
+    return null;
+  }
+}
+
+
+async function adminFetch(
+  path,
+  options={}
+){
+
+  const token =
+    await getAdminToken();
+
+  if(!token){
+    throw new Error(
+      "You are not signed in."
+    );
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    "Authorization":
+      "Bearer " + token
+  };
+
+  if(
+    options.body &&
+    !headers["Content-Type"]
+  ){
+    headers["Content-Type"] =
+      "application/json";
+  }
+
+  return fetch(
+    ADMIN_WORKER + path,
+    {
+      ...options,
+      headers
+    }
+  );
+}
+
+
+function hoursFromMinutes(minutes){
+
+  const total =
+    Math.max(
+      0,
+      Math.round(
+        Number(minutes || 0)
+      )
+    );
+
+  const hours =
+    Math.floor(total / 60);
+
+  const mins =
+    total % 60;
+
+  if(hours && mins){
+    return hours + "h " + mins + "m";
+  }
+
+  if(hours){
+    return hours + "h";
+  }
+
+  return mins + "m";
+}
+
+
+function formatDuration(ms){
+
+  const totalSeconds =
+    Math.max(
+      0,
+      Math.round(
+        Number(ms || 0) / 1000
+      )
+    );
+
+  const hours =
+    Math.floor(totalSeconds / 3600);
+
+  const minutes =
+    Math.floor(
+      (totalSeconds % 3600) / 60
+    );
+
+  const seconds =
+    totalSeconds % 60;
+
+  if(hours){
+    return hours + "h " + minutes + "m";
+  }
+
+  if(minutes){
+    return minutes + "m " + seconds + "s";
+  }
+
+  return seconds + "s";
+}
+
+
+async function verifyAdmin(){
+
+  const response =
+    await adminFetch(
+      "/admin/me"
+    );
+
+  const data =
+    await response.json();
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      "Administrator access required."
+    );
+  }
+
+  document.getElementById(
+    "adminName"
+  ).textContent =
+    data.admin.displayName ||
+    "Administrator";
+
+  document.getElementById(
+    "adminEmail"
+  ).textContent =
+    data.admin.email || "";
+
+  Clerk.mountUserButton(
+    document.getElementById(
+      "adminUserButton"
+    )
+  );
+
+  Clerk.mountUserButton(
+    document.getElementById(
+      "adminAccessUserButton"
+    )
+  );
+
+  Clerk.mountUserButton(
+    document.getElementById(
+      "plansUserButton"
+    )
+  );
+
+  return data.admin;
+}
+
+
+
+async function loadAdminCandidates(){
+
+  const rows =
+    document.getElementById(
+      "adminAccessRows"
+    );
+
+  rows.innerHTML =
+    '<div class="lb-empty">Loading administrator accounts...</div>';
+
+  const response =
+    await adminFetch(
+      "/admin/admin-candidates"
+    );
+
+  const data =
+    await response.json();
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      "Unable to load administrator accounts."
+    );
+  }
+
+  renderAdminCandidates(
+    data.candidates || []
+  );
+}
+
+
+function renderAdminCandidates(list){
+
+  const rows =
+    document.getElementById(
+      "adminAccessRows"
+    );
+
+  if(!list.length){
+
+    rows.innerHTML =
+      '<div class="lb-empty">No LiveBridge accounts found.</div>';
+
+    return;
+  }
+
+
+  rows.innerHTML =
+    list.map(item => {
+
+      const displayName =
+        item.accountHolder ||
+        item.organizationName ||
+        "LiveBridge User";
+
+      return `
+        <div class="lb-admin-access-row">
+
+          <div>
+            <div class="lb-admin-access-name">
+              ${escapeHtml(displayName)}
+            </div>
+
+            <div class="lb-admin-access-email">
+              ${escapeHtml(item.email || "No email")}
+            </div>
+          </div>
+
+          <div>
+            <div style="font-weight:800;">
+              ${escapeHtml(item.organizationName)}
+            </div>
+
+            <div class="lb-admin-access-room">
+              ${escapeHtml(item.roomName)}
+            </div>
+          </div>
+
+          <div class="lb-admin-access-status ${item.isAdmin ? "on" : "off"}">
+            ${item.isAdmin ? "✓ Administrator" : "Customer Only"}
+          </div>
+
+          <div>
+            <button
+              class="lb-button ${item.isAdmin ? "secondary" : "primary"}"
+              onclick="setAdministratorAccess(
+                '${escapeHtml(item.clerkUserId)}',
+                ${item.isAdmin ? "false" : "true"}
+              )"
+            >
+              ${item.isAdmin ? "Remove Admin" : "Make Admin"}
+            </button>
+          </div>
+
+        </div>
+      `;
+    })
+    .join("");
+}
+
+
+async function setAdministratorAccess(
+  clerkUserId,
+  enabled
+){
+
+  const action =
+    enabled
+      ? "grant administrator access"
+      : "remove administrator access";
+
+  if(
+    !confirm(
+      "Are you sure you want to " +
+      action +
+      "?"
+    )
+  ){
+    return;
+  }
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/admin-access",
+        {
+          method:"POST",
+
+          headers:{
+            "Content-Type":
+              "application/json"
+          },
+
+          body:JSON.stringify({
+            clerkUserId,
+            enabled
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to update administrator access."
+      );
+    }
+
+    await loadAdminCandidates();
+
+  }catch(error){
+
+    alert(
+      error.message ||
+      "Unable to update administrator access."
+    );
+  }
+}
+
+
+function showAdminAccess(){
+
+  document.getElementById(
+    "clientListView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "clientDetailView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "plansView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "adminAccessView"
+  ).style.display =
+    "block";
+
+  document
+    .querySelectorAll(
+      ".lb-side-button"
+    )
+    .forEach(button =>
+      button.classList.remove(
+        "active"
+      )
+    );
+
+  document.getElementById(
+    "showAdminsButton"
+  ).classList.add(
+    "active"
+  );
+
+  loadAdminCandidates()
+    .catch(error => {
+
+      console.error(
+        "Admin access list failed:",
+        error
+      );
+
+      document.getElementById(
+        "adminAccessRows"
+      ).innerHTML =
+        '<div class="lb-empty">Unable to load administrators.</div>';
+    });
+}
+
+
+
+async function loadPlans(){
+
+  const grid =
+    document.getElementById(
+      "plansGrid"
+    );
+
+  grid.innerHTML =
+    '<div class="lb-empty">Loading plans...</div>';
+
+  const response =
+    await adminFetch(
+      "/admin/plans"
+    );
+
+  const data =
+    await response.json();
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      "Unable to load plans."
+    );
+  }
+
+  adminPlans =
+    data.plans || [];
+
+  renderPlans(
+    adminPlans
+  );
+
+  refreshOrganizationPlanDropdown();
+}
+
+
+function formatPlanPrice(
+  plan
+){
+
+  const amount =
+    Number(
+      plan.priceCents || 0
+    ) / 100;
+
+  const currency =
+    String(
+      plan.currency || "CAD"
+    );
+
+  return new Intl.NumberFormat(
+    "en-CA",
+    {
+      style:"currency",
+      currency
+    }
+  ).format(amount);
+}
+
+
+function renderPlans(
+  list
+){
+
+  const grid =
+    document.getElementById(
+      "plansGrid"
+    );
+
+  if(!list.length){
+    grid.innerHTML =
+      '<div class="lb-empty">No plans found.</div>';
+    return;
+  }
+
+  grid.innerHTML =
+    list.map(plan => {
+
+      const activeClass =
+        plan.active
+          ? ""
+          : " inactive";
+
+      return `
+        <div class="lb-plan-card${activeClass}">
+
+          <div class="lb-plan-name">
+            ${escapeHtml(plan.planName)}
+          </div>
+
+          <div class="lb-plan-code">
+            ${escapeHtml(plan.planCode)}
+          </div>
+
+          <div style="font-size:23px;font-weight:900;">
+            ${escapeHtml(formatPlanPrice(plan))}
+            <span style="font-size:11px;color:#7890aa;font-weight:700;">
+              / ${escapeHtml(plan.billingInterval || "month")}
+            </span>
+          </div>
+
+          <div class="lb-plan-meta">
+            <div class="lb-plan-meta-box">
+              <div class="lb-plan-meta-label">Included Time</div>
+              <div class="lb-plan-meta-value">
+                ${hoursFromMinutes(plan.includedMinutes)}
+              </div>
+            </div>
+
+            <div class="lb-plan-meta-box">
+              <div class="lb-plan-meta-label">Viewer Limit</div>
+              <div class="lb-plan-meta-value">
+                ${Number(plan.viewerLimit || 0)}
+              </div>
+            </div>
+          </div>
+
+          <div class="lb-plan-flags">
+            <span class="lb-plan-flag ${plan.active ? "green" : "red"}">
+              ${plan.active ? "Active" : "Inactive"}
+            </span>
+
+            <span class="lb-plan-flag ${plan.publicVisible ? "green" : "yellow"}">
+              ${plan.publicVisible ? "Public" : "Private"}
+            </span>
+
+            ${
+              plan.customPlan
+                ? '<span class="lb-plan-flag yellow">Custom</span>'
+                : ""
+            }
+
+            <span class="lb-plan-flag">
+              Order ${Number(plan.displayOrder || 0)}
+            </span>
+          </div>
+
+          <div class="lb-muted" style="min-height:34px;line-height:1.5;margin-bottom:12px;">
+            ${escapeHtml(plan.description || "No description yet.")}
+          </div>
+
+          <div class="lb-plan-actions">
+            <button
+              class="lb-button primary"
+              type="button"
+              onclick="editPlanById(${Number(plan.id)})"
+            >
+              Edit
+            </button>
+
+            ${
+              plan.active && (plan.customPlan || !plan.publicVisible)
+                ? `
+                  <button
+                    class="lb-button green"
+                    type="button"
+                    onclick="openOfferCreatorByPlanId(${Number(plan.id)})"
+                  >
+                    Share Offer
+                  </button>
+                `
+                : ""
+            }
+
+            ${
+              plan.active
+                ? `
+                  <button
+                    class="lb-button danger"
+                    type="button"
+                    onclick="archivePlanById(${Number(plan.id)})"
+                  >
+                    Archive
+                  </button>
+                `
+                : ""
+            }
+          </div>
+
+        </div>
+      `;
+    })
+    .join("");
+}
+
+
+function refreshOrganizationPlanDropdown(){
+
+  const select =
+    document.getElementById(
+      "editPlan"
+    );
+
+  if(
+    !select ||
+    !Array.isArray(adminPlans) ||
+    !adminPlans.length
+  ){
+    return;
+  }
+
+  const currentValue =
+    select.value;
+
+  select.innerHTML =
+    adminPlans
+      .filter(plan =>
+        plan.active ||
+        plan.planCode ===
+          selectedOrganization?.planCode
+      )
+      .map(plan => `
+        <option value="${escapeHtml(plan.planCode)}">
+          ${escapeHtml(plan.planName)} — ${hoursFromMinutes(plan.includedMinutes)} / ${Number(plan.viewerLimit || 0)} viewers
+        </option>
+      `)
+      .join("");
+
+  if(
+    currentValue &&
+    [...select.options].some(
+      option =>
+        option.value === currentValue
+    )
+  ){
+    select.value =
+      currentValue;
+  }else if(
+    selectedOrganization?.planCode
+  ){
+    select.value =
+      selectedOrganization.planCode;
+  }
+}
+
+
+function showPlans(){
+
+  document.getElementById(
+    "clientListView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "clientDetailView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "adminAccessView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "plansView"
+  ).style.display =
+    "block";
+
+  document
+    .querySelectorAll(
+      ".lb-side-button"
+    )
+    .forEach(button =>
+      button.classList.remove(
+        "active"
+      )
+    );
+
+  document.getElementById(
+    "showPlansButton"
+  ).classList.add(
+    "active"
+  );
+
+  loadPlans()
+    .catch(error => {
+
+      console.error(
+        "Plan list failed:",
+        error
+      );
+
+      document.getElementById(
+        "plansGrid"
+      ).innerHTML =
+        '<div class="lb-empty">Unable to load plans.</div>';
+    });
+}
+
+
+function openPlanEditor(
+  plan = null
+){
+
+  selectedPlan =
+    plan || null;
+
+  document.getElementById(
+    "planEditorTitle"
+  ).textContent =
+    plan
+      ? "Edit " + plan.planName
+      : "Add Plan";
+
+  document.getElementById(
+    "planEditId"
+  ).value =
+    plan?.id || "";
+
+  document.getElementById(
+    "planEditName"
+  ).value =
+    plan?.planName || "";
+
+  document.getElementById(
+    "planEditCode"
+  ).value =
+    plan?.planCode || "";
+
+  document.getElementById(
+    "planEditPrice"
+  ).value =
+    plan
+      ? (
+          Number(
+            plan.priceCents || 0
+          ) / 100
+        ).toFixed(2)
+      : "";
+
+  document.getElementById(
+    "planEditBillingInterval"
+  ).value =
+    plan?.billingInterval ||
+    "month";
+
+  document.getElementById(
+    "planEditMinutes"
+  ).value =
+    plan?.includedMinutes ?? 0;
+
+  document.getElementById(
+    "planEditViewers"
+  ).value =
+    plan?.viewerLimit ?? 1;
+
+  document.getElementById(
+    "planEditOrder"
+  ).value =
+    plan?.displayOrder ?? 0;
+
+  document.getElementById(
+    "planEditCurrency"
+  ).value =
+    plan?.currency || "CAD";
+
+  document.getElementById(
+    "planEditDescription"
+  ).value =
+    plan?.description || "";
+
+  document.getElementById(
+    "planEditFeatures"
+  ).value =
+    Array.isArray(plan?.features)
+      ? plan.features.join("\n")
+      : "";
+
+  document.getElementById(
+    "planEditPublic"
+  ).checked =
+    plan
+      ? !!plan.publicVisible
+      : true;
+
+  document.getElementById(
+    "planEditActive"
+  ).checked =
+    plan
+      ? !!plan.active
+      : true;
+
+  document.getElementById(
+    "planEditCustom"
+  ).checked =
+    !!plan?.customPlan;
+
+  document.getElementById(
+    "planEditStripeProduct"
+  ).value =
+    plan?.stripeProductId || "";
+
+  document.getElementById(
+    "planEditStripePrice"
+  ).value =
+    plan?.stripePriceId || "";
+
+  const message =
+    document.getElementById(
+      "planSaveMessage"
+    );
+
+  message.className =
+    "lb-message";
+
+  message.textContent =
+    "";
+
+  document.getElementById(
+    "planEditorModal"
+  ).classList.add(
+    "show"
+  );
+}
+
+
+function closePlanEditor(){
+
+  document.getElementById(
+    "planEditorModal"
+  ).classList.remove(
+    "show"
+  );
+
+  selectedPlan =
+    null;
+}
+
+
+function editPlanById(id){
+
+  const plan =
+    adminPlans.find(
+      item =>
+        Number(item.id) ===
+        Number(id)
+    );
+
+  if(!plan){
+    return;
+  }
+
+  openPlanEditor(
+    plan
+  );
+}
+
+
+async function savePlan(){
+
+  const button =
+    document.getElementById(
+      "savePlanButton"
+    );
+
+  const message =
+    document.getElementById(
+      "planSaveMessage"
+    );
+
+  button.disabled =
+    true;
+
+  button.textContent =
+    "Saving...";
+
+  message.className =
+    "lb-message";
+
+  try{
+
+    const features =
+      document.getElementById(
+        "planEditFeatures"
+      ).value
+      .split(/\n+/)
+      .map(value =>
+        value.trim()
+      )
+      .filter(Boolean);
+
+    const response =
+      await adminFetch(
+        "/admin/plan-save",
+        {
+          method:"POST",
+
+          body:JSON.stringify({
+            id:
+              Number(
+                document.getElementById(
+                  "planEditId"
+                ).value || 0
+              ),
+
+            planName:
+              document.getElementById(
+                "planEditName"
+              ).value.trim(),
+
+            planCode:
+              document.getElementById(
+                "planEditCode"
+              ).value.trim(),
+
+            priceCents:
+              Math.round(
+                Number(
+                  document.getElementById(
+                    "planEditPrice"
+                  ).value || 0
+                ) * 100
+              ),
+
+            currency:
+              document.getElementById(
+                "planEditCurrency"
+              ).value,
+
+            billingInterval:
+              document.getElementById(
+                "planEditBillingInterval"
+              ).value,
+
+            includedMinutes:
+              Number(
+                document.getElementById(
+                  "planEditMinutes"
+                ).value || 0
+              ),
+
+            viewerLimit:
+              Number(
+                document.getElementById(
+                  "planEditViewers"
+                ).value || 1
+              ),
+
+            displayOrder:
+              Number(
+                document.getElementById(
+                  "planEditOrder"
+                ).value || 0
+              ),
+
+            description:
+              document.getElementById(
+                "planEditDescription"
+              ).value.trim(),
+
+            features,
+
+            publicVisible:
+              document.getElementById(
+                "planEditPublic"
+              ).checked,
+
+            active:
+              document.getElementById(
+                "planEditActive"
+              ).checked,
+
+            customPlan:
+              document.getElementById(
+                "planEditCustom"
+              ).checked,
+
+            stripeProductId:
+              document.getElementById(
+                "planEditStripeProduct"
+              ).value.trim(),
+
+            stripePriceId:
+              document.getElementById(
+                "planEditStripePrice"
+              ).value.trim()
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to save plan."
+      );
+    }
+
+    message.textContent =
+      "✓ Plan saved.";
+
+    message.className =
+      "lb-message good";
+
+    await loadPlans();
+
+    setTimeout(
+      closePlanEditor,
+      500
+    );
+
+  }catch(error){
+
+    message.textContent =
+      error.message ||
+      "Unable to save plan.";
+
+    message.className =
+      "lb-message bad";
+
+  }finally{
+
+    button.disabled =
+      false;
+
+    button.textContent =
+      "Save Plan";
+  }
+}
+
+
+async function archivePlanById(
+  id
+){
+
+  const plan =
+    adminPlans.find(
+      item =>
+        Number(item.id) ===
+        Number(id)
+    );
+
+  if(!plan){
+    return;
+  }
+
+  const confirmed =
+    confirm(
+      "Archive " +
+      plan.planName +
+      "?\n\n" +
+      "It will be hidden from public use and marked inactive, but historical organization data will remain."
+    );
+
+  if(!confirmed){
+    return;
+  }
+
+  const response =
+    await adminFetch(
+      "/admin/plan-archive",
+      {
+        method:"POST",
+
+        body:JSON.stringify({
+          id:Number(id)
+        })
+      }
+    );
+
+  const data =
+    await response.json();
+
+  if(!response.ok){
+    alert(
+      data.error ||
+      "Unable to archive plan."
+    );
+    return;
+  }
+
+  await loadPlans();
+}
+
+
+function openOfferCreatorByPlanId(id){
+  const plan = adminPlans.find(item => Number(item.id) === Number(id));
+  if(!plan){ return; }
+
+  document.getElementById("offerPlanId").value = plan.id;
+  document.getElementById("offerPlanSummary").textContent =
+    plan.planName + " · " + formatPlanPrice(plan) + " / " + (plan.billingInterval || "month") +
+    " · " + hoursFromMinutes(plan.includedMinutes) + " · " + Number(plan.viewerLimit || 0) + " viewers";
+
+  document.getElementById("offerRecipientName").value = "";
+  document.getElementById("offerRecipientEmail").value = "";
+  document.getElementById("offerExpiration").value = "";
+  document.getElementById("offerMaxRedemptions").value = "1";
+  document.getElementById("offerSingleUse").checked = true;
+  document.getElementById("offerMaxRedemptions").disabled = true;
+  document.getElementById("offerNote").value = "";
+  document.getElementById("offerFormArea").style.display = "block";
+  document.getElementById("offerResultArea").style.display = "none";
+  document.getElementById("offerCreateMessage").className = "lb-message";
+  document.getElementById("offerCreateMessage").textContent = "";
+  lastCreatedOffer = null;
+  document.getElementById("offerCreatorModal").classList.add("show");
+}
+
+function closeOfferCreator(){
+  document.getElementById("offerCreatorModal").classList.remove("show");
+}
+
+function resetOfferCreator(){
+  const id = Number(document.getElementById("offerPlanId").value || 0);
+  openOfferCreatorByPlanId(id);
+}
+
+async function createPrivateOffer(){
+  const button = document.getElementById("createOfferButton");
+  const message = document.getElementById("offerCreateMessage");
+  button.disabled = true;
+  button.textContent = "Creating...";
+  message.className = "lb-message";
+  message.textContent = "";
+
+  try{
+    const singleUse = document.getElementById("offerSingleUse").checked;
+    const expirationRaw = document.getElementById("offerExpiration").value;
+    const expirationTimestamp = expirationRaw ? new Date(expirationRaw).getTime() : 0;
+
+    const response = await adminFetch("/admin/offer-create", {
+      method:"POST",
+      body:JSON.stringify({
+        planId:Number(document.getElementById("offerPlanId").value || 0),
+        recipientName:document.getElementById("offerRecipientName").value.trim(),
+        recipientEmail:document.getElementById("offerRecipientEmail").value.trim(),
+        expirationTimestamp,
+        singleUse,
+        maxRedemptions:singleUse ? 1 : Number(document.getElementById("offerMaxRedemptions").value || 1),
+        note:document.getElementById("offerNote").value.trim()
+      })
+    });
+
+    const data = await response.json();
+    if(!response.ok){ throw new Error(data.error || "Unable to create offer."); }
+
+    lastCreatedOffer = data;
+    document.getElementById("offerFormArea").style.display = "none";
+    document.getElementById("offerResultArea").style.display = "block";
+    document.getElementById("offerResultLink").value = data.offerUrl;
+    document.getElementById("offerResultRecipient").textContent =
+      (data.offer?.recipientName ? "Prepared for " + data.offer.recipientName + " · " : "") +
+      (data.offer?.plan?.planName || "Private Plan");
+    document.getElementById("offerQrImage").src =
+      "https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=" + encodeURIComponent(data.offerUrl);
+    message.textContent = "✓ Secure private offer created.";
+    message.className = "lb-message good";
+  }catch(error){
+    message.textContent = error.message || "Unable to create offer.";
+    message.className = "lb-message bad";
+  }finally{
+    button.disabled = false;
+    button.textContent = "Create Offer";
+  }
+}
+
+async function copyOfferLink(){
+  const link = String(lastCreatedOffer?.offerUrl || "");
+  if(!link){ return; }
+  await navigator.clipboard.writeText(link);
+  const message = document.getElementById("offerCreateMessage");
+  message.textContent = "✓ Offer link copied.";
+  message.className = "lb-message good";
+}
+
+async function sharePrivateOffer(){
+  const link = String(lastCreatedOffer?.offerUrl || "");
+  if(!link){ return; }
+  const offer = lastCreatedOffer?.offer || {};
+  const text = "LiveBridge Private Offer" + (offer.recipientName ? " for " + offer.recipientName : "") + ": " + link;
+
+  if(navigator.share){
+    await navigator.share({ title:"LiveBridge Private Offer", text, url:link });
+  }else{
+    await navigator.clipboard.writeText(text);
+    const message = document.getElementById("offerCreateMessage");
+    message.textContent = "✓ Share text copied.";
+    message.className = "lb-message good";
+  }
+}
+
+async function downloadOfferGraphic(){
+  const data = lastCreatedOffer;
+
+  if(
+    !data?.offerUrl ||
+    !data?.offer
+  ){
+    return;
+  }
+
+  const offer = data.offer;
+  const plan = offer.plan || {};
+
+  const canvas =
+    document.createElement("canvas");
+
+  canvas.width = 1600;
+  canvas.height = 1000;
+
+  const ctx =
+    canvas.getContext("2d");
+
+
+  function roundedRect(
+    x,
+    y,
+    width,
+    height,
+    radius,
+    fill,
+    stroke = null,
+    lineWidth = 1
+  ){
+    const r =
+      Math.min(
+        radius,
+        width / 2,
+        height / 2
+      );
+
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + width, y, x + width, y + height, r);
+    ctx.arcTo(x + width, y + height, x, y + height, r);
+    ctx.arcTo(x, y + height, x, y, r);
+    ctx.arcTo(x, y, x + width, y, r);
+    ctx.closePath();
+
+    if(fill){
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+
+    if(stroke){
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+    }
+  }
+
+
+  function wrapText(
+    text,
+    x,
+    y,
+    maxWidth,
+    lineHeight,
+    maxLines = 3
+  ){
+    const words =
+      String(text || "")
+        .split(/\s+/)
+        .filter(Boolean);
+
+    let line = "";
+    let currentY = y;
+    let lines = 0;
+
+    for(
+      let i = 0;
+      i < words.length;
+      i++
+    ){
+      const testLine =
+        line
+          ? line + " " + words[i]
+          : words[i];
+
+      if(
+        ctx.measureText(testLine).width >
+          maxWidth &&
+        line
+      ){
+        ctx.fillText(
+          line,
+          x,
+          currentY
+        );
+
+        lines += 1;
+
+        if(
+          lines >= maxLines
+        ){
+          return currentY;
+        }
+
+        line = words[i];
+        currentY += lineHeight;
+
+      }else{
+        line = testLine;
+      }
+    }
+
+    if(
+      line &&
+      lines < maxLines
+    ){
+      ctx.fillText(
+        line,
+        x,
+        currentY
+      );
+    }
+
+    return currentY;
+  }
+
+
+  const bg =
+    ctx.createLinearGradient(
+      0,
+      0,
+      1600,
+      1000
+    );
+
+  bg.addColorStop(0,"#061827");
+  bg.addColorStop(.48,"#0a3154");
+  bg.addColorStop(1,"#10254a");
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,1600,1000);
+
+
+  const glow1 =
+    ctx.createRadialGradient(
+      1370,
+      80,
+      0,
+      1370,
+      80,
+      560
+    );
+
+  glow1.addColorStop(0,"rgba(75,210,237,.34)");
+  glow1.addColorStop(.45,"rgba(75,150,237,.12)");
+  glow1.addColorStop(1,"rgba(75,150,237,0)");
+
+  ctx.fillStyle = glow1;
+  ctx.fillRect(800,0,800,650);
+
+
+  const glow2 =
+    ctx.createRadialGradient(
+      100,
+      900,
+      0,
+      100,
+      900,
+      500
+    );
+
+  glow2.addColorStop(0,"rgba(57,218,173,.15)");
+  glow2.addColorStop(1,"rgba(57,218,173,0)");
+
+  ctx.fillStyle = glow2;
+  ctx.fillRect(0,450,650,550);
+
+
+  /*
+  =====================================================
+  HEADER / BRAND
+  =====================================================
+  */
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 54px Arial";
+  ctx.fillText("LiveBridge",100,118);
+
+  ctx.fillStyle = "#66d8f5";
+  ctx.font = "900 16px Arial";
+  ctx.fillText(
+    "REAL-TIME MULTILINGUAL COMMUNICATION",
+    102,
+    158
+  );
+
+
+  /*
+  =====================================================
+  TOP LEFT — RECIPIENT
+  =====================================================
+  */
+
+  ctx.fillStyle = "#7ce5ff";
+  ctx.font = "900 15px Arial";
+  ctx.fillText(
+    "A PRIVATE OFFER PREPARED FOR",
+    100,
+    245
+  );
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 48px Arial";
+
+  const recipient =
+    String(
+      offer.recipientName ||
+      "Your Organization"
+    );
+
+  wrapText(
+    recipient,
+    100,
+    300,
+    720,
+    55,
+    2
+  );
+
+  ctx.fillStyle = "#c4d9e8";
+  ctx.font = "500 24px Arial";
+  ctx.fillText(
+    "We're excited to share a LiveBridge plan created for your organization.",
+    100,
+    385
+  );
+
+
+  /*
+  =====================================================
+  TOP RIGHT — VALUE / BENEFITS
+  =====================================================
+  */
+
+  roundedRect(
+    1005,
+    82,
+    485,
+    305,
+    24,
+    "rgba(5,31,55,.33)",
+    "rgba(255,255,255,.10)",
+    1
+  );
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 25px Arial";
+  ctx.fillText(
+    "Connect everyone in the room.",
+    1042,
+    130
+  );
+
+  ctx.fillStyle = "#a9c6d8";
+  ctx.font = "500 18px Arial";
+  wrapText(
+    "LiveBridge gives guests instant access to translated captions and natural-language audio on their own device.",
+    1042,
+    168,
+    405,
+    27,
+    3
+  );
+
+  const benefits = [
+    "No app download required",
+    "Multiple languages at the same time",
+    "Works with live services, events and training",
+    "One broadcast can serve many listeners"
+  ];
+
+  let benefitY = 268;
+
+  benefits.forEach(
+    benefit => {
+
+      ctx.fillStyle = "#49ddb1";
+      ctx.beginPath();
+      ctx.arc(
+        1051,
+        benefitY - 6,
+        7,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+
+      ctx.fillStyle = "#e6f3f9";
+      ctx.font = "700 16px Arial";
+      ctx.fillText(
+        benefit,
+        1072,
+        benefitY
+      );
+
+      benefitY += 31;
+    }
+  );
+
+
+  /*
+  =====================================================
+  MAIN OFFER CARD
+  =====================================================
+  */
+
+  roundedRect(
+    100,
+    445,
+    850,
+    390,
+    28,
+    "rgba(255,255,255,.96)",
+    "rgba(255,255,255,.42)",
+    2
+  );
+
+  ctx.fillStyle = "#7890a2";
+  ctx.font = "900 13px Arial";
+  ctx.fillText(
+    "YOUR LIVEBRIDGE OFFER",
+    145,
+    495
+  );
+
+  ctx.fillStyle = "#10283c";
+  ctx.font = "900 44px Arial";
+
+  const titleBottom =
+    wrapText(
+      plan.planName ||
+        "LiveBridge Private Plan",
+      145,
+      555,
+      660,
+      50,
+      2
+    );
+
+  const amount =
+    new Intl.NumberFormat(
+      "en-CA",
+      {
+        style:"currency",
+        currency:
+          plan.currency ||
+          "CAD"
+      }
+    )
+    .format(
+      Number(
+        plan.priceCents ||
+        0
+      ) / 100
+    );
+
+  ctx.fillStyle = "#0a2135";
+  ctx.font = "900 60px Arial";
+  ctx.fillText(
+    amount,
+    145,
+    titleBottom + 95
+  );
+
+  ctx.fillStyle = "#687f91";
+  ctx.font = "700 19px Arial";
+  ctx.fillText(
+    "per " +
+      (
+        plan.billingInterval ||
+        "month"
+      ),
+    145,
+    titleBottom + 130
+  );
+
+
+  roundedRect(
+    145,
+    710,
+    330,
+    82,
+    15,
+    "#f2f6f9"
+  );
+
+  roundedRect(
+    495,
+    710,
+    330,
+    82,
+    15,
+    "#f2f6f9"
+  );
+
+  ctx.fillStyle = "#8094a3";
+  ctx.font = "900 11px Arial";
+  ctx.fillText(
+    "INCLUDED TRANSLATION TIME",
+    168,
+    738
+  );
+  ctx.fillText(
+    "SIMULTANEOUS LISTENERS",
+    518,
+    738
+  );
+
+  ctx.fillStyle = "#16354d";
+  ctx.font = "900 27px Arial";
+  ctx.fillText(
+    hoursFromMinutes(
+      plan.includedMinutes
+    ),
+    168,
+    774
+  );
+  ctx.fillText(
+    String(
+      Number(
+        plan.viewerLimit ||
+        0
+      )
+    ),
+    518,
+    774
+  );
+
+
+  /*
+  =====================================================
+  RIGHT SIDE — INVITATION / QR
+  =====================================================
+  */
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "900 29px Arial";
+  ctx.fillText(
+    "Your private invitation",
+    1050,
+    455
+  );
+
+  ctx.fillStyle = "#b9cfde";
+  ctx.font = "500 19px Arial";
+  wrapText(
+    "Review the details prepared for you and continue whenever you're ready.",
+    1050,
+    497,
+    410,
+    29,
+    3
+  );
+
+
+  roundedRect(
+    1050,
+    590,
+    245,
+    245,
+    24,
+    "#ffffff",
+    "rgba(255,255,255,.25)",
+    1
+  );
+
+  const qrUrl =
+    "https://api.qrserver.com/v1/create-qr-code/?size=700x700&margin=12&data=" +
+    encodeURIComponent(
+      data.offerUrl
+    );
+
+  try{
+
+    const qr =
+      new Image();
+
+    qr.crossOrigin =
+      "anonymous";
+
+    await new Promise(
+      (resolve,reject) => {
+        qr.onload = resolve;
+        qr.onerror = reject;
+        qr.src = qrUrl;
+      }
+    );
+
+    ctx.drawImage(
+      qr,
+      1070,
+      610,
+      205,
+      205
+    );
+
+  }catch(error){
+
+    ctx.fillStyle = "#16354d";
+    ctx.font = "900 18px Arial";
+    ctx.fillText(
+      "Secure offer link",
+      1090,
+      720
+    );
+  }
+
+  ctx.fillStyle = "#d3e5f0";
+  ctx.font = "700 16px Arial";
+  ctx.fillText(
+    "Scan to open your private offer",
+    1050,
+    873
+  );
+
+
+  /*
+  =====================================================
+  BOTTOM MESSAGE BAR — FIXED TEXT WRAPPING
+  =====================================================
+  */
+
+  roundedRect(
+    100,
+    875,
+    850,
+    82,
+    18,
+    "rgba(76,220,183,.95)"
+  );
+
+  ctx.fillStyle = "#082d3d";
+  ctx.font = "900 18px Arial";
+
+  ctx.fillText(
+    "We look forward to helping your organization",
+    137,
+    910
+  );
+
+  ctx.fillText(
+    "connect across languages.",
+    137,
+    936
+  );
+
+
+  ctx.fillStyle = "#9eb9cb";
+  ctx.font = "600 13px Arial";
+  ctx.fillText(
+    "Private proposal prepared through LiveBridge",
+    1050,
+    925
+  );
+
+
+  const link =
+    document.createElement(
+      "a"
+    );
+
+  link.download =
+    "LiveBridge-Private-Offer.png";
+
+  link.href =
+    canvas.toDataURL(
+      "image/png"
+    );
+
+  link.click();
+}
+
+
+async function loadOrganizations(){
+
+  const rows =
+    document.getElementById(
+      "clientRows"
+    );
+
+  rows.innerHTML =
+    '<div class="lb-empty">Loading clients...</div>';
+
+
+  const response =
+    await adminFetch(
+      "/admin/organizations"
+    );
+
+  const data =
+    await response.json();
+
+  if(!response.ok){
+    throw new Error(
+      data.error ||
+      "Unable to load organizations."
+    );
+  }
+
+  adminOrganizations =
+    data.organizations || [];
+
+  renderAdminStats();
+
+  renderOrganizations(
+    adminOrganizations
+  );
+}
+
+
+function renderAdminStats(){
+
+  const total =
+    adminOrganizations.length;
+
+  const active =
+    adminOrganizations.filter(
+      item =>
+        item.accountStatus ===
+        "active"
+    ).length;
+
+  const broadcasts =
+    adminOrganizations.reduce(
+      (sum,item) =>
+        sum +
+        Number(
+          item.stats
+            ?.broadcastCount || 0
+        ),
+      0
+    );
+
+  const listeners =
+    adminOrganizations.reduce(
+      (sum,item) =>
+        sum +
+        Number(
+          item.stats
+            ?.listenerSessions || 0
+        ),
+      0
+    );
+
+
+  document.getElementById(
+    "totalClients"
+  ).textContent =
+    total;
+
+  document.getElementById(
+    "activeClients"
+  ).textContent =
+    active;
+
+  document.getElementById(
+    "totalBroadcasts"
+  ).textContent =
+    broadcasts;
+
+  document.getElementById(
+    "totalListenerSessions"
+  ).textContent =
+    listeners;
+}
+
+
+function renderOrganizations(list){
+
+  const rows =
+    document.getElementById(
+      "clientRows"
+    );
+
+  if(!list.length){
+
+    rows.innerHTML =
+      '<div class="lb-empty">No organizations found.</div>';
+
+    return;
+  }
+
+
+  rows.innerHTML =
+    list.map(item => {
+
+      const status =
+        item.accountStatus ||
+        "active";
+
+      return `
+        <div class="lb-client-row">
+
+          <div>
+            <div class="lb-org-name">
+              ${escapeHtml(item.organizationName)}
+            </div>
+
+            <div class="lb-room">
+              ${escapeHtml(item.roomName)}
+            </div>
+          </div>
+
+          <div>
+            ${escapeHtml(item.planName)}
+          </div>
+
+          <div>
+            ${hoursFromMinutes(item.remainingMinutes)}
+          </div>
+
+          <div>
+            ${Number(item.effectiveViewerLimit || 0)}
+          </div>
+
+          <div class="hide-medium">
+            ${Number(item.stats?.broadcastCount || 0)}
+          </div>
+
+          <div class="hide-medium">
+            ${Number(item.stats?.highestPeak || 0)}
+          </div>
+
+          <div class="hide-medium">
+            <span class="lb-status ${status}">
+              ${escapeHtml(status)}
+            </span>
+          </div>
+
+          <div>
+            <button
+              class="lb-button primary"
+              onclick="openOrganization(${Number(item.id)})"
+            >
+              Manage
+            </button>
+          </div>
+
+        </div>
+      `;
+
+    }).join("");
+}
+
+
+function escapeHtml(value){
+
+  return String(value || "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+
+async function openOrganization(id){
+
+  document.getElementById(
+    "clientListView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "adminAccessView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "plansView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "clientDetailView"
+  ).style.display =
+    "block";
+
+
+  const response =
+    await adminFetch(
+      "/admin/organization?id=" +
+      encodeURIComponent(id)
+    );
+
+  const data =
+    await response.json();
+
+  if(!response.ok){
+
+    alert(
+      data.error ||
+      "Unable to load organization."
+    );
+
+    showClientList();
+
+    return;
+  }
+
+
+  selectedOrganization =
+    data.account;
+
+
+  const account =
+    data.account;
+
+
+  document.getElementById(
+    "detailOrganization"
+  ).textContent =
+    account.organizationName;
+
+  document.getElementById(
+    "detailRoom"
+  ).textContent =
+    "Room: " +
+    account.roomName;
+
+
+  document.getElementById(
+    "detailIncludedHours"
+  ).textContent =
+    hoursFromMinutes(
+      account.includedMinutes
+    );
+
+  document.getElementById(
+    "detailUsedHours"
+  ).textContent =
+    hoursFromMinutes(
+      account.usedMinutes
+    );
+
+  document.getElementById(
+    "detailRemainingHours"
+  ).textContent =
+    hoursFromMinutes(
+      account.remainingMinutes
+    );
+
+  document.getElementById(
+    "detailViewerLimit"
+  ).textContent =
+    account.effectiveViewerLimit;
+
+
+  document.getElementById(
+    "detailHolder"
+  ).textContent =
+    account.accountHolder || "—";
+
+  document.getElementById(
+    "detailEmail"
+  ).textContent =
+    account.email || "—";
+
+  document.getElementById(
+    "detailPhone"
+  ).textContent =
+    account.phone || "—";
+
+  document.getElementById(
+    "detailRoomInfo"
+  ).textContent =
+    account.roomName;
+
+  document.getElementById(
+    "detailPlanName"
+  ).textContent =
+    account.planName;
+
+  document.getElementById(
+    "detailBilling"
+  ).textContent =
+    account.billingStatus;
+
+
+  document.getElementById(
+    "editOrganizationName"
+  ).value =
+    account.organizationName || "";
+
+  document.getElementById(
+    "editAccountHolder"
+  ).value =
+    account.accountHolder || "";
+
+  document.getElementById(
+    "editEmail"
+  ).value =
+    account.email || "";
+
+  document.getElementById(
+    "editAccountEmail"
+  ).value =
+    account.accountEmail ||
+    account.email ||
+    "";
+
+  document.getElementById(
+    "editPhone"
+  ).value =
+    account.phone || "";
+
+  document.getElementById(
+    "editRoomName"
+  ).value =
+    account.roomName;
+
+
+  document.getElementById(
+    "editPlan"
+  ).value =
+    account.planCode;
+
+  document.getElementById(
+    "editStatus"
+  ).value =
+    account.accountStatus;
+
+  document.getElementById(
+    "editIncludedMinutes"
+  ).value =
+    account.includedMinutes;
+
+  document.getElementById(
+    "editBonusMinutes"
+  ).value =
+    account.bonusMinutes;
+
+  document.getElementById(
+    "editViewerLimit"
+  ).value =
+    account.viewerLimit;
+
+  document.getElementById(
+    "editViewerOverride"
+  ).value =
+    account.viewerOverride === null
+      ? ""
+      : account.viewerOverride;
+
+  document.getElementById(
+    "editScriptureEnabled"
+  ).checked =
+    !!account.scriptureEnabled;
+
+  document.getElementById(
+    "editScripturePlanOverride"
+  ).checked =
+    !!account.scripturePlanOverride;
+
+  renderScriptureAdminStatus(
+    account
+  );
+
+
+  const featureOverrides =
+    account.featureOverrides || {};
+
+  document.getElementById("overrideTranscriptAccess").checked =
+    !!featureOverrides.transcriptAccess;
+
+  document.getElementById("overrideTranscriptEmail").checked =
+    !!featureOverrides.transcriptEmail;
+
+  document.getElementById("overrideScheduledBroadcasts").checked =
+    !!featureOverrides.scheduledBroadcasts;
+
+  document.getElementById("overrideDetailedAnalytics").checked =
+    !!featureOverrides.detailedAnalytics;
+
+  document.getElementById("overrideReportExport").checked =
+    !!featureOverrides.reportExport;
+
+  document.getElementById("overridePrioritySupport").checked =
+    !!featureOverrides.prioritySupport;
+
+  document.getElementById("overrideCustomOnboarding").checked =
+    !!featureOverrides.customOnboarding;
+
+  renderFeatureOverrideSummary();
+
+  document.getElementById(
+    "editAdminNotes"
+  ).value =
+    account.adminNotes || "";
+
+
+  renderDetailHistory(
+    data.broadcasts || []
+  );
+}
+
+
+
+
+function collectFeatureOverrides(){
+  return {
+    transcriptAccess:
+      document.getElementById("overrideTranscriptAccess")?.checked === true,
+
+    transcriptEmail:
+      document.getElementById("overrideTranscriptEmail")?.checked === true,
+
+    scheduledBroadcasts:
+      document.getElementById("overrideScheduledBroadcasts")?.checked === true,
+
+    detailedAnalytics:
+      document.getElementById("overrideDetailedAnalytics")?.checked === true,
+
+    reportExport:
+      document.getElementById("overrideReportExport")?.checked === true,
+
+    scriptureDetection:
+      document.getElementById("editScripturePlanOverride")?.checked === true,
+
+    prioritySupport:
+      document.getElementById("overridePrioritySupport")?.checked === true,
+
+    customOnboarding:
+      document.getElementById("overrideCustomOnboarding")?.checked === true
+  };
+}
+
+
+function renderFeatureOverrideSummary(){
+  const box =
+    document.getElementById(
+      "featureOverrideSummary"
+    );
+
+  if(!box){
+    return;
+  }
+
+  const overrides =
+    collectFeatureOverrides();
+
+  const labels = {
+    transcriptAccess:"Transcripts",
+    transcriptEmail:"Transcript Email + AI Summary",
+    scheduledBroadcasts:"Scheduled Broadcasts",
+    detailedAnalytics:"Detailed Analytics",
+    reportExport:"Report Export",
+    scriptureDetection:"Scripture Detection",
+    prioritySupport:"Priority Support",
+    customOnboarding:"Custom Onboarding"
+  };
+
+  const enabled =
+    Object.keys(overrides)
+      .filter(key => overrides[key])
+      .map(key => labels[key]);
+
+  box.innerHTML =
+    enabled.length
+      ? '✓ Manual access enabled: <strong style="color:#63e7a1;">' +
+        enabled.map(escapeHtml).join(", ") +
+        "</strong>"
+      : "No additional feature overrides enabled.";
+}
+
+
+document.addEventListener(
+  "change",
+  function(event){
+    if(
+      event.target?.closest?.(
+        "#featureOverrideGrid"
+      ) ||
+      event.target?.id ===
+        "editScripturePlanOverride"
+    ){
+      renderFeatureOverrideSummary();
+    }
+  }
+);
+
+
+function renderScriptureAdminStatus(
+  account
+){
+
+  const status =
+    document.getElementById(
+      "editScriptureEffectiveStatus"
+    );
+
+  if(!status){
+    return;
+  }
+
+  const planAllows =
+    (
+      account?.planEntitlements ||
+      account?.entitlements
+    )?.scriptureDetection === true;
+
+  const enabled =
+    account?.scriptureEnabled === true;
+
+  const override =
+    account?.scripturePlanOverride === true;
+
+  const effective =
+    account?.scriptureEffectiveEnabled === true;
+
+  if(effective){
+
+    status.innerHTML =
+      planAllows
+        ? '✓ Effective: <strong style="color:#63e7a1;">Enabled by plan</strong> and organization setting.'
+        : '✓ Effective: <strong style="color:#ffd978;">Enabled by admin override</strong> for this organization.';
+
+    return;
+  }
+
+  if(!enabled){
+
+    status.innerHTML =
+      'Effective: <strong style="color:#9aaec2;">Off</strong> because the organization Scripture toggle is disabled.';
+
+    return;
+  }
+
+  if(!planAllows && !override){
+
+    status.innerHTML =
+      'Effective: <strong style="color:#ff9f9f;">Locked by plan</strong>. Turn on Override Plan Restriction to grant access manually.';
+
+    return;
+  }
+
+  status.textContent =
+    "Effective: Off.";
+}
+
+
+let currentHistoryBroadcasts = [];
+let historyAdvancedMode = false;
+
+function renderDetailHistory(
+  broadcasts
+){
+
+  currentHistoryBroadcasts =
+    broadcasts || [];
+
+  const box =
+    document.getElementById(
+      "detailHistory"
+    );
+
+  if(!currentHistoryBroadcasts.length){
+
+    box.innerHTML =
+      '<div class="lb-empty">No completed broadcasts yet.</div>';
+
+    return;
+  }
+
+  box.classList.toggle(
+    "advanced",
+    historyAdvancedMode
+  );
+
+  box.innerHTML =
+    currentHistoryBroadcasts.map(item => {
+
+      const date =
+        new Date(
+          Number(item.startedAt)
+        ).toLocaleString();
+
+      const metrics =
+        item.requestMetrics || {};
+
+      const totalRequests =
+        Number(
+          metrics.totalWorkerRequests ||
+          0
+        );
+
+      const endReason =
+        String(
+          item.autoEndReason || ""
+        );
+
+      const endReasonLabel = {
+        no_audio:
+          "No audio safety",
+        page_exit:
+          "Page exited",
+        time_limit:
+          "Time limit",
+        scheduled_end:
+          "Scheduled end"
+      }[endReason] ||
+        "Manual / normal";
+
+      return `
+        <div class="lb-history-row">
+
+          <div>${escapeHtml(date)}</div>
+
+          <div>
+            ${formatDuration(item.durationMs)}
+          </div>
+
+          <div>
+            ${Number(item.totalListeners || 0)}
+          </div>
+
+          <div>
+            ${Number(item.peakListeners || 0)}
+          </div>
+
+          <div>
+            ${totalRequests.toLocaleString()}
+          </div>
+
+        </div>
+
+        <div class="lb-history-advanced-row">
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">Broadcast Heartbeats</div>
+            <div class="lb-history-detail-value">${Number(metrics.heartbeatRequests || 0).toLocaleString()}</div>
+          </div>
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">Room Status Polls</div>
+            <div class="lb-history-detail-value">${Number(metrics.statusPolls || 0).toLocaleString()}</div>
+          </div>
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">Analytics Calls</div>
+            <div class="lb-history-detail-value">${Number(metrics.analyticsRequests || 0).toLocaleString()}</div>
+          </div>
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">Audio / Transcription Chunks</div>
+            <div class="lb-history-detail-value">${Number(metrics.audioChunks || 0).toLocaleString()}</div>
+          </div>
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">Source Feed Calls</div>
+            <div class="lb-history-detail-value">${Number(metrics.sourceFinalRequests || 0).toLocaleString()}</div>
+          </div>
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">Listener Heartbeats</div>
+            <div class="lb-history-detail-value">${Number(metrics.listenerHeartbeats || 0).toLocaleString()}</div>
+          </div>
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">Listener TTS Requests</div>
+            <div class="lb-history-detail-value">${Number(metrics.ttsRequests || 0).toLocaleString()}</div>
+          </div>
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">Total Tracked Worker Requests</div>
+            <div class="lb-history-detail-value">${totalRequests.toLocaleString()}</div>
+          </div>
+
+          <div class="lb-history-detail-stat">
+            <div class="lb-history-detail-label">End Reason</div>
+            <div class="lb-history-detail-value">${escapeHtml(endReasonLabel)}</div>
+          </div>
+
+        </div>
+      `;
+
+    }).join("");
+}
+
+
+function setHistoryMode(
+  advanced
+){
+
+  historyAdvancedMode =
+    !!advanced;
+
+  document.getElementById(
+    "historySimpleButton"
+  )?.classList.toggle(
+    "active",
+    !historyAdvancedMode
+  );
+
+  document.getElementById(
+    "historyAdvancedButton"
+  )?.classList.toggle(
+    "active",
+    historyAdvancedMode
+  );
+
+  renderDetailHistory(
+    currentHistoryBroadcasts
+  );
+}
+
+
+async function saveOrganization(){
+
+  if(!selectedOrganization){
+    return;
+  }
+
+
+  const saveButton =
+    document.getElementById(
+      "saveClientButton"
+    );
+
+  const message =
+    document.getElementById(
+      "saveMessage"
+    );
+
+
+  saveButton.disabled =
+    true;
+
+  saveButton.textContent =
+    "Saving...";
+
+  message.className =
+    "lb-message";
+
+
+  const overrideValue =
+    document.getElementById(
+      "editViewerOverride"
+    ).value.trim();
+
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/organization-update",
+        {
+          method:"POST",
+
+          body:JSON.stringify({
+
+            organizationId:
+              selectedOrganization.id,
+
+            organizationName:
+              document.getElementById(
+                "editOrganizationName"
+              ).value.trim(),
+
+            accountHolder:
+              document.getElementById(
+                "editAccountHolder"
+              ).value.trim(),
+
+            email:
+              document.getElementById(
+                "editEmail"
+              ).value.trim(),
+
+            accountEmail:
+              document.getElementById(
+                "editAccountEmail"
+              ).value.trim(),
+
+            phone:
+              document.getElementById(
+                "editPhone"
+              ).value.trim(),
+
+            roomName:
+              document.getElementById(
+                "editRoomName"
+              ).value
+              .trim()
+              .toUpperCase(),
+
+            planCode:
+              document.getElementById(
+                "editPlan"
+              ).value,
+
+            includedMinutes:
+              Number(
+                document.getElementById(
+                  "editIncludedMinutes"
+                ).value
+              ),
+
+            bonusMinutes:
+              Number(
+                document.getElementById(
+                  "editBonusMinutes"
+                ).value
+              ),
+
+            viewerLimit:
+              Number(
+                document.getElementById(
+                  "editViewerLimit"
+                ).value
+              ),
+
+            viewerOverride:
+              overrideValue === ""
+                ? null
+                : Number(
+                    overrideValue
+                  ),
+
+            scriptureEnabled:
+              document.getElementById(
+                "editScriptureEnabled"
+              ).checked,
+
+            scripturePlanOverride:
+              document.getElementById(
+                "editScripturePlanOverride"
+              ).checked,
+
+            featureOverrides:
+              collectFeatureOverrides(),
+
+            accountStatus:
+              document.getElementById(
+                "editStatus"
+              ).value,
+
+            adminNotes:
+              document.getElementById(
+                "editAdminNotes"
+              ).value
+          })
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if(!response.ok){
+
+      throw new Error(
+        data.error ||
+        "Update failed."
+      );
+    }
+
+
+    message.textContent =
+      "✓ Account changes saved.";
+
+    message.className =
+      "lb-message good";
+
+
+    await loadOrganizations();
+
+    await openOrganization(
+      selectedOrganization.id
+    );
+
+
+  }catch(error){
+
+    message.textContent =
+      error.message;
+
+    message.className =
+      "lb-message bad";
+
+  }finally{
+
+    saveButton.disabled =
+      false;
+
+    saveButton.textContent =
+      "Save Changes";
+  }
+}
+
+
+
+function liveBridgeAdminModal({
+  title,
+  message,
+  confirmText = "Continue",
+  cancelText = "Cancel",
+  requireText = "",
+  success = false
+}){
+
+  return new Promise(
+    resolve => {
+
+      const overlay =
+        document.createElement(
+          "div"
+        );
+
+      overlay.style.cssText = `
+        position:fixed;
+        inset:0;
+        z-index:999999;
+        background:rgba(2,8,18,.84);
+        backdrop-filter:blur(5px);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:20px;
+      `;
+
+      const inputHtml =
+        requireText
+          ? `
+            <input
+              id="lbAdminModalInput"
+              type="text"
+              autocomplete="off"
+              placeholder="Type ${escapeHtml(requireText)}"
+              style="
+                width:100%;
+                margin-top:16px;
+                padding:13px 14px;
+                border-radius:10px;
+                border:1px solid rgba(255,255,255,.15);
+                background:#07111f;
+                color:white;
+                font-size:15px;
+              "
+            >
+          `
+          : "";
+
+      overlay.innerHTML = `
+        <div style="
+          width:100%;
+          max-width:500px;
+          background:#101d2d;
+          border:1px solid rgba(255,255,255,.13);
+          border-radius:20px;
+          padding:28px;
+          box-shadow:0 25px 70px rgba(0,0,0,.45);
+          color:white;
+          font-family:Arial,Helvetica,sans-serif;
+        ">
+
+          <div style="
+            font-size:25px;
+            font-weight:900;
+            margin-bottom:5px;
+          ">
+            LiveBridge
+          </div>
+
+          <div style="
+            color:${success ? "#68e5c1" : "#ff8f8f"};
+            font-size:12px;
+            font-weight:900;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+            margin-bottom:18px;
+          ">
+            ${success ? "Account Updated" : "Administrator Action"}
+          </div>
+
+          <div style="
+            font-size:20px;
+            font-weight:900;
+            margin-bottom:10px;
+          ">
+            ${escapeHtml(title)}
+          </div>
+
+          <div style="
+            color:#a8b9cb;
+            font-size:14px;
+            line-height:1.65;
+          ">
+            ${escapeHtml(message).replace(/\n/g,"<br>")}
+          </div>
+
+          ${inputHtml}
+
+          <div style="
+            display:flex;
+            gap:10px;
+            margin-top:22px;
+          ">
+
+            ${
+              success
+                ? ""
+                : `
+                  <button
+                    id="lbAdminModalCancel"
+                    style="
+                      flex:1;
+                      border:1px solid rgba(255,255,255,.13);
+                      border-radius:11px;
+                      padding:13px 16px;
+                      cursor:pointer;
+                      background:#17283d;
+                      color:white;
+                      font-weight:800;
+                    "
+                  >
+                    ${escapeHtml(cancelText)}
+                  </button>
+                `
+            }
+
+            <button
+              id="lbAdminModalConfirm"
+              style="
+                flex:1;
+                border:0;
+                border-radius:11px;
+                padding:13px 16px;
+                cursor:pointer;
+                background:${
+                  success
+                    ? "linear-gradient(135deg,#29d783,#38e59a)"
+                    : "linear-gradient(135deg,#ef4444,#dc2626)"
+                };
+                color:${success ? "#04150d" : "white"};
+                font-weight:900;
+              "
+            >
+              ${escapeHtml(confirmText)}
+            </button>
+
+          </div>
+
+        </div>
+      `;
+
+      document.body.appendChild(
+        overlay
+      );
+
+
+      const input =
+        overlay.querySelector(
+          "#lbAdminModalInput"
+        );
+
+      if(input){
+        input.focus();
+      }
+
+
+      const close =
+        value => {
+
+          overlay.remove();
+
+          resolve(value);
+        };
+
+
+      const cancelButton =
+        overlay.querySelector(
+          "#lbAdminModalCancel"
+        );
+
+      if(cancelButton){
+
+        cancelButton.onclick =
+          () => close(false);
+      }
+
+
+      overlay.querySelector(
+        "#lbAdminModalConfirm"
+      ).onclick =
+        () => {
+
+          if(requireText){
+
+            const typed =
+              input.value.trim();
+
+            if(
+              typed !==
+                requireText
+            ){
+
+              input.style.borderColor =
+                "#ef4444";
+
+              input.focus();
+
+              return;
+            }
+          }
+
+          close(true);
+        };
+    }
+  );
+}
+
+
+async function deleteOrganization(){
+
+  if(!selectedOrganization){
+    return;
+  }
+
+
+  const organizationName =
+    selectedOrganization.organizationName ||
+    selectedOrganization.name ||
+    "this organization";
+
+
+  const firstConfirm =
+    await liveBridgeAdminModal({
+      title:
+        "Delete " +
+        organizationName +
+        "?",
+
+      message:
+        "This permanently deletes the customer's Clerk login AND all LiveBridge data, including the organization, room, usage, broadcast history, listener analytics and administrator access.",
+
+      confirmText:
+        "Continue",
+      cancelText:
+        "Cancel"
+    });
+
+
+  if(!firstConfirm){
+    return;
+  }
+
+
+  const finalConfirm =
+    await liveBridgeAdminModal({
+      title:
+        "Final Confirmation",
+
+      message:
+        "Type the organization name exactly to permanently delete this account.",
+
+      requireText:
+        organizationName,
+
+      confirmText:
+        "Delete Account",
+      cancelText:
+        "Cancel"
+    });
+
+
+  if(!finalConfirm){
+    return;
+  }
+
+
+  const deleteButton =
+    document.getElementById(
+      "deleteClientButton"
+    );
+
+
+  deleteButton.disabled =
+    true;
+
+  deleteButton.textContent =
+    "Deleting...";
+
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/organization-delete",
+        {
+          method:"POST",
+
+          body:JSON.stringify({
+            organizationId:
+              selectedOrganization.id
+          })
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if(!response.ok){
+
+      throw new Error(
+        data.error ||
+        "Delete failed."
+      );
+    }
+
+
+    selectedOrganization =
+      null;
+
+
+    await loadOrganizations();
+
+    await loadPlans();
+
+    showClientList();
+
+
+    await liveBridgeAdminModal({
+      title:
+        "Account Deleted",
+
+      message:
+        "The Clerk login and LiveBridge account data were permanently removed.",
+
+      confirmText:
+        "Done",
+
+      success:
+        true
+    });
+
+
+  }catch(error){
+
+    await liveBridgeAdminModal({
+      title:
+        "Delete Failed",
+
+      message:
+        error.message ||
+        "Unable to delete LiveBridge account.",
+
+      confirmText:
+        "Close",
+
+      success:
+        true
+    });
+
+  }finally{
+
+    deleteButton.disabled =
+      false;
+
+    deleteButton.textContent =
+      "Delete LiveBridge Account";
+  }
+}
+
+function showClientList(){
+
+  document.getElementById(
+    "clientDetailView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "adminAccessView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "plansView"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "clientListView"
+  ).style.display =
+    "block";
+
+  document
+    .querySelectorAll(
+      ".lb-side-button"
+    )
+    .forEach(button =>
+      button.classList.remove(
+        "active"
+      )
+    );
+
+  document.getElementById(
+    "showClientsButton"
+  ).classList.add(
+    "active"
+  );
+
+  selectedOrganization =
+    null;
+}
+
+
+document.getElementById(
+  "clientSearch"
+).addEventListener(
+  "input",
+  function(){
+
+    const term =
+      this.value
+        .trim()
+        .toLowerCase();
+
+    const filtered =
+      adminOrganizations.filter(
+        item => {
+
+          return (
+            String(
+              item.organizationName || ""
+            )
+            .toLowerCase()
+            .includes(term) ||
+
+            String(
+              item.roomName || ""
+            )
+            .toLowerCase()
+            .includes(term) ||
+
+            String(
+              item.email || ""
+            )
+            .toLowerCase()
+            .includes(term)
+          );
+        }
+      );
+
+    renderOrganizations(
+      filtered
+    );
+  }
+);
+
+
+document.querySelectorAll(
+  ".bonus-btn"
+).forEach(button => {
+
+  button.addEventListener(
+    "click",
+    function(){
+
+      const add =
+        Number(
+          this.dataset.minutes
+        );
+
+      const input =
+        document.getElementById(
+          "editBonusMinutes"
+        );
+
+      input.value =
+        Number(
+          input.value || 0
+        ) + add;
+    }
+  );
+});
+
+
+document.querySelectorAll(
+  ".viewer-btn"
+).forEach(button => {
+
+  button.addEventListener(
+    "click",
+    function(){
+
+      document.getElementById(
+        "editViewerOverride"
+      ).value =
+        Number(
+          this.dataset.viewers
+        );
+    }
+  );
+});
+
+
+document.getElementById(
+  "clearViewerOverride"
+).addEventListener(
+  "click",
+  function(){
+
+    document.getElementById(
+      "editViewerOverride"
+    ).value =
+      "";
+  }
+);
+
+
+document.getElementById(
+  "saveClientButton"
+).addEventListener(
+  "click",
+  saveOrganization
+);
+
+
+document.getElementById(
+  "deleteClientButton"
+).addEventListener(
+  "click",
+  deleteOrganization
+);
+
+
+document.getElementById(
+  "backToClients"
+).addEventListener(
+  "click",
+  showClientList
+);
+
+
+document.getElementById(
+  "historySimpleButton"
+)?.addEventListener(
+  "click",
+  () => setHistoryMode(false)
+);
+
+document.getElementById(
+  "historyAdvancedButton"
+)?.addEventListener(
+  "click",
+  () => setHistoryMode(true)
+);
+
+
+document.getElementById(
+  "showClientsButton"
+).addEventListener(
+  "click",
+  showClientList
+);
+
+
+document.getElementById(
+  "showAdminsButton"
+).addEventListener(
+  "click",
+  showAdminAccess
+);
+
+
+document.getElementById(
+  "showPlansButton"
+).addEventListener(
+  "click",
+  showPlans
+);
+
+
+document.getElementById(
+  "createPlanButton"
+).addEventListener(
+  "click",
+  () => openPlanEditor()
+);
+
+
+document.getElementById(
+  "closePlanEditor"
+).addEventListener(
+  "click",
+  closePlanEditor
+);
+
+
+document.getElementById(
+  "cancelPlanEditor"
+).addEventListener(
+  "click",
+  closePlanEditor
+);
+
+
+document.getElementById(
+  "savePlanButton"
+).addEventListener(
+  "click",
+  savePlan
+);
+
+
+document.getElementById(
+  "planEditorModal"
+).addEventListener(
+  "click",
+  function(event){
+
+    if(
+      event.target ===
+      this
+    ){
+      closePlanEditor();
+    }
+  }
+);
+
+
+
+document.getElementById("closeOfferCreator").addEventListener("click", closeOfferCreator);
+document.getElementById("createOfferButton").addEventListener("click", createPrivateOffer);
+document.getElementById("copyOfferLinkButton").addEventListener("click", copyOfferLink);
+document.getElementById("shareOfferButton").addEventListener("click", sharePrivateOffer);
+document.getElementById("downloadOfferGraphicButton").addEventListener("click", downloadOfferGraphic);
+document.getElementById("createAnotherOfferButton").addEventListener("click", resetOfferCreator);
+document.getElementById("offerSingleUse").addEventListener("change", function(){
+  document.getElementById("offerMaxRedemptions").disabled = this.checked;
+  if(this.checked){ document.getElementById("offerMaxRedemptions").value = "1"; }
+});
+document.getElementById("offerCreatorModal").addEventListener("click", function(event){
+  if(event.target === this){ closeOfferCreator(); }
+});
+
+
+document.getElementById(
+  "refreshAdminButton"
+).addEventListener(
+  "click",
+  async function(){
+
+    await loadOrganizations();
+
+    showClientList();
+  }
+);
+
+
+document.getElementById(
+  "adminLogoutButton"
+).addEventListener(
+  "click",
+  async function(){
+
+    try{
+      await Clerk.signOut();
+    }catch(error){
+      console.error(
+        "LiveBridge admin logout error:",
+        error
+      );
+    }
+
+    window.location.replace(
+      "/"
+    );
+  }
+);
+
+
+window.addEventListener(
+  "load",
+  async function(){
+
+    try{
+
+      await Clerk.load();
+
+      const token =
+        await getAdminToken();
+
+      if(!token){
+
+        window.location.href =
+          "/account/?returnTo=" +
+          encodeURIComponent(
+            "/admin"
+          );
+
+        return;
+      }
+
+
+      await verifyAdmin();
+
+      await loadOrganizations();
+
+      await loadPlans();
+
+
+      document.getElementById(
+        "adminLoading"
+      ).style.display =
+        "none";
+
+      document.getElementById(
+        "adminShell"
+      ).style.display =
+        "grid";
+
+
+    }catch(error){
+
+      console.error(
+        "LiveBridge admin failed:",
+        error
+      );
+
+      document.getElementById(
+        "adminLoading"
+      ).innerHTML = `
+        <div>
+
+          <div style="
+            font-size:26px;
+            font-weight:900;
+            margin-bottom:10px;
+          ">
+            Administrator Access Required
+          </div>
+
+          <div style="
+            color:#8ea3ba;
+            margin-bottom:18px;
+          ">
+            ${escapeHtml(error.message)}
+          </div>
+
+          <button
+            onclick="window.location.href='/account'"
+            style="
+              border:0;
+              border-radius:10px;
+              padding:12px 18px;
+              background:#288cf8;
+              color:white;
+              font-weight:900;
+              cursor:pointer;
+            "
+          >
+            Back to Account Dashboard
+          </button>
+
+        </div>
+      `;
+    }
+  }
+);
+
+</script>
+
+<!-- =====================================================
+LIVEBRIDGE /admin SPEECH RATE OVERRIDE
+ADD AS SECOND Embed on /admin.
+Keeps the existing admin Embed unchanged.
+===================================================== -->
+
+<style>
+  .lb-admin-speech-card{
+    margin-top:18px;
+    padding:16px;
+    border-radius:14px;
+    background:rgba(52,212,189,.055);
+    border:1px solid rgba(52,212,189,.20);
+  }
+
+  .lb-admin-speech-title{
+    font-size:14px;
+    font-weight:900;
+    margin-bottom:5px;
+    color:white;
+  }
+
+  .lb-admin-speech-sub{
+    color:#8ea3ba;
+    font-size:11px;
+    line-height:1.5;
+    margin-bottom:12px;
+  }
+
+  .lb-admin-speech-row{
+    display:grid;
+    grid-template-columns:44px 1fr 44px auto;
+    gap:8px;
+    align-items:center;
+  }
+
+  .lb-admin-speech-btn{
+    height:42px;
+    border-radius:9px;
+    border:1px solid rgba(255,255,255,.13);
+    background:#14253a;
+    color:white;
+    font-size:20px;
+    font-weight:900;
+    cursor:pointer;
+  }
+
+  .lb-admin-speech-value{
+    height:42px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:9px;
+    border:1px solid rgba(255,255,255,.11);
+    background:#0e1c2d;
+    color:white;
+    font-size:16px;
+    font-weight:900;
+  }
+
+  .lb-admin-speech-save{
+    height:42px;
+    border:0;
+    border-radius:9px;
+    padding:0 14px;
+    background:linear-gradient(135deg,#288cf8,#7046df);
+    color:white;
+    font-weight:900;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+
+  .lb-admin-speech-save:disabled{
+    opacity:.55;
+    cursor:not-allowed;
+  }
+
+  .lb-admin-speech-status{
+    margin-top:9px;
+    color:#8ea3ba;
+    font-size:11px;
+  }
+
+  @media(max-width:760px){
+    .lb-admin-speech-row{
+      grid-template-columns:44px 1fr 44px;
+    }
+
+    .lb-admin-speech-save{
+      grid-column:1 / -1;
+      width:100%;
+    }
+  }
+</style>
+
+<script>
+(function(){
+
+  let currentAdminOrganizationId = null;
+  let currentAdminSpeechRate = 1.15;
+
+  function clampRate(value){
+    const n = Number(value);
+
+    return Math.round(
+      Math.min(
+        1.50,
+        Math.max(
+          0.75,
+          Number.isFinite(n)
+            ? n
+            : 1.15
+        )
+      ) * 100
+    ) / 100;
+  }
+
+
+  function ensureSpeechCard(){
+
+    if(
+      document.getElementById(
+        "lbAdminSpeechRateCard"
+      )
+    ){
+      return true;
+    }
+
+    const notesField =
+      document.getElementById(
+        "editAdminNotes"
+      );
+
+    if(!notesField){
+      return false;
+    }
+
+    const anchor =
+      notesField.closest(
+        ".lb-field"
+      );
+
+    if(!anchor){
+      return false;
+    }
+
+    const card =
+      document.createElement(
+        "div"
+      );
+
+    card.id =
+      "lbAdminSpeechRateCard";
+
+    card.className =
+      "lb-admin-speech-card";
+
+    card.innerHTML = `
+      <div class="lb-admin-speech-title">
+        🔊 Listener Speaking Speed Override
+      </div>
+
+      <div class="lb-admin-speech-sub">
+        Changes the organization-wide Azure listener speed.
+        The customer will see this same saved value in /account
+        and can change it again later.
+      </div>
+
+      <div class="lb-admin-speech-row">
+
+        <button
+          type="button"
+          id="lbAdminSpeechDown"
+          class="lb-admin-speech-btn"
+        >
+          −
+        </button>
+
+        <div
+          id="lbAdminSpeechValue"
+          class="lb-admin-speech-value"
+        >
+          1.15×
+        </div>
+
+        <button
+          type="button"
+          id="lbAdminSpeechUp"
+          class="lb-admin-speech-btn"
+        >
+          +
+        </button>
+
+        <button
+          type="button"
+          id="lbAdminSpeechSave"
+          class="lb-admin-speech-save"
+        >
+          Save Speed
+        </button>
+
+      </div>
+
+      <div
+        id="lbAdminSpeechStatus"
+        class="lb-admin-speech-status"
+      >
+        Select an organization to load its saved speed.
+      </div>
+    `;
+
+    anchor.insertAdjacentElement(
+      "beforebegin",
+      card
+    );
+
+
+    document
+      .getElementById(
+        "lbAdminSpeechDown"
+      )
+      .addEventListener(
+        "click",
+        function(){
+
+          currentAdminSpeechRate =
+            clampRate(
+              currentAdminSpeechRate - 0.05
+            );
+
+          updateSpeechDisplay();
+        }
+      );
+
+
+    document
+      .getElementById(
+        "lbAdminSpeechUp"
+      )
+      .addEventListener(
+        "click",
+        function(){
+
+          currentAdminSpeechRate =
+            clampRate(
+              currentAdminSpeechRate + 0.05
+            );
+
+          updateSpeechDisplay();
+        }
+      );
+
+
+    document
+      .getElementById(
+        "lbAdminSpeechSave"
+      )
+      .addEventListener(
+        "click",
+        saveSpeechRate
+      );
+
+    return true;
+  }
+
+
+  function updateSpeechDisplay(){
+
+    const value =
+      document.getElementById(
+        "lbAdminSpeechValue"
+      );
+
+    if(value){
+      value.textContent =
+        currentAdminSpeechRate.toFixed(2) +
+        "×";
+    }
+  }
+
+
+  async function loadSpeechRate(
+    organizationId
+  ){
+
+    if(!organizationId){
+      return;
+    }
+
+    currentAdminOrganizationId =
+      Number(
+        organizationId
+      );
+
+    const status =
+      document.getElementById(
+        "lbAdminSpeechStatus"
+      );
+
+    if(status){
+      status.textContent =
+        "Loading saved speed...";
+    }
+
+    try{
+
+      const response =
+        await adminFetch(
+          "/admin/organization?id=" +
+          encodeURIComponent(
+            currentAdminOrganizationId
+          )
+        );
+
+      const data =
+        await response.json();
+
+      if(
+        !response.ok ||
+        !data.success ||
+        !data.account
+      ){
+        throw new Error(
+          data.error ||
+          "Unable to load speaking speed."
+        );
+      }
+
+      currentAdminSpeechRate =
+        clampRate(
+          data.account.speechRate ??
+          1.15
+        );
+
+      updateSpeechDisplay();
+
+      if(status){
+        status.textContent =
+          "Current organization speed: " +
+          currentAdminSpeechRate.toFixed(2) +
+          "×.";
+      }
+
+    }catch(error){
+
+      console.error(
+        "Admin speech rate load failed:",
+        error
+      );
+
+      if(status){
+        status.textContent =
+          "Could not load saved speed.";
+      }
+    }
+  }
+
+
+  async function saveSpeechRate(){
+
+    if(!currentAdminOrganizationId){
+      return;
+    }
+
+    const button =
+      document.getElementById(
+        "lbAdminSpeechSave"
+      );
+
+    const status =
+      document.getElementById(
+        "lbAdminSpeechStatus"
+      );
+
+    button.disabled = true;
+    button.textContent = "Saving...";
+
+    if(status){
+      status.textContent =
+        "Saving...";
+    }
+
+    try{
+
+      const response =
+        await adminFetch(
+          "/admin/organization-update",
+          {
+            method:"POST",
+
+            body:
+              JSON.stringify({
+                organizationId:
+                  currentAdminOrganizationId,
+
+                speechRate:
+                  currentAdminSpeechRate
+              })
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if(
+        !response.ok ||
+        !data.success ||
+        !data.account
+      ){
+        throw new Error(
+          data.error ||
+          "Unable to save speaking speed."
+        );
+      }
+
+      currentAdminSpeechRate =
+        clampRate(
+          data.account.speechRate ??
+          currentAdminSpeechRate
+        );
+
+      updateSpeechDisplay();
+
+      button.textContent =
+        "✓ Saved";
+
+      if(status){
+        status.textContent =
+          "Saved at " +
+          currentAdminSpeechRate.toFixed(2) +
+          "×. Customer /account will now load this value.";
+      }
+
+      setTimeout(
+        function(){
+          button.textContent =
+            "Save Speed";
+        },
+        1400
+      );
+
+    }catch(error){
+
+      console.error(
+        "Admin speech rate save failed:",
+        error
+      );
+
+      button.textContent =
+        "Save Speed";
+
+      if(status){
+        status.textContent =
+          "Error: " +
+          error.message;
+      }
+
+    }finally{
+
+      button.disabled = false;
+    }
+  }
+
+
+  function wrapOpenOrganization(){
+
+    if(
+      typeof window.openOrganization !==
+      "function"
+    ){
+      return false;
+    }
+
+    if(
+      window.openOrganization
+        .__lbSpeechWrapped
+    ){
+      return true;
+    }
+
+    const original =
+      window.openOrganization;
+
+    const wrapped =
+      async function(id){
+
+        const result =
+          await original(id);
+
+        ensureSpeechCard();
+
+        await loadSpeechRate(id);
+
+        return result;
+      };
+
+    wrapped.__lbSpeechWrapped =
+      true;
+
+    window.openOrganization =
+      wrapped;
+
+    return true;
+  }
+
+
+  function start(){
+
+    ensureSpeechCard();
+
+    let attempts = 0;
+
+    const timer =
+      setInterval(
+        function(){
+
+          attempts += 1;
+
+          ensureSpeechCard();
+
+          if(
+            wrapOpenOrganization()
+          ){
+            clearInterval(
+              timer
+            );
+          }
+
+          if(
+            attempts >= 80
+          ){
+            clearInterval(
+              timer
+            );
+          }
+
+        },
+        250
+      );
+  }
+
+
+  start();
+
+})();
+</script>
+
+<!-- =====================================================
+LIVEBRIDGE /admin AZURE TTS USAGE COLUMN
+ADD AS THIRD Embed on /admin.
+Keeps existing admin + speech-rate embeds unchanged.
+===================================================== -->
+
+<style>
+  /* Keep every header/body column on the exact same grid. */
+  .lb-client-row{
+    grid-template-columns:
+      minmax(190px,1.65fr)
+      minmax(105px,.85fr)
+      minmax(95px,.78fr)
+      minmax(95px,.78fr)
+      minmax(90px,.70fr)
+      minmax(80px,.62fr)
+      minmax(90px,.72fr)
+      minmax(110px,.90fr)
+      88px !important;
+
+    column-gap:12px !important;
+    align-items:center !important;
+  }
+
+  .lb-client-row > div{
+    min-width:0;
+    text-align:center;
+  }
+
+  .lb-client-row > div:first-child{
+    text-align:left;
+  }
+
+  .lb-client-row > div:last-child{
+    text-align:right;
+  }
+
+  .lb-client-row.head > div{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .lb-client-row.head > div:first-child{
+    justify-content:flex-start;
+  }
+
+  .lb-client-row.head > div:last-child{
+    justify-content:flex-end;
+  }
+
+  .lb-azure-usage{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    line-height:1.2;
+  }
+
+  .lb-azure-usage strong{
+    color:#f5f8fc;
+    font-size:12px;
+  }
+
+  .lb-azure-usage span{
+    color:#7f96ad;
+    font-size:9px;
+    white-space:nowrap;
+  }
+
+  @media(max-width:1100px){
+    .lb-client-row{
+      grid-template-columns:
+        minmax(180px,1.5fr)
+        minmax(100px,.8fr)
+        minmax(95px,.75fr)
+        minmax(95px,.75fr)
+        minmax(105px,.85fr)
+        88px !important;
+    }
+
+    .lb-client-row > .hide-medium{
+      display:none !important;
+    }
+
+    .lb-azure-hide-medium{
+      display:none !important;
+    }
+  }
+
+  @media(max-width:760px){
+    .lb-client-row{
+      grid-template-columns:1fr auto !important;
+    }
+
+    .lb-azure-mobile-hide{
+      display:none !important;
+    }
+  }
+</style>
+
+<script>
+(function(){
+
+  const AZURE_FREE_CHARACTERS =
+    500000;
+
+
+  function formatAzureCharacters(
+    value
+  ){
+
+    const number =
+      Math.max(
+        0,
+        Number(value || 0)
+      );
+
+    if(number >= 1000000){
+
+      return (
+        (number / 1000000)
+          .toFixed(2)
+          .replace(/\.?0+$/,"") +
+        "M"
+      );
+    }
+
+    if(number >= 1000){
+
+      return (
+        (number / 1000)
+          .toFixed(1)
+          .replace(/\.0$/,"") +
+        "K"
+      );
+    }
+
+    return String(
+      Math.round(number)
+    );
+  }
+
+
+  function azureUsageMarkup(
+    item
+  ){
+
+    const characters =
+      Number(
+        item?.stats
+          ?.azureTtsCharacters ||
+        0
+      );
+
+    const generations =
+      Number(
+        item?.stats
+          ?.azureTtsGenerations ||
+        0
+      );
+
+    const percent =
+      Math.min(
+        999,
+        (
+          characters /
+          AZURE_FREE_CHARACTERS
+        ) * 100
+      );
+
+    const percentText =
+      percent < 0.1 &&
+      characters > 0
+        ? "<0.1%"
+        : percent.toFixed(1) + "%";
+
+    return `
+      <div class="lb-azure-usage">
+        <strong>
+          ${formatAzureCharacters(characters)}
+        </strong>
+
+        <span>
+          ${percentText} of 500K
+        </span>
+
+        <span>
+          ${generations} new audio
+        </span>
+      </div>
+    `;
+  }
+
+
+  function installAzureHeader(){
+
+    const head =
+      document.querySelector(
+        ".lb-client-row.head"
+      );
+
+    if(
+      !head ||
+      head.querySelector(
+        ".lb-azure-head"
+      )
+    ){
+      return;
+    }
+
+    const actionsColumn =
+      head.lastElementChild;
+
+    const column =
+      document.createElement(
+        "div"
+      );
+
+    column.className =
+      "lb-azure-head lb-azure-mobile-hide";
+
+    column.textContent =
+      "Azure TTS";
+
+    head.insertBefore(
+      column,
+      actionsColumn
+    );
+  }
+
+
+  function decorateAzureRows(
+    list
+  ){
+
+    installAzureHeader();
+
+    const container =
+      document.getElementById(
+        "clientRows"
+      );
+
+    if(!container){
+      return;
+    }
+
+    const rows =
+      Array.from(
+        container.querySelectorAll(
+          ".lb-client-row"
+        )
+      );
+
+    rows.forEach(
+      function(row,index){
+
+        const item =
+          list[index];
+
+        if(!item){
+          return;
+        }
+
+        const existing =
+          row.querySelector(
+            ".lb-azure-column"
+          );
+
+        if(existing){
+          existing.remove();
+        }
+
+        const actionsColumn =
+          row.lastElementChild;
+
+        const column =
+          document.createElement(
+            "div"
+          );
+
+        column.className =
+          "lb-azure-column lb-azure-mobile-hide";
+
+        column.innerHTML =
+          azureUsageMarkup(
+            item
+          );
+
+        row.insertBefore(
+          column,
+          actionsColumn
+        );
+      }
+    );
+  }
+
+
+  function wrapRenderOrganizations(){
+
+    if(
+      typeof window.renderOrganizations !==
+      "function"
+    ){
+      return false;
+    }
+
+    if(
+      window.renderOrganizations
+        .__lbAzureWrapped
+    ){
+      return true;
+    }
+
+    const original =
+      window.renderOrganizations;
+
+    const wrapped =
+      function(list){
+
+        const result =
+          original(list);
+
+        decorateAzureRows(
+          Array.isArray(list)
+            ? list
+            : []
+        );
+
+        return result;
+      };
+
+    wrapped.__lbAzureWrapped =
+      true;
+
+    window.renderOrganizations =
+      wrapped;
+
+    return true;
+  }
+
+
+  function start(){
+
+    installAzureHeader();
+
+    let attempts = 0;
+
+    const timer =
+      setInterval(
+        function(){
+
+          attempts += 1;
+
+          installAzureHeader();
+
+          if(
+            wrapRenderOrganizations()
+          ){
+
+            if(
+              Array.isArray(
+                window.adminOrganizations
+              ) &&
+              window.adminOrganizations.length
+            ){
+              decorateAzureRows(
+                window.adminOrganizations
+              );
+            }
+
+            clearInterval(
+              timer
+            );
+          }
+
+          if(
+            attempts >= 80
+          ){
+            clearInterval(
+              timer
+            );
+          }
+
+        },
+        250
+      );
+  }
+
+
+  start();
+
+})();
+</script>
+
+<!-- =====================================================
+LIVEBRIDGE /admin DISPLAY + MOBILE FIX
+ADD AS FOURTH Embed on /admin.
+Does NOT change admin data or Worker logic.
+===================================================== -->
+
+<style>
+  :root{
+    --lb-admin-scale:1;
+  }
+
+  /* ---------- DESKTOP FONT SCALE ---------- */
+
+  #clientListView{
+    font-size:
+      calc(
+        1em *
+        var(--lb-admin-scale)
+      );
+  }
+
+  #clientListView .lb-client-row{
+    font-size:
+      calc(
+        12px *
+        var(--lb-admin-scale)
+      ) !important;
+  }
+
+  #clientListView .lb-client-row.head{
+    font-size:
+      calc(
+        10px *
+        var(--lb-admin-scale)
+      ) !important;
+  }
+
+  #clientListView .lb-org-name{
+    font-size:
+      calc(
+        12px *
+        var(--lb-admin-scale)
+      ) !important;
+  }
+
+  #clientListView .lb-room{
+    font-size:
+      calc(
+        10px *
+        var(--lb-admin-scale)
+      ) !important;
+  }
+
+  #clientListView .lb-status{
+    font-size:
+      calc(
+        10px *
+        var(--lb-admin-scale)
+      ) !important;
+  }
+
+  #clientListView .lb-azure-usage strong{
+    font-size:
+      calc(
+        12px *
+        var(--lb-admin-scale)
+      ) !important;
+  }
+
+  #clientListView .lb-azure-usage span{
+    font-size:
+      calc(
+        9px *
+        var(--lb-admin-scale)
+      ) !important;
+  }
+
+
+  /* ---------- FONT CONTROL ---------- */
+
+  .lb-admin-font-controls{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin-left:auto;
+  }
+
+  .lb-admin-font-label{
+    color:#8399b0;
+    font-size:10px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+  }
+
+  .lb-admin-font-button{
+    width:32px;
+    height:32px;
+    border:1px solid rgba(255,255,255,.11);
+    border-radius:8px;
+    background:#14253a;
+    color:#fff;
+    cursor:pointer;
+    font-weight:900;
+    font-size:16px;
+  }
+
+  .lb-admin-font-value{
+    min-width:42px;
+    text-align:center;
+    color:#fff;
+    font-size:11px;
+    font-weight:900;
+  }
+
+
+  /* ---------- MOBILE ---------- */
+
+  @media(max-width:760px){
+
+    .lb-main{
+      padding:10px !important;
+    }
+
+    .lb-title{
+      font-size:24px !important;
+    }
+
+    .lb-subtitle{
+      font-size:11px !important;
+    }
+
+    .lb-grid4{
+      grid-template-columns:
+        repeat(2,minmax(0,1fr))
+        !important;
+
+      gap:8px !important;
+    }
+
+    .lb-grid4 .lb-card{
+      padding:12px !important;
+      min-width:0;
+    }
+
+    .lb-metric{
+      font-size:25px !important;
+    }
+
+    .lb-grid4 .lb-muted{
+      font-size:10px !important;
+    }
+
+    .lb-table-header{
+      padding:13px 12px !important;
+      flex-direction:column;
+      align-items:stretch !important;
+    }
+
+    .lb-table-header .lb-card-title{
+      font-size:16px !important;
+    }
+
+    .lb-search{
+      width:100% !important;
+      font-size:13px !important;
+    }
+
+    .lb-client-row.head{
+      display:none !important;
+    }
+
+    #clientRows .lb-client-row{
+      display:grid !important;
+      grid-template-columns:
+        minmax(0,1fr)
+        auto
+        !important;
+
+      gap:10px 14px !important;
+      padding:15px 12px !important;
+      align-items:center !important;
+      font-size:13px !important;
+    }
+
+    /*
+      Organization / room gets full left column.
+    */
+    #clientRows .lb-client-row > div:first-child{
+      grid-column:1;
+      grid-row:1;
+      text-align:left !important;
+      min-width:0;
+    }
+
+    #clientRows .lb-org-name{
+      font-size:14px !important;
+      line-height:1.25;
+    }
+
+    #clientRows .lb-room{
+      font-size:10px !important;
+      margin-top:4px !important;
+      word-break:break-word;
+    }
+
+    /*
+      Plan
+    */
+    #clientRows .lb-client-row > div:nth-child(2){
+      grid-column:2;
+      grid-row:1;
+      text-align:right !important;
+      font-size:12px !important;
+      font-weight:800;
+      white-space:nowrap;
+    }
+
+    /*
+      Hours left
+    */
+    #clientRows .lb-client-row > div:nth-child(3){
+      grid-column:1;
+      grid-row:2;
+      text-align:left !important;
+      font-size:12px !important;
+      font-weight:800;
+    }
+
+    #clientRows .lb-client-row > div:nth-child(3)::before{
+      content:"Hours: ";
+      color:#7890aa;
+      font-weight:700;
+    }
+
+    /*
+      Viewer limit
+    */
+    #clientRows .lb-client-row > div:nth-child(4){
+      grid-column:2;
+      grid-row:2;
+      text-align:right !important;
+      font-size:12px !important;
+      font-weight:800;
+    }
+
+    #clientRows .lb-client-row > div:nth-child(4)::before{
+      content:"Viewers: ";
+      color:#7890aa;
+      font-weight:700;
+    }
+
+    /*
+      Keep medium-only stats hidden on phones.
+    */
+    #clientRows .hide-medium,
+    #clientRows .lb-azure-mobile-hide{
+      display:none !important;
+    }
+
+    /*
+      Manage button gets its own full-width row.
+    */
+    #clientRows .lb-client-row > div:last-child{
+      grid-column:1 / -1;
+      grid-row:3;
+      text-align:right !important;
+    }
+
+    #clientRows .lb-button.primary{
+      min-width:105px;
+      min-height:40px;
+      font-size:12px;
+    }
+
+    .lb-admin-font-controls{
+      margin-left:0;
+      justify-content:flex-end;
+    }
+  }
+
+
+  @media(max-width:430px){
+
+    .lb-grid4{
+      grid-template-columns:
+        1fr 1fr
+        !important;
+    }
+
+    .lb-card{
+      border-radius:13px !important;
+    }
+
+    #clientRows .lb-client-row{
+      padding:14px 11px !important;
+    }
+  }
+</style>
+
+
+<script>
+(function(){
+
+  const STORAGE_KEY =
+    "livebridgeAdminFontScale";
+
+  const MIN =
+    0.9;
+
+  const MAX =
+    1.45;
+
+  const STEP =
+    0.1;
+
+
+  function clamp(
+    value
+  ){
+
+    return Math.min(
+      MAX,
+      Math.max(
+        MIN,
+        Number(value) || 1
+      )
+    );
+  }
+
+
+  function getScale(){
+
+    return clamp(
+      localStorage.getItem(
+        STORAGE_KEY
+      ) || 1
+    );
+  }
+
+
+  function setScale(
+    value
+  ){
+
+    const scale =
+      Math.round(
+        clamp(value) *
+        100
+      ) /
+      100;
+
+
+    document
+      .documentElement
+      .style
+      .setProperty(
+        "--lb-admin-scale",
+        scale
+      );
+
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      String(scale)
+    );
+
+
+    const valueBox =
+      document.getElementById(
+        "lbAdminFontValue"
+      );
+
+
+    if(valueBox){
+
+      valueBox.textContent =
+        Math.round(
+          scale *
+          100
+        ) +
+        "%";
+    }
+  }
+
+
+  function installControls(){
+
+    if(
+      document.getElementById(
+        "lbAdminFontControls"
+      )
+    ){
+      return true;
+    }
+
+
+    const header =
+      document.querySelector(
+        "#clientListView .lb-table-header"
+      );
+
+
+    if(!header){
+      return false;
+    }
+
+
+    const controls =
+      document.createElement(
+        "div"
+      );
+
+
+    controls.id =
+      "lbAdminFontControls";
+
+
+    controls.className =
+      "lb-admin-font-controls";
+
+
+    controls.innerHTML = `
+      <span class="lb-admin-font-label">
+        Text
+      </span>
+
+      <button
+        type="button"
+        class="lb-admin-font-button"
+        id="lbAdminFontDown"
+        title="Smaller client text"
+      >
+        −
+      </button>
+
+      <span
+        class="lb-admin-font-value"
+        id="lbAdminFontValue"
+      >
+        100%
+      </span>
+
+      <button
+        type="button"
+        class="lb-admin-font-button"
+        id="lbAdminFontUp"
+        title="Larger client text"
+      >
+        +
+      </button>
+    `;
+
+
+    header.appendChild(
+      controls
+    );
+
+
+    document.getElementById(
+      "lbAdminFontDown"
+    ).onclick =
+      function(){
+
+        setScale(
+          getScale() -
+          STEP
+        );
+      };
+
+
+    document.getElementById(
+      "lbAdminFontUp"
+    ).onclick =
+      function(){
+
+        setScale(
+          getScale() +
+          STEP
+        );
+      };
+
+
+    setScale(
+      getScale()
+    );
+
+
+    return true;
+  }
+
+
+  setScale(
+    getScale()
+  );
+
+
+  let attempts =
+    0;
+
+
+  const timer =
+    setInterval(
+      function(){
+
+        attempts += 1;
+
+
+        if(
+          installControls() ||
+          attempts >= 80
+        ){
+
+          clearInterval(
+            timer
+          );
+        }
+
+      },
+      250
+    );
+
+})();
+</script>
+
+</body>
+</html>

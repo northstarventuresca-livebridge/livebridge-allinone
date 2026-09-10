@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiveBridge Plans & Pricing</title>
+<meta name="description" content="Compare LiveBridge Starter, Growth and Pro plans for real-time multilingual captions, translated audio, analytics and broadcast tools.">
+<style>
+:root{
+  --bg:#07111f;
+  --panel:#0d1b2b;
+  --panel2:#102236;
+  --text:#f4f8fc;
+  --muted:#9bb0c6;
+  --line:rgba(255,255,255,.11);
+  --blue:#2b9cff;
+  --cyan:#35d8ff;
+  --green:#3ddc97;
+  --gold:#ffd166;
+  --danger:#ff8e8e;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:
+    radial-gradient(circle at 12% 0%,rgba(35,126,255,.18),transparent 28%),
+    radial-gradient(circle at 88% 10%,rgba(38,210,255,.12),transparent 24%),
+    var(--bg);
+  color:var(--text);
+}
+a{color:inherit}
+.lb-wrap{width:min(1180px,calc(100% - 34px));margin:auto}
+.lb-nav{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:18px;padding:20px 0;
+}
+.lb-brand{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:900}
+.lb-logo{
+  width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(135deg,#166fff,#29d2ff);box-shadow:0 10px 28px rgba(24,139,255,.25)
+}
+.lb-nav-actions{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}
+.lb-btn{
+  border:0;border-radius:12px;min-height:44px;padding:0 16px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font-weight:850;text-decoration:none;cursor:pointer;font-size:14px;
+}
+.lb-btn-primary{background:linear-gradient(135deg,#1788ff,#2dc8ff);color:white;box-shadow:0 12px 28px rgba(25,145,255,.24)}
+.lb-btn-secondary{background:rgba(255,255,255,.055);border:1px solid var(--line);color:#eaf4ff}
+.lb-btn:disabled{opacity:.55;cursor:not-allowed}
+.lb-hero{text-align:center;padding:62px 0 40px}
+.lb-kicker{
+  display:inline-flex;padding:8px 12px;border-radius:999px;
+  background:rgba(41,158,255,.09);border:1px solid rgba(47,172,255,.21);
+  color:#91d4ff;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase
+}
+.lb-hero h1{font-size:clamp(38px,7vw,70px);line-height:.98;margin:18px auto 18px;max-width:880px;letter-spacing:-.04em}
+.lb-gradient{
+  background:linear-gradient(90deg,#49a8ff,#69e7ff);
+  -webkit-background-clip:text;background-clip:text;color:transparent
+}
+.lb-hero p{max-width:760px;margin:0 auto;color:var(--muted);font-size:18px;line-height:1.7}
+.lb-industry-row{
+  display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:24px
+}
+.lb-chip{
+  padding:8px 11px;border-radius:999px;border:1px solid var(--line);
+  background:rgba(255,255,255,.04);color:#bfd0e0;font-size:12px;font-weight:800
+}
+.lb-section{padding:42px 0}
+.lb-section-title{text-align:center;font-size:clamp(28px,5vw,43px);letter-spacing:-.025em;margin:0 0 10px}
+.lb-section-sub{max-width:760px;text-align:center;color:var(--muted);margin:0 auto 26px;line-height:1.65}
+.lb-plans{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:stretch
+}
+.lb-plan{
+  position:relative;background:linear-gradient(180deg,rgba(20,41,64,.98),rgba(10,25,40,.98));
+  border:1px solid var(--line);border-radius:22px;padding:24px;display:flex;flex-direction:column;min-height:100%
+}
+.lb-plan.growth{
+  border-color:rgba(42,177,255,.52);
+  box-shadow:0 18px 54px rgba(22,125,255,.18);
+  transform:translateY(-7px)
+}
+.lb-popular{
+  position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+  white-space:nowrap;padding:6px 11px;border-radius:999px;
+  background:linear-gradient(135deg,#168aff,#35d8ff);font-size:11px;font-weight:950;letter-spacing:.06em
+}
+.lb-plan-name{font-size:27px;font-weight:950;margin-bottom:5px}
+.lb-plan-best{color:#8fcaff;font-size:13px;font-weight:800;min-height:38px}
+.lb-price{font-size:43px;font-weight:950;margin:18px 0 3px;letter-spacing:-.04em}
+.lb-price small{font-size:13px;color:var(--muted);font-weight:750;letter-spacing:0}
+.lb-core{
+  display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:16px 0
+}
+.lb-core div{
+  border:1px solid var(--line);background:rgba(255,255,255,.035);padding:11px;border-radius:12px
+}
+.lb-core strong{display:block;font-size:18px}
+.lb-core span{font-size:11px;color:var(--muted)}
+.lb-feature-list{list-style:none;padding:0;margin:5px 0 22px;display:grid;gap:10px;flex:1}
+.lb-feature-list li{display:flex;gap:9px;color:#dbe8f4;font-size:13px;line-height:1.45}
+.lb-check{color:#69e6ae;font-weight:950}
+.lb-lock{color:#899caf}
+.lb-plan .lb-btn{width:100%}
+.lb-note{font-size:11px;color:#8196aa;text-align:center;margin-top:9px}
+.lb-custom{
+  margin-top:20px;border:1px solid var(--line);border-radius:20px;padding:22px;
+  display:flex;gap:20px;justify-content:space-between;align-items:center;
+  background:rgba(255,255,255,.035)
+}
+.lb-custom h3{margin:0 0 6px;font-size:22px}
+.lb-custom p{margin:0;color:var(--muted);line-height:1.6}
+.lb-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:rgba(10,26,42,.8)}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th,td{padding:15px 16px;border-bottom:1px solid var(--line);text-align:center;font-size:13px}
+th:first-child,td:first-child{text-align:left}
+thead th{position:sticky;top:0;background:#102033;z-index:2;font-size:14px}
+tbody tr:last-child td{border-bottom:0}
+.lb-yes{color:#69e6ae;font-weight:950}
+.lb-no{color:#667c91}
+.lb-growth-col{background:rgba(37,151,255,.045)}
+.lb-tag{
+  display:inline-flex;padding:4px 8px;border-radius:999px;background:rgba(44,168,255,.10);
+  color:#9bd8ff;border:1px solid rgba(44,168,255,.18);font-size:10px;font-weight:900
+}
+.lb-info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}
+.lb-info{
+  border:1px solid var(--line);background:rgba(255,255,255,.035);border-radius:17px;padding:19px
+}
+.lb-info h3{margin:0 0 7px;font-size:18px}
+.lb-info p{margin:0;color:var(--muted);font-size:13px;line-height:1.6}
+.lb-foot-cta{
+  margin:36px 0 58px;border:1px solid rgba(52,181,255,.25);border-radius:24px;padding:34px;text-align:center;
+  background:linear-gradient(135deg,rgba(19,111,210,.16),rgba(37,210,255,.07))
+}
+.lb-foot-cta h2{margin:0 0 9px;font-size:31px}
+.lb-foot-cta p{margin:0 auto 18px;max-width:720px;color:var(--muted);line-height:1.65}
+.lb-loading{grid-column:1/-1;text-align:center;color:var(--muted);padding:30px}
+.lb-error{
+  grid-column:1/-1;border:1px solid rgba(255,120,120,.2);background:rgba(255,70,70,.05);
+  color:#ffb6b6;border-radius:14px;padding:16px;text-align:center
+}
+.lb-footer{border-top:1px solid var(--line);padding:25px 0 36px;color:#7e94aa;font-size:12px;text-align:center}
+@media(max-width:920px){
+  .lb-plans,.lb-info-grid{grid-template-columns:1fr}
+  .lb-plan.growth{transform:none}
+}
+@media(max-width:650px){
+  .lb-nav{align-items:flex-start}
+  .lb-nav-actions{max-width:190px}
+  .lb-custom{align-items:flex-start;flex-direction:column}
+  .lb-custom .lb-btn{width:100%}
+  .lb-core{grid-template-columns:1fr}
+}
+
+  .lb-plan.free-demo{
+    grid-column:1/-1;
+    border-color:rgba(52,211,153,.30);
+    background:
+      radial-gradient(circle at top right,rgba(52,211,153,.10),transparent 34%),
+      linear-gradient(180deg,#122234,#0e1b2b);
+  }
+
+  .lb-demo-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:6px 10px;
+    margin-bottom:12px;
+    border-radius:999px;
+    background:rgba(52,211,153,.12);
+    border:1px solid rgba(52,211,153,.24);
+    color:#8af0bb;
+    font-size:10px;
+    font-weight:900;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+
+  .lb-plan.free-demo .lb-core{
+    max-width:620px;
+  }
+
+</style>
+</head>
+<body>
+<div class="lb-wrap">
+
+<nav class="lb-nav">
+  <a class="lb-brand" href="/" style="text-decoration:none;">
+    <span class="lb-logo">🌉</span>
+    <span>LiveBridge</span>
+  </a>
+  <div class="lb-nav-actions">
+    <a class="lb-btn lb-btn-secondary" href="/t/">Join a Room</a>
+    <a class="lb-btn lb-btn-secondary" href="/account/">Sign In</a>
+    <a class="lb-btn lb-btn-primary" href="#plans">View Plans</a>
+  </div>
+</nav>
+
+<section class="lb-hero">
+  <div class="lb-kicker">Plans built around how you actually use LiveBridge</div>
+  <h1>Choose the right plan.<br><span class="lb-gradient">Grow when you need more.</span></h1>
+  <p>
+    Every LiveBridge plan includes the core real-time multilingual experience.
+    Higher plans unlock more broadcast capacity and the tools organizations use
+    for recurring events, reporting, scheduling and post-broadcast follow-up.
+  </p>
+  <div class="lb-industry-row">
+    <span class="lb-chip">Businesses</span>
+    <span class="lb-chip">Training & HR</span>
+    <span class="lb-chip">Education</span>
+    <span class="lb-chip">Conferences</span>
+    <span class="lb-chip">Churches</span>
+    <span class="lb-chip">Nonprofits</span>
+    <span class="lb-chip">Community Organizations</span>
+    <span class="lb-chip">Weddings & Events</span>
+  </div>
+</section>
+
+<section class="lb-section" id="plans">
+  <h2 class="lb-section-title">Plans & Pricing</h2>
+  <p class="lb-section-sub">
+    Start with the core translation experience, or choose Growth for the
+    post-broadcast, scheduling and analytics tools most regular users want.
+  </p>
+
+  <div class="lb-plans" id="lbPlans">
+    <div class="lb-loading">Loading current LiveBridge plans…</div>
+  </div>
+
+  <div class="lb-custom">
+    <div>
+      <h3>Need something different?</h3>
+      <p>
+        We can build a private/custom plan for higher usage, larger audiences,
+        special events or organization-specific requirements.
+      </p>
+    </div>
+    <a class="lb-btn lb-btn-secondary" href="mailto:globalconnectionschurch@gmail.com?subject=LiveBridge%20Custom%20Plan">
+      Ask About a Custom Plan
+    </a>
+  </div>
+</section>
+
+<section class="lb-section">
+  <h2 class="lb-section-title">Compare what you get</h2>
+  <p class="lb-section-sub">
+    Starter gives you the complete live translation experience.
+    Growth unlocks the tools that make LiveBridge easier to use week after week.
+    Pro adds higher capacity, longer transcript access and reporting/export tools.
+  </p>
+
+  <div class="lb-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Starter</th>
+          <th class="lb-growth-col">Growth <span class="lb-tag">MOST POPULAR</span></th>
+          <th>Pro</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Monthly broadcast time</td><td id="matrixStarterTime">5 hrs</td><td class="lb-growth-col" id="matrixGrowthTime">10 hrs</td><td id="matrixProTime">20 hrs</td></tr>
+        <tr><td>Simultaneous listeners</td><td id="matrixStarterViewers">25</td><td class="lb-growth-col" id="matrixGrowthViewers">50</td><td id="matrixProViewers">100</td></tr>
+        <tr><td>Real-time translated captions</td><td class="lb-yes">✓</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Spoken translated audio</td><td class="lb-yes">✓</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Multiple listener languages</td><td class="lb-yes">✓</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Room share links & QR codes</td><td class="lb-yes">✓</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Broadcast history</td><td class="lb-yes">✓ Basic</td><td class="lb-yes lb-growth-col">✓ Detailed</td><td class="lb-yes">✓ Detailed</td></tr>
+        <tr><td>AI Live Notes during broadcast</td><td class="lb-yes">✓</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>View & download post-broadcast transcripts</td><td class="lb-no">—</td><td class="lb-yes lb-growth-col">✓ Up to 30 days</td><td class="lb-yes">✓ Up to 90 days</td></tr>
+        <tr><td>Email transcript + AI summary after broadcast</td><td class="lb-no">—</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Scheduled broadcasts</td><td class="lb-no">—</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Detailed listener & language analytics</td><td class="lb-no">Basic only</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Downloadable analytics/report export</td><td class="lb-no">—</td><td class="lb-no lb-growth-col">—</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Specialized Scripture/reference detection</td><td class="lb-no">—</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Priority email support</td><td class="lb-no">Standard</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓ Priority</td></tr>
+        <tr><td>Custom onboarding/configuration support</td><td class="lb-no">—</td><td class="lb-no lb-growth-col">—</td><td class="lb-yes">✓</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="lb-section">
+  <h2 class="lb-section-title">Which plan fits your organization?</h2>
+  <div class="lb-info-grid">
+    <div class="lb-info">
+      <h3>Starter</h3>
+      <p>
+        Best for occasional meetings, smaller events, weddings, community
+        gatherings, training sessions or organizations testing multilingual access.
+      </p>
+    </div>
+    <div class="lb-info">
+      <h3>Growth</h3>
+      <p>
+        Best for organizations using LiveBridge regularly and wanting transcripts,
+        scheduling, detailed analytics and post-broadcast AI follow-up.
+      </p>
+    </div>
+    <div class="lb-info">
+      <h3>Pro</h3>
+      <p>
+        Best for larger or more frequent events, higher audience capacity,
+        longer transcript access and organizations that need exportable reporting.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="lb-foot-cta">
+  <h2>One speaker. Every listener. Their language.</h2>
+  <p>
+    Pick the plan that fits today. Your LiveBridge room, account and broadcast
+    history stay with you when you move to a higher plan.
+  </p>
+  <a class="lb-btn lb-btn-primary" href="#plans">Choose Your Plan</a>
+</section>
+
+<div class="lb-footer">
+  LiveBridge · Real-time multilingual communication for organizations, events and live audiences.
+</div>
+
+</div>
+
+<script>
+(function(){
+  const WORKER = "https://livebridge.northstarventures-ca.workers.dev";
+
+  const planMeta = {
+    starter:{
+      best:"Best for smaller or occasional use",
+      className:"",
+      bullets:[
+        "Real-time translated captions",
+        "Spoken translated audio",
+        "Multiple listener languages",
+        "Room links & QR sharing",
+        "Basic broadcast history & audience stats",
+        "AI Live Notes"
+      ]
+    },
+    growth:{
+      best:"Best value for regular organizational use",
+      className:"growth",
+      bullets:[
+        "Everything in Starter",
+        "View & download post-broadcast transcripts",
+        "30-day transcript access",
+        "Email transcript + AI summary",
+        "Scheduled broadcasts",
+        "Detailed listener & language analytics",
+        "Specialized Scripture/reference detection",
+        "Priority email support"
+      ]
+    },
+    pro:{
+      best:"Best for larger, frequent or high-capacity use",
+      className:"",
+      bullets:[
+        "Everything in Growth",
+        "90-day transcript access",
+        "Higher monthly broadcast capacity",
+        "Higher simultaneous listener capacity",
+        "Downloadable analytics/report export",
+        "Priority support",
+        "Custom onboarding/configuration support"
+      ]
+    },
+    "free-demo":{
+      best:"Temporary beta access — try LiveBridge before choosing a paid plan",
+      className:"free-demo",
+      bullets:[
+        "20 broadcast hours per month during beta",
+        "Up to 100 simultaneous listeners",
+        "Real-time translated captions",
+        "Spoken translated audio",
+        "AI Live Notes",
+        "Post-broadcast transcripts & AI summary",
+        "Scheduled broadcasts",
+        "Detailed listener & language analytics",
+        "Access to current beta features"
+      ]
+    }
+  };
+
+  function esc(v){
+    return String(v ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;");
+  }
+
+  function money(cents,currency){
+    const amount = Number(cents||0)/100;
+    return new Intl.NumberFormat("en-CA",{
+      style:"currency",
+      currency:String(currency||"CAD").toUpperCase(),
+      maximumFractionDigits: amount % 1 === 0 ? 0 : 2
+    }).format(amount);
+  }
+
+  function hours(minutes){
+    const h = Number(minutes||0)/60;
+    return Number.isInteger(h) ? String(h) : h.toFixed(1).replace(/\.0$/,"");
+  }
+
+  async function checkout(button,planCode){
+    const old = button.textContent;
+    button.disabled = true;
+    button.textContent =
+      String(planCode||"").toLowerCase() === "free-demo"
+        ? "Opening free demo signup…"
+        : "Opening secure checkout…";
+    try{
+      const r = await fetch(WORKER + "/stripe/create-checkout-session",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({planCode})
+      });
+      const data = await r.json();
+      if(!r.ok || !data.success || !data.checkoutUrl){
+        throw new Error(data.error || "Unable to start checkout.");
+      }
+      window.location.href = data.checkoutUrl;
+    }catch(e){
+      alert(e.message || "Unable to start checkout.");
+      button.disabled = false;
+      button.textContent = old;
+    }
+  }
+
+  function setMatrix(plan){
+    const code = String(plan.planCode||"").toLowerCase();
+    const cap = code.charAt(0).toUpperCase()+code.slice(1);
+    const t = document.getElementById("matrix"+cap+"Time");
+    const v = document.getElementById("matrix"+cap+"Viewers");
+    if(t) t.textContent = hours(plan.includedMinutes) + " hrs";
+    if(v) v.textContent = Number(plan.viewerLimit||0).toLocaleString();
+  }
+
+  function render(plans){
+    const box = document.getElementById("lbPlans");
+    const visible = (plans||[]).filter(p=>["starter","growth","pro","free-demo"].includes(String(p.planCode||"").toLowerCase()));
+    visible.sort((a,b)=>Number(a.displayOrder||0)-Number(b.displayOrder||0));
+
+    if(!visible.length){
+      box.innerHTML = '<div class="lb-error">Current public plans could not be loaded. Please contact LiveBridge for pricing.</div>';
+      return;
+    }
+
+    box.innerHTML = visible.map(plan=>{
+      const code = String(plan.planCode||"").toLowerCase();
+      const meta = planMeta[code] || planMeta.starter;
+      setMatrix(plan);
+      return `
+        <article class="lb-plan ${meta.className}">
+          ${code==="growth" ? '<div class="lb-popular">MOST POPULAR</div>' : ''}
+          ${code==="free-demo" ? '<div class="lb-demo-badge">BETA · FREE FOR A LIMITED TIME</div>' : ''}
+          <div class="lb-plan-name">${esc(plan.planName)}</div>
+          <div class="lb-plan-best">${esc(meta.best)}</div>
+          <div class="lb-price">${esc(money(plan.priceCents,plan.currency))} <small>${esc(plan.currency)} / ${esc(plan.billingInterval)}</small></div>
+          <div class="lb-core">
+            <div><strong>${esc(hours(plan.includedMinutes))} hrs</strong><span>broadcast time / month</span></div>
+            <div><strong>${esc(plan.viewerLimit)}</strong><span>simultaneous listeners</span></div>
+          </div>
+          <ul class="lb-feature-list">
+            ${meta.bullets.map(x=>`<li><span class="lb-check">✓</span><span>${esc(x)}</span></li>`).join("")}
+          </ul>
+          <button class="lb-btn ${code==="growth" || code==="free-demo" ? "lb-btn-primary" : "lb-btn-secondary"}" data-checkout="${esc(code)}">
+            ${code==="free-demo" ? "Start Free Beta Demo" : "Choose " + esc(plan.planName)}
+          </button>
+          <div class="lb-note">
+            ${code==="free-demo"
+              ? "No charge during the beta period. Beta access is temporary and may change as LiveBridge moves to paid plans."
+              : "Secure subscription checkout powered by Stripe"}
+          </div>
+        </article>
+      `;
+    }).join("");
+
+    box.querySelectorAll("[data-checkout]").forEach(btn=>{
+      btn.addEventListener("click",()=>checkout(btn,btn.getAttribute("data-checkout")));
+    });
+  }
+
+  async function load(){
+    try{
+      const r = await fetch(WORKER + "/plans",{headers:{"Accept":"application/json"},cache:"no-store"});
+      const data = await r.json();
+      if(!r.ok || !data.success) throw new Error(data.error || "Unable to load plans.");
+      render(data.plans || []);
+    }catch(e){
+      document.getElementById("lbPlans").innerHTML =
+        '<div class="lb-error">Unable to load current plan pricing right now. Please try again shortly.</div>';
+    }
+  }
+
+  load();
+})();
+</script>
+</body>
+</html>

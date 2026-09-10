@@ -1,0 +1,4457 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      </head>
+      <body>
+        <style>
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: #07111f;
+    font-family: Arial, Helvetica, sans-serif;
+    color: white;
+  }
+
+  .lb-live-page {
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, #12345f 0%, transparent 32%),
+      radial-gradient(circle at bottom right, #23154b 0%, transparent 30%),
+      #07111f;
+    padding: 24px;
+  }
+
+  .lb-live-wrap {
+    width: 100%;
+    max-width: 950px;
+    margin: 0 auto;
+  }
+
+  .lb-live-header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .lb-live-brand {
+    font-size: 42px;
+    font-weight: 900;
+    margin-bottom: 8px;
+  }
+
+  .lb-live-brand span {
+    background: linear-gradient(90deg,#34d4bd,#2897ff,#a14cff);
+    -webkit-background-clip: text;
+    color: transparent;
+  }
+
+  .lb-live-subtitle {
+    color: #9fb1c7;
+    font-size: 17px;
+  }
+
+  .lb-live-card {
+    background: rgba(255,255,255,.055);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 25px 70px rgba(0,0,0,.35);
+  }
+
+  .lb-live-controls {
+    padding: 22px;
+    background: rgba(0,0,0,.18);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+
+  .lb-live-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #c9d8e8;
+    margin-bottom: 7px;
+  }
+
+  .lb-live-input,
+  .lb-live-select {
+    width: 100%;
+    padding: 14px;
+    border-radius: 11px;
+    border: 1px solid rgba(255,255,255,.15);
+    background: #101d2d;
+    color: white;
+    font-size: 16px;
+    margin-bottom: 14px;
+  }
+
+  .lb-live-button {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 11px;
+    color: white;
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+    background: linear-gradient(135deg,#2588ff,#6f43df);
+  }
+
+  .lb-live-topbar {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+
+  .lb-live-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #9caec2;
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .lb-live-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+  }
+
+  .lb-live-dot.live {
+    background: #22c55e;
+    box-shadow: 0 0 12px #22c55e;
+  }
+
+  .lb-live-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .lb-live-pill {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 9px;
+    padding: 7px 10px;
+    font-size: 12px;
+    color: #b9c8d9;
+  }
+
+  .lb-live-output {
+    min-height: 420px;
+    max-height: 520px;
+    overflow-y: auto;
+    padding: 24px;
+    background: #0d1724;
+    font-size: 18px;
+    line-height: 1.45;
+    scroll-behavior: smooth;
+  }
+
+  .lb-live-output > div {
+    margin-bottom: 12px;
+  }
+
+  .lb-live-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 16px 20px;
+    color: #9caec2;
+    font-size: 13px;
+  }
+
+  .lb-live-size {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .lb-live-size button {
+    background: #16283d;
+    color: white;
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 8px;
+    padding: 7px 11px;
+    cursor: pointer;
+    font-weight: 800;
+  }
+
+  .lb-voice-label {
+    display:block; font-size:13px; font-weight:700; color:#c9d8e8; margin:16px 0 8px;
+  }
+  .lb-voice-choice {
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  }
+  .lb-voice-button {
+    padding:13px 10px; border-radius:11px; border:1px solid rgba(255,255,255,.15);
+    background:#101d2d; color:#c9d8e8; font-size:15px; font-weight:800; cursor:pointer;
+  }
+  .lb-voice-button.selected {
+    color:white; border-color:#2897ff;
+    background:linear-gradient(135deg,rgba(37,136,255,.30),rgba(111,67,223,.30));
+  }
+
+  @media(max-width:600px) {
+    .lb-live-page {
+      padding: 14px;
+    }
+
+    .lb-live-output {
+      min-height: 360px;
+      padding: 16px;
+    }
+
+    .lb-live-footer {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  .lb-listener-home-row{
+    display:flex;
+    justify-content:flex-start;
+    margin-bottom:14px;
+  }
+
+  .lb-listener-home{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:9px 12px;
+    border-radius:9px;
+    border:1px solid rgba(255,255,255,.12);
+    background:#13243a;
+    color:#dbe9f7;
+    text-decoration:none;
+    font-size:12px;
+    font-weight:800;
+    transition:.16s ease;
+  }
+
+  .lb-listener-home:hover{
+    transform:translateY(-1px);
+    background:#18304c;
+  }
+
+  .lb-listener-share-card{
+    margin-top:18px;
+    padding:20px;
+    border-radius:18px;
+    background:rgba(15,118,80,.09);
+    border:1px solid rgba(52,211,153,.32);
+    display:grid;
+    grid-template-columns:1fr 190px;
+    gap:22px;
+    align-items:center;
+  }
+
+  .lb-listener-share-title{
+    color:#48f59a;
+    font-size:20px;
+    font-weight:900;
+    margin-bottom:5px;
+  }
+
+  .lb-listener-share-copy{
+    color:#c5d4e5;
+    line-height:1.45;
+    margin-bottom:13px;
+    font-size:13px;
+  }
+
+  .lb-listener-share-row{
+    display:grid;
+    grid-template-columns:1fr auto auto auto;
+    gap:8px;
+  }
+
+  .lb-listener-share-link{
+    background:#09241f;
+    border:1px solid rgba(52,211,153,.30);
+    color:#53f49a;
+    border-radius:10px;
+    padding:12px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-weight:800;
+    font-size:11px;
+  }
+
+  .lb-listener-share-button{
+    padding:11px 12px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,.13);
+    background:#14263b;
+    color:white;
+    cursor:pointer;
+    font-weight:800;
+    font-size:12px;
+  }
+
+  .lb-listener-share-button.green{
+    background:#3dde83;
+    color:#06120b;
+    border:none;
+  }
+
+  .lb-listener-qr-wrap{
+    text-align:center;
+  }
+
+  .lb-listener-qr-box{
+    width:160px;
+    height:160px;
+    background:white;
+    padding:7px;
+    border-radius:12px;
+    margin:auto;
+  }
+
+  .lb-listener-qr-box img{
+    width:100%;
+    height:100%;
+    display:block;
+  }
+
+  .lb-listener-qr-caption{
+    color:#98acc2;
+    font-size:11px;
+    margin-top:7px;
+  }
+
+
+  .lb-language-gate{
+    min-height:100vh;
+    background:
+      radial-gradient(circle at top left,#12345f 0%,transparent 34%),
+      radial-gradient(circle at bottom right,#23154b 0%,transparent 34%),
+      #07111f;
+    padding:28px 18px 50px;
+    display:none;
+  }
+  .lb-language-gate.show{display:block}
+  .lb-language-gate-inner{width:100%;max-width:1050px;margin:0 auto}
+  .lb-language-gate-brand{text-align:center;font-size:44px;font-weight:900;margin:16px 0 8px}
+  .lb-language-gate-brand span{
+    background:linear-gradient(90deg,#34d4bd,#2897ff,#a14cff);
+    -webkit-background-clip:text;
+    color:transparent;
+  }
+  .lb-language-gate-title{text-align:center;font-size:28px;font-weight:900;margin:28px 0 8px}
+  .lb-language-gate-subtitle{text-align:center;color:#9fb1c7;font-size:15px;line-height:1.6;margin-bottom:28px}
+  .lb-language-gate-room{
+    display:inline-block;
+    padding:7px 11px;
+    border-radius:999px;
+    margin-top:8px;
+    background:rgba(52,212,189,.09);
+    border:1px solid rgba(52,212,189,.18);
+    color:#8ee8dc;
+    font-weight:800;
+    font-size:12px;
+  }
+  .lb-language-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    gap:12px;
+  }
+  .lb-language-choice{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    text-align:left;
+    border:1px solid rgba(255,255,255,.11);
+    background:rgba(255,255,255,.055);
+    color:white;
+    border-radius:15px;
+    padding:15px 16px;
+    cursor:pointer;
+    transition:.16s ease;
+  }
+  .lb-language-choice:hover{
+    transform:translateY(-1px);
+    border-color:rgba(52,212,189,.42);
+    background:rgba(52,212,189,.075);
+  }
+  .lb-language-flag{
+    width:46px;height:46px;flex:0 0 46px;border-radius:12px;
+    display:flex;align-items:center;justify-content:center;
+    background:#101d2d;font-size:27px;
+  }
+  .lb-language-native{font-weight:900;font-size:16px;line-height:1.3}
+  .lb-language-english{display:block;color:#8198ae;font-size:11px;margin-top:3px}
+  .lb-language-gate-note{text-align:center;color:#6f849a;font-size:11px;margin-top:24px;line-height:1.55}
+
+</style>
+        <style>
+@media(max-width:700px){
+  .lb-listener-share-card{
+    grid-template-columns:1fr;
+  }
+
+  .lb-listener-share-row{
+    grid-template-columns:1fr;
+  }
+
+  .lb-listener-qr-box{
+    width:170px;
+    height:170px;
+  }
+}
+</style>
+        <div id="lbLanguageGate" class="lb-language-gate">
+          <div class="lb-language-gate-inner">
+            <div class="lb-language-gate-brand">Live<span>Bridge</span>
+          </div>
+          <div class="lb-language-gate-title">Choose your language</div>
+          <div class="lb-language-gate-subtitle">
+            Select the language you understand best.<br>
+            <span id="lbLanguageGateRoom" class="lb-language-gate-room">
+            </span>
+          </div>
+          <div id="lbLanguageGrid" class="lb-language-grid">
+          </div>
+          <div class="lb-language-gate-note">
+            No app download is required. Select your language to continue to the live translation room.
+          </div>
+        </div>
+      </div>
+      <div class="lb-live-page">
+        <div class="lb-live-wrap">
+          <div class="lb-listener-home-row">
+            <a class="lb-listener-home" href="/">← Back to LiveBridge</a>
+          </div>
+          <div class="lb-live-header">
+            <div class="lb-live-brand">Live<span>Bridge</span>
+          </div>
+          <div class="lb-live-subtitle">
+            Join a room. Choose your language. Understand live.
+          </div>
+        </div>
+        <div class="lb-live-card">
+          <div class="lb-live-controls">
+            <label class="lb-live-label">Room Name</label>
+            <input
+              id="listenerRoom"
+              class="lb-live-input"
+              value="TRANSLATION"
+              placeholder="Enter room name"
+              >
+              <label class="lb-live-label">Listening Language</label>
+              <select id="listenerLanguage" class="lb-live-select">
+                <option value="en|en-US">English</option>
+                <option value="fr|fr-CA">French — Français</option>
+                <option value="es|es-ES">Spanish — Español</option>
+                <option value="de|de-DE">German — Deutsch</option>
+                <option value="pt|pt-BR">Portuguese — Português</option>
+                <option value="it|it-IT">Italian — Italiano</option>
+                <option value="pl|pl-PL">Polish — Polski</option>
+                <option value="ru|ru-RU">Russian — Русский</option>
+                <option value="uk|uk-UA">Ukrainian — Українська</option>
+                <option value="nl|nl-NL">Dutch — Nederlands</option>
+                <option value="cs|cs-CZ">Czech — Čeština</option>
+                <option value="fil|fil-PH">Filipino (Tagalog) — Filipino</option>
+                <option value="he|he-IL">Hebrew — עברית</option>
+                <option value="yo|yo-NG">Yoruba — Yorùbá</option>
+                <option value="ig|ig-NG">Igbo — Igbo</option>
+                <option value="ha|ha-NG">Hausa — Hausa</option>
+                <option value="zh|zh-CN">Mandarin Chinese — 中文（普通话）</option>
+                <option value="yue|yue-CN">Cantonese — 廣東話</option>
+              </select>
+              <button class="lb-live-button" id="joinRoomButton">
+                Join Live Room
+              </button>
+              <div style="
+                margin-top:12px;
+                padding:12px 13px;
+                border-radius:11px;
+                background:rgba(37,136,255,.07);
+                border:1px solid rgba(37,136,255,.16);
+                color:#9fb4ca;
+                font-size:11px;
+                line-height:1.55;
+                ">
+                <strong id="lbNoticeTitle" style="color:#dce9f5;">
+                  Live Translation Notice:
+                </strong>
+                This event may be transcribed and processed using automated
+                translation and text-to-speech technology. Automated results
+                may contain errors.
+                <a
+                  href="/privacy/"
+                  target="_blank"
+                  style="color:#78b7ff;font-weight:800;"
+                  >
+                  Privacy Policy
+                </a>
+              </div>
+              <span class="lb-voice-label">Translated Voice</span>
+              <div class="lb-voice-choice">
+                <button type="button" class="lb-voice-button selected" id="maleVoiceButton">👨 Male Voice</button>
+                <button type="button" class="lb-voice-button" id="femaleVoiceButton">👩 Female Voice</button>
+              </div>
+            </div>
+            <div class="lb-live-topbar">
+              <div class="lb-live-status">
+                <span id="listenerDot" class="lb-live-dot">
+                </span>
+                <span id="listenerStatus">Not Connected</span>
+                <button
+                  type="button"
+                  id="listenerAudioButton"
+                  style="
+                  margin-left:8px;
+                  padding:7px 11px;
+                  border-radius:8px;
+                  border:1px solid rgba(255,255,255,.15);
+                  background:#16283d;
+                  color:white;
+                  font-size:12px;
+                  font-weight:800;
+                  cursor:pointer;
+                  "
+                  >
+                  🔊 Audio On
+                </button>
+              </div>
+              <div class="lb-live-meta">
+                <span class="lb-live-pill" id="listenerRoomLabel">Room: —</span>
+                <span class="lb-live-pill" id="listenerLangLabel">Language: —</span>
+                <span class="lb-live-pill" id="listenerCountLabel">👥 0 Viewers</span>
+              </div>
+            </div>
+            <div class="lb-live-output" id="listenerOutput">
+              Join a room to begin receiving the live message.
+            </div>
+            <div style="
+              padding:16px 20px;
+              border-top:1px solid rgba(255,255,255,.07);
+              background:rgba(0,0,0,.12);
+              ">
+              <button
+                id="emailTranscriptButton"
+                style="
+                width:100%;
+                padding:14px;
+                border-radius:10px;
+                border:1px solid rgba(255,255,255,.14);
+                background:#16283d;
+                color:white;
+                font-size:15px;
+                font-weight:800;
+                cursor:pointer;
+                ">
+                ✉ Email Transcript & AI Notes
+              </button>
+            </div>
+            <div class="lb-live-footer">
+              <div class="lb-live-size">
+                <span>Text Size</span>
+                <button id="sizeDown">A−</button>
+                <button id="sizeReset">A</button>
+                <button id="sizeUp">A+</button>
+              </div>
+              <div>
+                🎧 Translated Audio &nbsp; • &nbsp; 💬 Live Captions
+              </div>
+            </div>
+          </div>
+          <div class="lb-listener-share-card">
+            <div>
+              <div class="lb-listener-share-title">Share This Room</div>
+              <div class="lb-listener-share-copy">
+                Send this listener link to someone else so they can join the same LiveBridge room.
+              </div>
+              <div class="lb-listener-share-row">
+                <div class="lb-listener-share-link" id="lbListenerShareURL">
+                </div>
+                <button type="button" class="lb-listener-share-button" id="lbListenerCopy">Copy Link</button>
+                <button type="button" class="lb-listener-share-button green" id="lbListenerShare">Send / Share</button>
+                <button type="button" class="lb-listener-share-button" id="lbListenerOpen">Open</button>
+              </div>
+            </div>
+            <div class="lb-listener-qr-wrap">
+              <div class="lb-listener-qr-box">
+                <img id="lbListenerQR" alt="LiveBridge room QR code">
+                </div>
+                <div class="lb-listener-qr-caption">Scan to join this room</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <script>
+  const WORKER_URL =
+  "https://livebridge.northstarventures-ca.workers.dev";
+
+  let ROOM_ID = "";
+  let listenerSocket = null;
+  let listenerHeartbeat = null;
+
+  /*
+    Production listener resilience:
+    the listener stays joined in the background and reconnects
+    automatically if the socket closes, the network changes,
+    or the listener changes language.
+  */
+  let listenerReconnectTimer = null;
+  let listenerReconnectAttempts = 0;
+  let listenerReconnectInProgress = false;
+  let listenerConnectionWanted = false;
+  let listenerStreamTimeout = null;
+  let listenerFontSize = 18;
+  let listenerAutoScroll = true;
+  let listenerTranslationQueue = Promise.resolve();
+  let fullTranslatedTranscript = "";
+  let listenerSessionId = createListenerSessionId();
+  let listenerVoiceGender = "male";
+  let listenerAudioMuted = false;
+  let listenerDisplayQueue = [];
+let listenerQueueRunning = false;
+
+/*
+  v1.0.1 queue pipeline:
+  Azure audio preparation is exposed to the live message handler so
+  the NEXT translated clip can be generated while the CURRENT clip
+  is still playing. This removes TTS-generation time from the serial
+  playback bottleneck without allowing audio overlap.
+*/
+let listenerAudioPreparer = null;
+
+async function processListenerQueue(ttsLang) {
+
+  if (listenerQueueRunning) return;
+
+  listenerQueueRunning = true;
+
+  while (listenerDisplayQueue.length > 0) {
+
+    const queueItem =
+      listenerDisplayQueue.shift();
+
+    const translatedText =
+      typeof queueItem === "string"
+        ? queueItem
+        : String(queueItem?.text || "");
+
+    const queuedTtsLang =
+      typeof queueItem === "string"
+        ? ttsLang
+        : (queueItem?.ttsLang || ttsLang);
+
+    const line =
+      document.createElement("div");
+
+    line.textContent =
+      translatedText;
+
+    output.appendChild(line);
+
+    if (listenerAutoScroll) {
+      output.scrollTop =
+        output.scrollHeight;
+    }
+
+    if (!listenerAudioMuted) {
+      await speakListenerText(
+        translatedText,
+        queuedTtsLang
+      );
+    }
+  }
+
+  listenerQueueRunning = false;
+}
+
+const listenerAudioButton =
+  document.getElementById("listenerAudioButton");
+
+listenerAudioButton.style.background = "#16a34a";
+listenerAudioButton.style.borderColor = "#22c55e";
+
+listenerAudioButton.addEventListener("click", () => {
+
+  listenerAudioMuted = !listenerAudioMuted;
+
+  if (listenerAudioMuted) {
+
+    window.speechSynthesis?.cancel();
+
+    listenerAudioButton.textContent =
+      "🔇 Audio Muted";
+
+    listenerAudioButton.style.background =
+      "#dc2626";
+
+    listenerAudioButton.style.borderColor =
+      "#ef4444";
+
+  } else {
+
+    listenerAudioButton.textContent =
+      "🔊 Audio On";
+
+    listenerAudioButton.style.background =
+      "#16a34a";
+
+    listenerAudioButton.style.borderColor =
+      "#22c55e";
+  }
+
+});
+
+  const joinButton =
+    document.getElementById("joinRoomButton");
+
+  const emailButton =
+    document.getElementById("emailTranscriptButton");
+
+  const output =
+    document.getElementById("listenerOutput");
+
+  const maleVoiceButton = document.getElementById("maleVoiceButton");
+  const femaleVoiceButton = document.getElementById("femaleVoiceButton");
+
+  maleVoiceButton.addEventListener("click", () => {
+    listenerVoiceGender = "male";
+    maleVoiceButton.classList.add("selected");
+    femaleVoiceButton.classList.remove("selected");
+  });
+
+  femaleVoiceButton.addEventListener("click", () => {
+    listenerVoiceGender = "female";
+    femaleVoiceButton.classList.add("selected");
+    maleVoiceButton.classList.remove("selected");
+  });
+
+  joinButton.addEventListener(
+    "click",
+    joinLiveRoom
+  );
+
+  document
+    .getElementById("sizeDown")
+    .addEventListener("click", () => {
+      listenerFontSize =
+        Math.max(12, listenerFontSize - 2);
+
+      applyListenerFontSize();
+    });
+
+  document
+    .getElementById("sizeReset")
+    .addEventListener("click", () => {
+      listenerFontSize = 18;
+      applyListenerFontSize();
+    });
+
+  document
+    .getElementById("sizeUp")
+    .addEventListener("click", () => {
+      listenerFontSize =
+        Math.min(32, listenerFontSize + 2);
+
+      applyListenerFontSize();
+    });
+
+  output.addEventListener("scroll", () => {
+    const distanceFromBottom =
+      output.scrollHeight -
+      output.scrollTop -
+      output.clientHeight;
+
+    listenerAutoScroll =
+      distanceFromBottom < 40;
+  });
+
+
+  function createListenerSessionId() {
+    return (
+      "lb_" +
+      Date.now() +
+      "_" +
+      Math.random()
+        .toString(36)
+        .substring(2, 10)
+    );
+  }
+
+
+  function applyListenerFontSize() {
+    output.style.fontSize =
+      listenerFontSize + "px";
+
+    output.style.lineHeight =
+      "1.45";
+  }
+
+
+  function showLiveBridgeRoomNotice({
+    title,
+    message,
+    organizationName = ""
+  }) {
+
+    const oldOverlay =
+      document.getElementById(
+        "lbRoomNoticeOverlay"
+      );
+
+    if (oldOverlay) {
+      oldOverlay.remove();
+    }
+
+    const overlay =
+      document.createElement("div");
+
+    overlay.id =
+      "lbRoomNoticeOverlay";
+
+    const safeTitle =
+      String(title || "LiveBridge Notice")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const safeMessage =
+      String(message || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const safeOrganization =
+      String(organizationName || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    overlay.innerHTML = `
+      <div style="
+        position:fixed;
+        inset:0;
+        z-index:999999;
+        background:rgba(2,8,18,.84);
+        backdrop-filter:blur(5px);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:20px;
+      ">
+        <div style="
+          width:100%;
+          max-width:500px;
+          background:#101d2d;
+          border:1px solid rgba(255,255,255,.14);
+          border-radius:20px;
+          padding:28px;
+          color:white;
+          box-shadow:0 25px 70px rgba(0,0,0,.5);
+          font-family:Arial,Helvetica,sans-serif;
+        ">
+
+          <div style="
+            font-size:26px;
+            font-weight:900;
+            margin-bottom:5px;
+          ">
+            Live<span style="color:#39d7c1;">Bridge</span>
+          </div>
+
+          <div style="
+            color:#6de8c5;
+            font-size:12px;
+            font-weight:900;
+            text-transform:uppercase;
+            letter-spacing:.08em;
+            margin-bottom:18px;
+          ">
+            ${safeTitle}
+          </div>
+
+          <div style="
+            font-size:18px;
+            font-weight:800;
+            line-height:1.5;
+            margin-bottom:12px;
+          ">
+            ${safeMessage}
+          </div>
+
+          ${safeOrganization ? `
+            <div style="
+              color:#91a7bf;
+              font-size:13px;
+              line-height:1.5;
+              margin-bottom:20px;
+            ">
+              Room hosted by <strong style="color:white;">${safeOrganization}</strong>
+            </div>
+          ` : `
+            <div style="height:8px;"></div>
+          `}
+
+          <button
+            id="lbRoomNoticeClose"
+            style="
+              width:100%;
+              border:0;
+              border-radius:11px;
+              padding:14px 16px;
+              background:linear-gradient(135deg,#2588ff,#6f43df);
+              color:white;
+              font-size:14px;
+              font-weight:900;
+              cursor:pointer;
+            "
+          >
+            Close
+          </button>
+
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(
+      overlay
+    );
+
+    overlay
+      .querySelector(
+        "#lbRoomNoticeClose"
+      )
+      .onclick = () => {
+        overlay.remove();
+      };
+  }
+
+
+  async function checkLiveBridgeRoomAccess(
+    room
+  ) {
+
+    try {
+
+      const response =
+        await fetch(
+          WORKER_URL +
+          "/room-access?room=" +
+          encodeURIComponent(room),
+          {
+            cache: "no-store"
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        response.ok &&
+        data.allowed !== false
+      ) {
+        return {
+          allowed: true,
+          data
+        };
+      }
+
+      return {
+        allowed: false,
+        data
+      };
+
+    } catch (error) {
+
+      console.error(
+        "LiveBridge room access check failed:",
+        error
+      );
+
+      /*
+      If the friendly pre-check itself fails,
+      allow the normal WebSocket connection
+      to attempt so a temporary status-check
+      problem does not block a valid listener.
+      */
+
+      return {
+        allowed: true,
+        data: null
+      };
+    }
+  }
+
+
+  async function handleRoomAccessDenied(
+    data
+  ) {
+
+    const code =
+      data?.code || "";
+
+    if (
+      code ===
+      "VIEWER_LIMIT_REACHED"
+    ) {
+
+      showLiveBridgeRoomNotice({
+        title:
+          "Room Capacity Reached",
+        message:
+          data?.error ||
+          "This LiveBridge room has reached its current listener limit. Please contact the organization hosting this room for access.",
+        organizationName:
+          data?.organizationName || ""
+      });
+
+    } else if (
+      code ===
+      "ACCOUNT_NOT_ACTIVE"
+    ) {
+
+      showLiveBridgeRoomNotice({
+        title:
+          "Room Unavailable",
+        message:
+          "This LiveBridge room is currently unavailable. Please contact the organization hosting this room for assistance.",
+        organizationName:
+          data?.organizationName || ""
+      });
+
+    } else {
+
+      showLiveBridgeRoomNotice({
+        title:
+          "Unable to Join Room",
+        message:
+          data?.error ||
+          "This LiveBridge room could not be joined right now. Please try again."
+      });
+    }
+
+    document.getElementById(
+      "listenerStatus"
+    ).textContent =
+      code === "VIEWER_LIMIT_REACHED"
+        ? "Room Full"
+        : "Unable to Join";
+
+    document.getElementById(
+      "listenerDot"
+    ).classList.remove("live");
+  }
+
+
+  function clearListenerReconnectTimer() {
+if (listenerReconnectTimer) {
+      clearTimeout(listenerReconnectTimer);
+      listenerReconnectTimer = null;
+    }
+  }
+
+  async function hardRejoinListenerForLanguageChange() {
+
+    if (
+      !listenerConnectionWanted ||
+      !ROOM_ID
+    ) {
+      return;
+    }
+
+    document.getElementById(
+      "listenerStatus"
+    ).textContent =
+      "Switching language…";
+
+    document.getElementById(
+      "listenerDot"
+    ).classList.remove("live");
+
+    /*
+      Stop any old-language audio immediately.
+    */
+    window.speechSynthesis?.cancel();
+
+    if (
+      typeof stopAzureAudio ===
+      "function"
+    ) {
+      try {
+        stopAzureAudio();
+      } catch {}
+    }
+
+    /*
+      Clear anything waiting locally from the old language.
+    */
+    listenerDisplayQueue = [];
+    listenerQueueRunning = false;
+
+    /*
+      Stop reconnect watchdogs from racing this deliberate rejoin.
+    */
+    listenerConnectionWanted = false;
+    clearListenerReconnectTimer();
+    listenerReconnectInProgress = false;
+    listenerReconnectAttempts = 0;
+
+    /*
+      Destroy the old socket completely.
+    */
+    if (listenerSocket) {
+
+      try {
+        listenerSocket.onopen = null;
+        listenerSocket.onmessage = null;
+        listenerSocket.onerror = null;
+        listenerSocket.onclose = null;
+        listenerSocket.__lbIntentionalClose = true;
+        listenerSocket.close();
+      } catch {}
+
+      listenerSocket = null;
+    }
+
+    /*
+      Close the old listener analytics session.
+    */
+    try {
+      stopListenerTracking();
+    } catch {}
+
+    /*
+      Fresh listener identity = fresh server-side language subscription.
+    */
+    listenerSessionId =
+      createListenerSessionId();
+
+    /*
+      Small pause gives the Durable Object / server side enough time
+      to release the previous socket before we subscribe again.
+    */
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          450
+        )
+    );
+
+    listenerConnectionWanted = true;
+
+    await joinLiveRoom({
+      preserveTranscript: true,
+      preserveSession: true,
+      reconnect: false
+    });
+
+    refreshListenerShare();
+  }
+
+
+  function closeListenerSocketIntentionally() {
+
+    if (!listenerSocket) {
+      return;
+    }
+
+    try {
+      listenerSocket.__lbIntentionalClose = true;
+      listenerSocket.close();
+    } catch (error) {
+      console.error(error);
+    }
+
+    listenerSocket = null;
+  }
+
+
+  function scheduleListenerReconnect(
+    reason = "connection lost"
+  ) {
+
+    if (
+      !listenerConnectionWanted ||
+      !ROOM_ID ||
+      listenerReconnectTimer ||
+      listenerReconnectInProgress
+    ) {
+      return;
+    }
+
+    listenerReconnectAttempts += 1;
+
+    const delay =
+      Math.min(
+        5000,
+        700 +
+        (
+          Math.max(
+            0,
+            listenerReconnectAttempts - 1
+          ) * 700
+        )
+      );
+
+    document.getElementById(
+      "listenerStatus"
+    ).textContent =
+      "Reconnecting automatically…";
+
+    document.getElementById(
+      "listenerDot"
+    ).classList.remove("live");
+
+    listenerReconnectTimer =
+      setTimeout(
+        async function () {
+
+          listenerReconnectTimer = null;
+
+          await joinLiveRoom({
+            preserveTranscript: true,
+            preserveSession: true,
+            reconnect: true
+          });
+
+        },
+        delay
+      );
+
+    console.log(
+      "LiveBridge listener reconnect scheduled:",
+      reason,
+      delay
+    );
+  }
+
+
+  async function joinLiveRoom(
+    options = {}
+  ) {
+
+    /*
+      A normal button click passes a MouseEvent.
+      Treat that as a fresh user join, not an options object.
+    */
+    if (
+      typeof Event !== "undefined" &&
+      options instanceof Event
+    ) {
+      options = {};
+    }
+
+    const preserveTranscript =
+      !!options.preserveTranscript;
+
+    const preserveSession =
+      !!options.preserveSession;
+
+    const reconnecting =
+      !!options.reconnect;
+
+    const roomInput =
+      document.getElementById("listenerRoom");
+
+    const languageSelect =
+      document.getElementById("listenerLanguage");
+
+    ROOM_ID =
+      roomInput.value
+        .trim()
+        .toUpperCase();
+
+    if (!ROOM_ID) {
+      alert("Please enter a room name.");
+      return;
+    }
+
+    listenerConnectionWanted = true;
+
+    roomInput.value = ROOM_ID;
+
+    const [
+      translateLang,
+      ttsLang
+    ] = languageSelect.value.split("|");
+
+    const languageName =
+      languageSelect.options[
+        languageSelect.selectedIndex
+      ].text;
+
+    document.getElementById(
+      "listenerRoomLabel"
+    ).textContent =
+      "Room: " + ROOM_ID;
+
+    document.getElementById(
+      "listenerLangLabel"
+    ).textContent =
+      "Language: " + languageName;
+
+    document.getElementById(
+      "listenerStatus"
+    ).textContent =
+      reconnecting
+        ? "Reconnecting automatically…"
+        : "Checking Room...";
+
+    document.getElementById(
+      "listenerDot"
+    ).classList.remove("live");
+
+    clearListenerReconnectTimer();
+    closeListenerSocketIntentionally();
+
+    window.speechSynthesis?.cancel();
+
+    /*
+      Only stop/create analytics tracking on a fresh manual join.
+      Background reconnects keep the same listener session.
+    */
+    if (!preserveSession) {
+      stopListenerTracking();
+    }
+
+    const access =
+      await checkLiveBridgeRoomAccess(
+        ROOM_ID
+      );
+
+    if (!access.allowed) {
+
+      listenerConnectionWanted = false;
+
+      await handleRoomAccessDenied(
+        access.data
+      );
+
+      return;
+    }
+
+    if (!preserveTranscript) {
+      output.innerHTML = "";
+      fullTranslatedTranscript = "";
+      listenerDisplayQueue = [];
+    }
+
+    if (!preserveSession) {
+      listenerSessionId =
+        createListenerSessionId();
+    }
+
+    document.getElementById(
+      "listenerStatus"
+    ).textContent =
+      reconnecting
+        ? "Reconnecting automatically…"
+        : "Connecting...";
+
+    const socketURL =
+      "wss://livebridge.northstarventures-ca.workers.dev/live-feed" +
+      "?room=" +
+      encodeURIComponent(ROOM_ID) +
+      "&lang=" +
+      encodeURIComponent(translateLang) +
+      "&listenerId=" +
+      encodeURIComponent(listenerSessionId);
+
+    listenerReconnectInProgress = true;
+
+    const thisSocket =
+      new WebSocket(socketURL);
+
+    listenerSocket =
+      thisSocket;
+
+    let socketOpened = false;
+    let capacityNoticeShown = false;
+
+    thisSocket.onopen =
+      async function () {
+
+        if (
+          listenerSocket !==
+          thisSocket
+        ) {
+          try {
+            thisSocket.__lbIntentionalClose = true;
+            thisSocket.close();
+          } catch {}
+          return;
+        }
+
+        socketOpened = true;
+        listenerReconnectInProgress = false;
+        listenerReconnectAttempts = 0;
+        clearListenerReconnectTimer();
+
+        document.getElementById(
+          "listenerStatus"
+        ).textContent =
+          "Connected — Waiting for Live Feed";
+
+        document.getElementById(
+          "listenerDot"
+        ).classList.add("live");
+
+        if (!preserveSession) {
+          await startListenerTracking();
+        }
+      };
+
+    thisSocket.onmessage =
+      function (event) {
+
+        try {
+
+          const data =
+            JSON.parse(event.data);
+
+          console.log(
+            "LIVEBRIDGE MESSAGE:",
+            data
+          );
+
+          if (data.type === "connected") {
+
+            listenerReconnectInProgress = false;
+            listenerReconnectAttempts = 0;
+
+            document.getElementById(
+              "listenerStatus"
+            ).textContent =
+              "Connected — Waiting for Live Feed";
+
+            document.getElementById(
+              "listenerDot"
+            ).classList.add("live");
+
+            return;
+          }
+
+          if (
+            data.type !== "translation" ||
+            !data.text
+          ) {
+            return;
+          }
+
+          markListenerLive();
+
+          const translatedText =
+            data.text;
+
+          fullTranslatedTranscript +=
+            translatedText + "\n\n";
+
+          const queueItem = {
+            text: translatedText,
+            ttsLang,
+            preparedPromise: null
+          };
+
+          /*
+            Queue the translation immediately. Audio is prepared with
+            ONE-CLIP LOOKAHEAD by processListenerQueue instead of
+            pre-generating the entire backlog. This lets catch-up speed
+            react to the CURRENT queue depth and makes voice changes
+            take effect within roughly one queued clip.
+          */
+          listenerDisplayQueue.push(
+            queueItem
+          );
+
+          processListenerQueue(
+            ttsLang
+          );
+
+        } catch (error) {
+
+          console.error(
+            "LiveBridge feed error:",
+            error
+          );
+        }
+      };
+
+    thisSocket.onerror =
+      async function (error) {
+
+        console.error(
+          "LiveBridge socket error:",
+          error
+        );
+
+        document.getElementById(
+          "listenerStatus"
+        ).textContent =
+          "Reconnecting automatically…";
+
+        document.getElementById(
+          "listenerDot"
+        ).classList.remove("live");
+
+        if (
+          !socketOpened &&
+          !capacityNoticeShown
+        ) {
+
+          const retryAccess =
+            await checkLiveBridgeRoomAccess(
+              ROOM_ID
+            );
+
+          if (!retryAccess.allowed) {
+
+            capacityNoticeShown = true;
+            listenerConnectionWanted = false;
+
+            await handleRoomAccessDenied(
+              retryAccess.data
+            );
+
+            return;
+          }
+        }
+
+        /*
+          onclose normally follows onerror.
+          This is also a fallback in case a browser does not fire close.
+        */
+        setTimeout(
+          function () {
+            if (
+              listenerSocket === thisSocket &&
+              thisSocket.readyState !== WebSocket.OPEN
+            ) {
+              listenerReconnectInProgress = false;
+              scheduleListenerReconnect(
+                "socket error"
+              );
+            }
+          },
+          900
+        );
+      };
+
+    thisSocket.onclose =
+      function () {
+
+        const intentional =
+          !!thisSocket.__lbIntentionalClose;
+
+        if (
+          listenerSocket ===
+          thisSocket
+        ) {
+          listenerSocket = null;
+        }
+
+        listenerReconnectInProgress = false;
+
+        document.getElementById(
+          "listenerDot"
+        ).classList.remove("live");
+
+        if (
+          ROOM_ID &&
+          !capacityNoticeShown &&
+          listenerConnectionWanted
+        ) {
+
+          document.getElementById(
+            "listenerStatus"
+          ).textContent =
+            intentional
+              ? "Reconnecting automatically…"
+              : "Reconnecting automatically…";
+
+          if (!intentional) {
+            scheduleListenerReconnect(
+              "socket closed"
+            );
+          }
+        }
+      };
+  }
+
+
+  /*
+    Changing listening language must never require a refresh.
+    Reconnect the live-feed socket immediately in the background
+    using the same room and listener session.
+  */
+  document.getElementById(
+    "listenerLanguage"
+  )?.addEventListener(
+    "change",
+    async function () {
+
+      if (
+        !ROOM_ID
+      ) {
+        return;
+      }
+
+      document.getElementById(
+        "listenerStatus"
+      ).textContent =
+        "Switching language…";
+
+      document.getElementById(
+        "listenerDot"
+      ).classList.remove("live");
+
+      /*
+        Stop old-language audio and queued items first.
+      */
+      window.speechSynthesis?.cancel();
+
+      if (
+        typeof stopAzureAudio ===
+        "function"
+      ) {
+        try {
+          stopAzureAudio();
+        } catch {}
+      }
+
+      listenerDisplayQueue = [];
+      listenerQueueRunning = false;
+
+      /*
+        Fully release the old listener connection.
+      */
+      listenerConnectionWanted = false;
+      clearListenerReconnectTimer();
+
+      if (listenerSocket) {
+        try {
+          listenerSocket.onopen = null;
+          listenerSocket.onmessage = null;
+          listenerSocket.onerror = null;
+          listenerSocket.onclose = null;
+          listenerSocket.__lbIntentionalClose = true;
+          listenerSocket.close();
+        } catch {}
+        listenerSocket = null;
+      }
+
+      try {
+        stopListenerTracking();
+      } catch {}
+
+      /*
+        Give the old socket a moment to close, then perform the
+        exact same Join Live Room action that works manually.
+      */
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            500
+          )
+      );
+
+      const joinButton =
+        document.getElementById(
+          "joinRoomButton"
+        );
+
+      if (joinButton) {
+        joinButton.click();
+      } else {
+        /*
+          Fallback in case the button ID ever changes.
+        */
+        listenerConnectionWanted = true;
+        await joinLiveRoom();
+      }
+    }
+  );
+
+
+  /*
+    If the device temporarily loses internet, rejoin as soon as
+    the browser reports that connectivity has returned.
+  */
+  window.addEventListener(
+    "online",
+    function () {
+
+      if (
+        listenerConnectionWanted &&
+        ROOM_ID &&
+        (
+          !listenerSocket ||
+          listenerSocket.readyState !== WebSocket.OPEN
+        )
+      ) {
+        clearListenerReconnectTimer();
+
+        joinLiveRoom({
+          preserveTranscript: true,
+          preserveSession: true,
+          reconnect: true
+        });
+      }
+    }
+  );
+
+
+  /*
+    Safety watchdog. The listener page is meant to stay open all day.
+    If anything silently drops the WebSocket, it repairs it without
+    asking the listener to refresh or press Join again.
+  */
+  setInterval(
+    function () {
+
+      if (
+        listenerConnectionWanted &&
+        ROOM_ID &&
+        !listenerReconnectInProgress &&
+        (
+          !listenerSocket ||
+          listenerSocket.readyState === WebSocket.CLOSED
+        )
+      ) {
+        scheduleListenerReconnect(
+          "connection watchdog"
+        );
+      }
+
+    },
+    3000
+  );
+
+
+  async function translateListenerText(
+    text,
+    translateLang
+  ) {
+
+    try {
+      const response =
+        await fetch(
+          WORKER_URL +
+          "/v1/chat/completions",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              "Authorization":
+                "Bearer proxy"
+            },
+
+            body: JSON.stringify({
+              model:
+                "gpt-4.1-mini",
+
+              temperature:
+                0,
+
+              messages: [
+                {
+                  role:
+                    "system",
+
+                  content:
+                    `You are a translation engine. Detect the language of the provided text automatically and translate it into ${translateLang}. Return only the translated text.`
+                },
+
+                {
+                  role:
+                    "user",
+
+                  content:
+                    text
+                }
+              ]
+            })
+          }
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          "Translation failed: " +
+          response.status
+        );
+      }
+
+      const data =
+        await response.json();
+
+      return (
+        data.choices?.[0]
+          ?.message
+          ?.content ||
+        text
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Translation failed:",
+        error
+      );
+
+      return text;
+    }
+  }
+
+
+  function speakListenerText(text, ttsLang) {
+
+  return new Promise((resolve) => {
+
+    if (!("speechSynthesis" in window)) {
+      resolve();
+      return;
+    }
+
+    const utterance =
+      new SpeechSynthesisUtterance(text);
+
+    utterance.lang = ttsLang;
+
+    const voices =
+      window.speechSynthesis.getVoices();
+
+    const base =
+      ttsLang.toLowerCase().split("-")[0];
+
+    const matching =
+      voices.filter(v => {
+
+        const lang =
+          (v.lang || "").toLowerCase();
+
+        return (
+          lang === ttsLang.toLowerCase() ||
+          lang.startsWith(base + "-")
+        );
+      });
+
+    if (matching.length) {
+
+      const femaleHints = [
+        "female", "woman", "samantha", "victoria",
+        "zira", "susan", "karen", "moira",
+        "tessa", "veena", "fiona", "amelie",
+        "audrey", "julie", "marie", "claire"
+      ];
+
+      const maleHints = [
+        "male", "man", "daniel", "david",
+        "mark", "alex", "fred", "thomas",
+        "jorge", "diego", "paul", "henri",
+        "jacques"
+      ];
+
+      const hints =
+        listenerVoiceGender === "female"
+          ? femaleHints
+          : maleHints;
+
+      let selectedVoice =
+        matching.find(v => {
+
+          const name =
+            (v.name || "").toLowerCase();
+
+          return hints.some(h =>
+            name.includes(h)
+          );
+        });
+
+      if (!selectedVoice) {
+        selectedVoice =
+          listenerVoiceGender === "female"
+            ? matching[matching.length - 1]
+            : matching[0];
+      }
+
+      utterance.voice =
+        selectedVoice;
+    }
+
+    utterance.rate = 1;
+
+    utterance.pitch =
+      listenerVoiceGender === "female"
+        ? 1.08
+        : 0.92;
+
+    utterance.onend = resolve;
+
+    utterance.onerror = resolve;
+
+    window.speechSynthesis.speak(
+      utterance
+    );
+  });
+}
+
+  function markListenerLive() {
+
+    const dot =
+      document.getElementById(
+        "listenerDot"
+      );
+
+    const status =
+      document.getElementById(
+        "listenerStatus"
+      );
+
+    dot.classList.add("live");
+
+    status.textContent =
+      "Live Feed Connected";
+
+    clearTimeout(
+      listenerStreamTimeout
+    );
+
+    listenerStreamTimeout =
+      setTimeout(() => {
+
+        dot.classList.remove("live");
+
+        status.textContent =
+          "No Live Feed";
+
+      }, 60000);
+  }
+
+</script>
+        <script>
+function askForEmail() {
+  return new Promise((resolve) => {
+
+    const overlay = document.createElement("div");
+
+    overlay.innerHTML = `
+      <div style="
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.72);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index:999999;
+        padding:20px;
+      ">
+        <div style="
+          width:100%;
+          max-width:430px;
+          background:#101d2d;
+          border:1px solid rgba(255,255,255,.15);
+          border-radius:18px;
+          padding:24px;
+          color:white;
+          box-shadow:0 25px 70px rgba(0,0,0,.5);
+        ">
+
+          <div style="
+            font-size:22px;
+            font-weight:900;
+            margin-bottom:6px;
+          ">
+            LiveBridge Email
+          </div>
+
+          <div style="
+            color:#9fb1c7;
+            margin-bottom:18px;
+          ">
+            Send your full transcript + AI notes
+          </div>
+
+          <input
+            id="lbEmailInput"
+            type="email"
+            placeholder="Email address"
+            style="
+              width:100%;
+              padding:14px;
+              border-radius:10px;
+              border:1px solid rgba(255,255,255,.15);
+              background:#07111f;
+              color:white;
+              font-size:16px;
+              margin-bottom:14px;
+            "
+          >
+
+          <div style="display:flex;gap:10px;">
+            <button id="lbEmailCancel" style="
+              flex:1;
+              padding:13px;
+              border-radius:10px;
+              border:1px solid rgba(255,255,255,.15);
+              background:#16283d;
+              color:white;
+              cursor:pointer;
+            ">
+              Cancel
+            </button>
+
+            <button id="lbEmailSend" style="
+              flex:1;
+              padding:13px;
+              border:0;
+              border-radius:10px;
+              background:linear-gradient(135deg,#2588ff,#6f43df);
+              color:white;
+              font-weight:800;
+              cursor:pointer;
+            ">
+              Send Email
+            </button>
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const input =
+      overlay.querySelector("#lbEmailInput");
+
+    input.focus();
+
+    overlay.querySelector("#lbEmailCancel")
+      .onclick = () => {
+        overlay.remove();
+        resolve(null);
+      };
+
+    overlay.querySelector("#lbEmailSend")
+      .onclick = () => {
+        const email = input.value.trim();
+
+        if (!email) return;
+
+        overlay.remove();
+resolve(email);
+      };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        overlay.querySelector("#lbEmailSend").click();
+      }
+    });
+
+  });
+}
+  async function emailTranscript() {
+
+  if (!fullTranslatedTranscript.trim()) {
+    alert("There is no transcript to email yet.");
+    return;
+  }
+
+  const email = await askForEmail();
+
+  if (!email) return;
+
+  const [translateLang] = document
+    .getElementById("listenerLanguage")
+    .value
+    .split("|");
+
+  try {
+    emailButton.disabled = true;
+    emailButton.textContent = "Sending...";
+
+    const response = await fetch(
+      WORKER_URL + "/email-transcript",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email,
+          transcript: fullTranslatedTranscript,
+          language: translateLang
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.error || "Email failed."
+      );
+    }
+
+    alert(
+      "Transcript and AI notes sent successfully!"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Email transcript failed:",
+      error
+    );
+
+    alert(
+      "The email could not be sent. Please try again."
+    );
+
+  } finally {
+
+    emailButton.disabled = false;
+    emailButton.textContent =
+      "✉ Email Transcript & AI Notes";
+  }
+}
+
+
+  // v1.0.3: attach email handler only after emailTranscript exists.
+  emailButton.addEventListener(
+    "click",
+    emailTranscript
+  );
+
+
+  async function startListenerTracking() {
+
+    if (
+      !ROOM_ID ||
+      !listenerSessionId
+    ) {
+      return;
+    }
+
+    const language =
+      document
+        .getElementById(
+          "listenerLanguage"
+        )
+        .value
+        .split("|")[0];
+
+    try {
+      const response =
+        await fetch(
+          WORKER_URL +
+          "/listener-start",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body: JSON.stringify({
+              listenerId:
+                listenerSessionId,
+
+              language,
+
+              room:
+                ROOM_ID
+            })
+          }
+        );
+
+      if (!response.ok) {
+        throw new Error(
+          "Listener analytics start failed: " +
+          response.status
+        );
+      }
+
+      listenerHeartbeat =
+        setInterval(
+          sendListenerHeartbeat,
+          30000
+        );
+
+    } catch (error) {
+
+      console.error(
+        "Listener analytics start failed:",
+        error
+      );
+    }
+  }
+
+
+  async function sendListenerHeartbeat() {
+
+    if (
+      !ROOM_ID ||
+      !listenerSessionId
+    ) {
+      return;
+    }
+
+    try {
+      await fetch(
+        WORKER_URL +
+        "/listener-heartbeat",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: JSON.stringify({
+  listenerId:
+    listenerSessionId,
+
+  room:
+    ROOM_ID,
+
+  queueDepth:
+    listenerDisplayQueue.length +
+    (listenerQueueRunning ? 1 : 0),
+
+  audioMuted:
+    listenerAudioMuted
+})
+        }
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Listener analytics heartbeat failed:",
+        error
+      );
+    }
+  }
+
+
+  function stopListenerTracking() {
+
+    if (listenerHeartbeat) {
+      clearInterval(
+        listenerHeartbeat
+      );
+
+      listenerHeartbeat =
+        null;
+    }
+  }
+
+
+  function sendListenerStop() {
+
+    if (
+      !ROOM_ID ||
+      !listenerSessionId
+    ) {
+      return;
+    }
+
+    const payload =
+      JSON.stringify({
+        listenerId:
+          listenerSessionId,
+
+        room:
+          ROOM_ID
+      });
+
+    try {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(
+          WORKER_URL +
+          "/listener-stop",
+          new Blob(
+            [payload],
+            {
+              type:
+                "application/json"
+            }
+          )
+        );
+
+        return;
+      }
+
+      fetch(
+        WORKER_URL +
+        "/listener-stop",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: payload,
+
+          keepalive: true
+        }
+      ).catch(() => {});
+
+    } catch (error) {
+      console.error(
+        "Listener analytics stop failed:",
+        error
+      );
+    }
+  }
+
+
+  window.addEventListener(
+    "pagehide",
+    function () {
+      listenerConnectionWanted = false;
+      clearListenerReconnectTimer();
+      closeListenerSocketIntentionally();
+      sendListenerStop();
+    }
+  );
+
+
+  function loadRoomFromURL() {
+
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const roomFromURL =
+      params.get("room");
+
+    if (roomFromURL) {
+
+      document.getElementById(
+        "listenerRoom"
+      ).value =
+        roomFromURL
+          .trim()
+          .toUpperCase();
+    }
+  }
+
+
+  loadRoomFromURL();
+  applyListenerFontSize();
+</script>
+        <!-- =====================================================
+        LIVEBRIDGE AZURE LISTENER TEST ADD-ON
+        Use ONLY on the duplicated /translation1 page.
+        Keep the existing listener embeds unchanged.
+        ===================================================== -->
+        <style>
+  .lb-azure-test-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    margin-top:10px;
+    padding:7px 11px;
+    border-radius:999px;
+    background:rgba(37,136,255,.12);
+    border:1px solid rgba(37,136,255,.28);
+    color:#8fc5ff;
+    font-size:11px;
+    font-weight:900;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+
+  .lb-azure-speed{
+    margin-top:16px;
+    padding:14px;
+    border-radius:12px;
+    background:rgba(255,255,255,.035);
+    border:1px solid rgba(255,255,255,.10);
+  }
+
+  .lb-azure-speed-title{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    align-items:center;
+    margin-bottom:9px;
+    color:#c9d8e8;
+    font-size:13px;
+    font-weight:800;
+  }
+
+  .lb-azure-speed-row{
+    display:grid;
+    grid-template-columns:48px 1fr 48px;
+    gap:9px;
+    align-items:center;
+  }
+
+  .lb-azure-speed-btn{
+    height:44px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,.15);
+    background:#16283d;
+    color:white;
+    font-size:22px;
+    font-weight:900;
+    cursor:pointer;
+  }
+
+  .lb-azure-speed-value{
+    height:44px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,.12);
+    background:#101d2d;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:white;
+    font-size:17px;
+    font-weight:900;
+  }
+
+  .lb-azure-engine{
+    margin-top:9px;
+    color:#8fa6bf;
+    font-size:11px;
+    line-height:1.4;
+  }
+
+  .lb-azure-cache-indicator{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:8px;
+    height:8px;
+    margin-left:2px;
+    border-radius:50%;
+    background:#64748b;
+    box-shadow:0 0 5px rgba(100,116,139,.55);
+    flex:0 0 auto;
+    vertical-align:middle;
+    opacity:.95;
+  }
+
+  .lb-azure-cache-indicator.generated{
+    background:#ef4444;
+    box-shadow:0 0 6px rgba(239,68,68,.75);
+  }
+
+  .lb-azure-cache-indicator.cached{
+    background:#22c55e;
+    box-shadow:0 0 6px rgba(34,197,94,.75);
+  }
+
+</style>
+        <script>
+(function () {
+
+  const AZURE_WORKER =
+    "https://livebridge.northstarventures-ca.workers.dev";
+
+  let azureVoices = [];
+  let azureVoicesLoaded = false;
+  let azureAudio = null;
+
+  /*
+    Demo-only STOP protection.
+    Stores stopped /clientpitch session IDs so late translated
+    messages from an already-stopped prerecorded/live demo
+    are ignored instead of restarting audio.
+  */
+  const stoppedDemoSessions =
+    new Set();
+
+  let patchedListenerSocket =
+    null;
+
+  /*
+    Default slightly faster because the original
+    Azure test sounded a little slow.
+  */
+  let listenerSpeechRate = 1.15;
+  let listenerSpeechRateLoaded = false;
+
+
+  function getSelectedGender() {
+
+    const femaleButton =
+      document.getElementById(
+        "femaleVoiceButton"
+      );
+
+    if (
+      femaleButton &&
+      femaleButton.classList.contains(
+        "selected"
+      )
+    ) {
+      return "Female";
+    }
+
+    return "Male";
+  }
+
+
+  function normalizeLocale(locale) {
+
+    return String(
+      locale || ""
+    ).trim();
+
+  }
+
+
+  async function loadOrganizationSpeechRate() {
+
+    try {
+
+      const roomInput =
+        document.getElementById(
+          "listenerRoom"
+        );
+
+      const room =
+        String(
+          roomInput?.value ||
+          new URLSearchParams(
+            window.location.search
+          ).get("room") ||
+          ""
+        )
+        .trim()
+        .toUpperCase();
+
+      if (!room) {
+        listenerSpeechRate = 1.15;
+        listenerSpeechRateLoaded = true;
+        return listenerSpeechRate;
+      }
+
+      const response =
+        await fetch(
+          AZURE_WORKER +
+          "/room-speech-settings?room=" +
+          encodeURIComponent(room),
+          {
+            cache: "no-store"
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.error ||
+          "Unable to load organization speech rate."
+        );
+      }
+
+      const rate =
+        Number(
+          data.speechRate ?? 1.15
+        );
+
+      listenerSpeechRate =
+        Math.round(
+          Math.min(
+            1.50,
+            Math.max(
+              0.75,
+              Number.isFinite(rate)
+                ? rate
+                : 1.15
+            )
+          ) * 100
+        ) / 100;
+
+      listenerSpeechRateLoaded = true;
+
+      return listenerSpeechRate;
+
+    } catch (error) {
+
+      console.error(
+        "LiveBridge organization speech rate failed:",
+        error
+      );
+
+      listenerSpeechRate = 1.15;
+      listenerSpeechRateLoaded = true;
+
+      return listenerSpeechRate;
+    }
+  }
+
+
+  function findAzureVoice(
+    locale,
+    gender
+  ) {
+
+    const exactLocale =
+      normalizeLocale(locale);
+
+    const matching =
+      azureVoices.filter(
+        voice =>
+          voice.Locale === exactLocale
+      );
+
+    if (!matching.length) {
+      return null;
+    }
+
+    const genderMatches =
+      matching.filter(
+        voice =>
+          String(
+            voice.Gender || ""
+          ).toLowerCase() ===
+          String(
+            gender || ""
+          ).toLowerCase()
+      );
+
+    const candidates =
+      genderMatches.length
+        ? genderMatches
+        : matching;
+
+    /*
+      Prefer multilingual neural voices where available,
+      otherwise use the first native neural voice Azure returns.
+    */
+    candidates.sort(
+      (a, b) => {
+
+        const aName =
+          String(
+            a.ShortName || ""
+          );
+
+        const bName =
+          String(
+            b.ShortName || ""
+          );
+
+        const aScore =
+          aName.includes(
+            "MultilingualNeural"
+          )
+            ? 2
+            : aName.includes(
+                "Neural"
+              )
+              ? 1
+              : 0;
+
+        const bScore =
+          bName.includes(
+            "MultilingualNeural"
+          )
+            ? 2
+            : bName.includes(
+                "Neural"
+              )
+              ? 1
+              : 0;
+
+        return bScore - aScore;
+      }
+    );
+
+    return candidates[0] || null;
+  }
+
+
+
+  function updateAzureCacheIndicator(cacheStatus) {
+
+    const dot =
+      document.getElementById(
+        "lbAzureCacheIndicator"
+      );
+
+    if (!dot) {
+      return;
+    }
+
+    dot.classList.remove(
+      "generated",
+      "cached"
+    );
+
+    if (
+      String(cacheStatus || "")
+        .toUpperCase() === "HIT"
+    ) {
+      dot.classList.add(
+        "cached"
+      );
+
+      dot.title =
+        "Azure audio reused from cache";
+
+    } else if (
+      String(cacheStatus || "")
+        .toUpperCase() === "MISS"
+    ) {
+      dot.classList.add(
+        "generated"
+      );
+
+      dot.title =
+        "Azure audio generated";
+    }
+  }
+
+
+  function addAzureCacheIndicator() {
+
+    if (
+      document.getElementById(
+        "lbAzureCacheIndicator"
+      )
+    ) {
+      return;
+    }
+
+    const controls =
+      document.querySelector(
+        ".lb-live-size"
+      );
+
+    if (!controls) {
+      return;
+    }
+
+    const dot =
+      document.createElement(
+        "span"
+      );
+
+    dot.id =
+      "lbAzureCacheIndicator";
+
+    dot.className =
+      "lb-azure-cache-indicator";
+
+    dot.title =
+      "Waiting for Azure audio";
+
+    /*
+      Put the tiny dot right beside the Text Size controls.
+    */
+    const textSizeLabel =
+      Array.from(
+        controls.children
+      ).find(
+        element =>
+          element.tagName === "SPAN" &&
+          String(
+            element.textContent || ""
+          )
+            .trim()
+            .toLowerCase() ===
+            "text size"
+      );
+
+    if (textSizeLabel) {
+
+      textSizeLabel.insertAdjacentElement(
+        "afterend",
+        dot
+      );
+
+    } else {
+
+      controls.appendChild(
+        dot
+      );
+    }
+  }
+
+
+  function stopAzureAudio() {
+
+    if (!azureAudio) {
+      return;
+    }
+
+    try {
+      azureAudio.pause();
+      azureAudio.src = "";
+    } catch (error) {}
+
+    azureAudio = null;
+  }
+
+
+  function speakWithBrowserFallback(
+    text,
+    ttsLang
+  ) {
+
+    return new Promise(
+      resolve => {
+
+        if (
+          !(
+            "speechSynthesis" in
+            window
+          )
+        ) {
+          resolve();
+          return;
+        }
+
+        const utterance =
+          new SpeechSynthesisUtterance(
+            text
+          );
+
+        utterance.lang =
+          ttsLang;
+
+        utterance.rate =
+          listenerSpeechRate;
+
+        utterance.pitch = 1;
+
+        const requestedGender =
+          getSelectedGender();
+
+        const voices =
+          window.speechSynthesis
+            .getVoices();
+
+        const langPrefix =
+          String(
+            ttsLang || ""
+          )
+            .toLowerCase()
+            .split("-")[0];
+
+        const languageVoices =
+          voices.filter(
+            voice =>
+              String(
+                voice.lang || ""
+              )
+                .toLowerCase()
+                .startsWith(
+                  langPrefix
+                )
+          );
+
+        const genderHints =
+          requestedGender ===
+          "Female"
+            ? [
+                "female",
+                "woman",
+                "samantha",
+                "zira",
+                "susan",
+                "victoria"
+              ]
+            : [
+                "male",
+                "man",
+                "david",
+                "mark",
+                "daniel",
+                "george"
+              ];
+
+        const hintedVoice =
+          languageVoices.find(
+            voice => {
+
+              const name =
+                String(
+                  voice.name || ""
+                ).toLowerCase();
+
+              return genderHints.some(
+                hint =>
+                  name.includes(
+                    hint
+                  )
+              );
+            }
+          );
+
+        utterance.voice =
+          hintedVoice ||
+          languageVoices[0] ||
+          null;
+
+        utterance.onend =
+          () => resolve();
+
+        utterance.onerror =
+          () => resolve();
+
+        window.speechSynthesis.speak(
+          utterance
+        );
+      }
+    );
+  }
+
+
+  async function prepareAzureAudio(
+    text,
+    ttsLang
+  ) {
+
+    const gender =
+      getSelectedGender();
+
+    const voice =
+      findAzureVoice(
+        ttsLang,
+        gender
+      );
+
+    /*
+      Unsupported Azure language:
+      keep the listener working with the browser voice.
+    */
+    if (!voice) {
+
+      updateEngineStatus();
+
+      return {
+        type: "unavailable",
+        text,
+        ttsLang
+      };
+    }
+
+    try {
+
+      if (!listenerSpeechRateLoaded) {
+        await loadOrganizationSpeechRate();
+      }
+
+      const room =
+        String(
+          document.getElementById(
+            "listenerRoom"
+          )?.value ||
+          new URLSearchParams(
+            window.location.search
+          ).get("room") ||
+          ""
+        )
+        .trim()
+        .toUpperCase();
+
+      /*
+        Adaptive catch-up speed. The organization's configured rate
+        remains the base. A small temporary boost is added only when
+        audio is beginning to queue, so sustained speech cannot drift
+        farther and farther behind the live speaker.
+      */
+      const pendingDepth =
+        listenerDisplayQueue.length +
+        (listenerQueueRunning ? 1 : 0) +
+        1;
+
+      let catchUpBoost = 0;
+
+      /*
+        Stronger real-time catch-up. Because only the next clip is
+        pre-generated, this rate is recalculated as the queue changes
+        instead of being frozen into a long backlog of already-created
+        MP3 files.
+      */
+      if (pendingDepth >= 8) {
+        catchUpBoost = 0.40;
+      } else if (pendingDepth >= 5) {
+        catchUpBoost = 0.30;
+      } else if (pendingDepth >= 3) {
+        catchUpBoost = 0.20;
+      } else if (pendingDepth >= 1) {
+        catchUpBoost = 0.10;
+      }
+
+      const effectiveSpeechRate =
+        Math.round(
+          Math.min(
+            1.50,
+            listenerSpeechRate +
+              catchUpBoost
+          ) * 100
+        ) / 100;
+
+      const response =
+        await fetch(
+          AZURE_WORKER +
+          "/azure-tts-test",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+
+            body:
+              JSON.stringify({
+                room,
+                text,
+                voice:
+                  voice.ShortName,
+                locale:
+                  ttsLang,
+                rate:
+                  effectiveSpeechRate
+              })
+          }
+        );
+
+      if (!response.ok) {
+
+        throw new Error(
+          "Azure TTS failed: " +
+          response.status
+        );
+      }
+const cacheStatus =
+        response.headers.get(
+          "X-LiveBridge-TTS-Cache"
+        );
+
+      updateAzureCacheIndicator(
+        cacheStatus
+      );
+
+      const blob =
+        await response.blob();
+
+      const objectUrl =
+        URL.createObjectURL(
+          blob
+        );
+
+      /*
+        Preload/decode enough of the MP3 BEFORE the caption is posted.
+        This keeps the visible sentence and the spoken sentence tightly
+        synchronized without changing queue order or sentence boundaries.
+      */
+      const audio =
+        new Audio();
+
+      audio.preload =
+        "auto";
+
+      audio.src =
+        objectUrl;
+
+      try {
+
+        await new Promise(
+          resolve => {
+
+            let finished =
+              false;
+
+            const done =
+              function () {
+
+                if (finished) {
+                  return;
+                }
+
+                finished =
+                  true;
+
+                audio.removeEventListener(
+                  "canplay",
+                  done
+                );
+
+                audio.removeEventListener(
+                  "canplaythrough",
+                  done
+                );
+
+                audio.removeEventListener(
+                  "loadeddata",
+                  done
+                );
+
+                audio.removeEventListener(
+                  "error",
+                  done
+                );
+
+                resolve();
+              };
+
+            audio.addEventListener(
+              "canplay",
+              done,
+              {
+                once: true
+              }
+            );
+
+            audio.addEventListener(
+              "canplaythrough",
+              done,
+              {
+                once: true
+              }
+            );
+
+            audio.addEventListener(
+              "loadeddata",
+              done,
+              {
+                once: true
+              }
+            );
+
+            audio.addEventListener(
+              "error",
+              done,
+              {
+                once: true
+              }
+            );
+
+            /*
+              Safety valve: don't hold the caption forever if a browser
+              is slow to fire its media-ready event.
+            */
+            setTimeout(
+              done,
+              700
+            );
+
+            audio.load();
+          }
+        );
+
+      } catch (error) {}
+
+      return {
+        type: "azure",
+        text,
+        ttsLang,
+        audio,
+        objectUrl
+      };
+
+    } catch (error) {
+
+      console.error(
+        "Azure listener prepare failed:",
+        error
+      );
+
+      return {
+        type: "unavailable",
+        text,
+        ttsLang
+      };
+    }
+  }
+
+
+  /*
+    Expose the Azure preparer to the WebSocket message handler above.
+    This is what lets incoming audio pre-generate during current
+    playback instead of waiting its turn to start generation.
+  */
+  listenerAudioPreparer =
+    prepareAzureAudio;
+
+
+  async function playPreparedAudio(
+    prepared
+  ) {
+
+    if (!prepared) {
+      return;
+    }
+
+    if (
+      prepared.type !==
+      "azure"
+    ) {
+      console.error("Azure audio unavailable; browser TTS fallback is disabled in production.");
+      return;
+    }
+
+    stopAzureAudio();
+
+    return await new Promise(
+      resolve => {
+
+        const audio =
+          prepared.audio;
+
+        const objectUrl =
+          prepared.objectUrl;
+
+        azureAudio =
+          audio;
+
+        let finished =
+          false;
+
+        const finish =
+          function () {
+
+            if (finished) {
+              return;
+            }
+
+            finished =
+              true;
+
+            try {
+              URL.revokeObjectURL(
+                objectUrl
+              );
+            } catch (error) {}
+
+            if (
+              azureAudio ===
+              audio
+            ) {
+              azureAudio =
+                null;
+            }
+
+            resolve();
+          };
+
+        audio.onended =
+          finish;
+
+        audio.onerror =
+          finish;
+
+        try {
+
+          audio.currentTime =
+            0;
+
+        } catch (error) {}
+
+        audio.play()
+          .catch(
+            function (error) {
+              console.error("Azure audio playback failed; browser TTS fallback is disabled in production.", error);
+              finish();
+            }
+          );
+      }
+    );
+  }
+
+
+  async function speakWithAzure(
+    text,
+    ttsLang
+  ) {
+
+    const prepared =
+      await prepareAzureAudio(
+        text,
+        ttsLang
+      );
+
+    return playPreparedAudio(
+      prepared
+    );
+  }
+
+
+  /*
+    KEEP THE EXISTING ONE-AT-A-TIME QUEUE,
+    but prepare the Azure MP3 BEFORE displaying the sentence.
+
+    Result:
+    - sentence order remains unchanged
+    - no duplicate speech
+    - no overlapping speech
+    - no half-sentence playback
+    - text appears immediately before its prepared audio starts
+  */
+  processListenerQueue =
+    async function (
+      ttsLang
+    ) {
+
+      if (
+        listenerQueueRunning
+      ) {
+        return;
+      }
+
+      listenerQueueRunning =
+        true;
+
+      try {
+
+        while (
+          listenerDisplayQueue.length >
+          0
+        ) {
+
+          const queueItem =
+            listenerDisplayQueue.shift();
+
+          const translatedText =
+            typeof queueItem ===
+              "string"
+              ? queueItem
+              : String(
+                  queueItem?.text ||
+                  ""
+                );
+
+          const queuedTtsLang =
+            typeof queueItem ===
+              "string"
+              ? ttsLang
+              : (
+                  queueItem?.ttsLang ||
+                  ttsLang
+                );
+
+          if (!translatedText) {
+            continue;
+          }
+
+          let prepared =
+            null;
+
+          if (
+            !listenerAudioMuted
+          ) {
+
+            /*
+              Normally this promise already started the moment the
+              WebSocket translation arrived, while the prior clip was
+              playing. Awaiting it here therefore adds little or no
+              extra delay.
+            */
+            if (
+              typeof queueItem !==
+                "string" &&
+              queueItem?.preparedPromise
+            ) {
+
+              prepared =
+                await queueItem
+                  .preparedPromise;
+
+            } else {
+
+              prepared =
+                await prepareAzureAudio(
+                  translatedText,
+                  queuedTtsLang
+                );
+            }
+          }
+
+          /*
+            ONE-CLIP LOOKAHEAD:
+            While the current prepared MP3 is about to play, start
+            preparing ONLY the next queued item. This hides Azure
+            generation time without freezing the speed/voice settings
+            for a long backlog.
+          */
+          if (
+            !listenerAudioMuted &&
+            listenerDisplayQueue.length > 0
+          ) {
+            const nextItem =
+              listenerDisplayQueue[0];
+
+            if (
+              typeof nextItem !== "string" &&
+              nextItem &&
+              !nextItem.preparedPromise
+            ) {
+              nextItem.preparedPromise =
+                prepareAzureAudio(
+                  String(nextItem.text || ""),
+                  nextItem.ttsLang || queuedTtsLang
+                ).catch(
+                  error => {
+                    console.error(
+                      "Azure one-clip pre-generation failed:",
+                      error
+                    );
+                    return null;
+                  }
+                );
+            }
+          }
+
+          const line =
+            document.createElement(
+              "div"
+            );
+
+          line.textContent =
+            translatedText;
+
+          output.appendChild(
+            line
+          );
+
+          if (
+            listenerAutoScroll
+          ) {
+
+            output.scrollTop =
+              output.scrollHeight;
+          }
+
+          if (
+            !listenerAudioMuted &&
+            prepared
+          ) {
+
+            await playPreparedAudio(
+              prepared
+            );
+          }
+        }
+
+      } finally {
+
+        listenerQueueRunning =
+          false;
+
+        /*
+          A translation can arrive in the tiny window between the last
+          loop check and listenerQueueRunning being cleared. If that
+          happened, immediately restart the queue.
+        */
+        if (
+          listenerDisplayQueue.length >
+          0
+        ) {
+          processListenerQueue(
+            ttsLang
+          );
+        }
+      }
+    };
+
+
+  /*
+    Keep the normal speech override available for any other listener code
+    that calls speakListenerText directly.
+  */
+  speakListenerText =
+    async function (
+      text,
+      ttsLang
+    ) {
+
+      return speakWithAzure(
+        text,
+        ttsLang
+      );
+    };
+
+
+  function stopCurrentListenerPlaybackNow(){
+
+    /*
+      Kill the Azure MP3 that is speaking right now.
+    */
+    stopAzureAudio();
+
+
+    /*
+      Kill browser fallback speech too.
+    */
+    try{
+      window.speechSynthesis
+        ?.cancel();
+    }catch{}
+
+
+    /*
+      Remove sentences already waiting in the listener's
+      one-at-a-time display/audio queue.
+    */
+    try{
+      listenerDisplayQueue.length =
+        0;
+    }catch{}
+
+
+    /*
+      Let a currently-running queue loop unwind cleanly.
+      It will see an empty queue and finish.
+    */
+  }
+
+
+  function getDemoSessionFromChunkId(
+    chunkId
+  ){
+
+    const value =
+      String(
+        chunkId || ""
+      );
+
+
+    const stopPrefix =
+      "__LB_DEMO_STOP__:";
+
+
+    if(
+      value.startsWith(
+        stopPrefix
+      )
+    ){
+
+      return {
+        type:
+          "stop",
+
+        sessionId:
+          value.substring(
+            stopPrefix.length
+          )
+      };
+    }
+
+
+    /*
+      Normal /clientpitch IDs are:
+      <sessionId>-<messageNumber>
+      or
+      <sessionId>-live-<messageNumber>
+
+      The generated session ID itself ends with a timestamp + random
+      suffix, so stripping the final message portion is safer by
+      comparing against stopped session prefixes below.
+    */
+    return {
+      type:
+        "normal",
+
+      chunkId:
+        value
+    };
+  }
+
+
+  function shouldBlockStoppedDemoChunk(
+    chunkId
+  ){
+
+    const value =
+      String(
+        chunkId || ""
+      );
+
+
+    for(
+      const sessionId
+      of stoppedDemoSessions
+    ){
+
+      if(
+        value ===
+          sessionId ||
+        value.startsWith(
+          sessionId +
+          "-"
+        )
+      ){
+
+        return true;
+      }
+    }
+
+
+    return false;
+  }
+
+
+  function patchDemoStopIntoListenerSocket(){
+
+    try{
+
+      if(
+        typeof listenerSocket ===
+          "undefined" ||
+        !listenerSocket ||
+        patchedListenerSocket ===
+          listenerSocket
+      ){
+        return;
+      }
+
+
+      const socket =
+        listenerSocket;
+
+
+      const originalOnMessage =
+        socket.onmessage;
+
+
+      if(
+        typeof originalOnMessage !==
+        "function"
+      ){
+        return;
+      }
+
+
+      socket.onmessage =
+        function(event){
+
+          try{
+
+            const data =
+              JSON.parse(
+                event.data
+              );
+
+
+            if(
+              data.type ===
+                "translation"
+            ){
+
+              const parsed =
+                getDemoSessionFromChunkId(
+                  data.chunkId
+                );
+
+
+              if(
+                parsed.type ===
+                  "stop"
+              ){
+
+                if(
+                  parsed.sessionId
+                ){
+
+                  stoppedDemoSessions.add(
+                    parsed.sessionId
+                  );
+
+
+                  /*
+                    Keep the set bounded during long testing days.
+                  */
+                  if(
+                    stoppedDemoSessions.size >
+                    30
+                  ){
+
+                    const first =
+                      stoppedDemoSessions
+                        .values()
+                        .next()
+                        .value;
+
+
+                    stoppedDemoSessions.delete(
+                      first
+                    );
+                  }
+                }
+
+
+                stopCurrentListenerPlaybackNow();
+
+                /*
+                  IMPORTANT:
+                  Do NOT pass the control message to the normal
+                  listener handler, so it never appears as a caption
+                  and is never spoken.
+                */
+                return;
+              }
+
+
+              if(
+                shouldBlockStoppedDemoChunk(
+                  data.chunkId
+                )
+              ){
+
+                /*
+                  A translation may have already been in-flight in the
+                  Durable Object when STOP was pressed. Ignore it.
+                */
+                return;
+              }
+            }
+
+          }catch{}
+
+
+          return originalOnMessage
+            .call(
+              socket,
+              event
+            );
+        };
+
+
+      patchedListenerSocket =
+        socket;
+
+
+    }catch(error){
+
+      console.warn(
+        "LiveBridge demo STOP listener patch skipped:",
+        error
+      );
+    }
+  }
+
+
+  /*
+    The base listener can create a replacement WebSocket after a
+    reconnect. Re-attach the demo STOP wrapper when that happens.
+  */
+  setInterval(
+    patchDemoStopIntoListenerSocket,
+    150
+  );
+
+
+  patchDemoStopIntoListenerSocket();
+
+
+  async function loadAzureVoices() {
+
+    try {
+
+      const response =
+        await fetch(
+          AZURE_WORKER +
+          "/azure-voices-test"
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+
+        throw new Error(
+          data.error ||
+          "Unable to load Azure voices."
+        );
+      }
+
+      azureVoices =
+        data.voices || [];
+
+      azureVoicesLoaded = true;
+
+    } catch (error) {
+
+      console.error(
+        "Azure voice list failed:",
+        error
+      );
+
+      azureVoices = [];
+      azureVoicesLoaded = false;
+    }
+
+    updateEngineStatus();
+  }
+
+
+  function currentListenerLocale() {
+
+    const languageSelect =
+      document.getElementById(
+        "listenerLanguage"
+      );
+
+    if (!languageSelect) {
+      return "";
+    }
+
+    const parts =
+      String(
+        languageSelect.value || ""
+      ).split("|");
+
+    return parts[1] || "";
+  }
+
+
+  function updateEngineStatus() {
+
+    const status =
+      document.getElementById(
+        "lbAzureEngine"
+      );
+
+    if (!status) {
+      return;
+    }
+
+    if (!azureVoicesLoaded) {
+
+      status.textContent =
+        "Voice engine: loading Azure voices…";
+
+      return;
+    }
+
+    const locale =
+      currentListenerLocale();
+
+    const voice =
+      findAzureVoice(
+        locale,
+        getSelectedGender()
+      );
+
+    if (voice) {
+
+      status.textContent =
+        "Voice engine: Azure • " +
+        voice.LocalName +
+        " • " +
+        getSelectedGender();
+
+    } else {
+
+      status.textContent =
+        "Voice engine: Browser fallback • Azure has no native " +
+        locale +
+        " voice";
+
+    }
+  }
+
+
+
+
+  function buildAzureControls() {
+
+    addAzureCacheIndicator();
+
+    const voiceChoice =
+      document.querySelector(
+        ".lb-voice-choice"
+      );
+
+    if (!voiceChoice) {
+      return;
+    }
+
+    /* Production Azure voice engine. */
+
+    const engineStatus =
+      document.createElement(
+        "div"
+      );
+
+    engineStatus.className =
+      "lb-azure-engine";
+
+    engineStatus.id =
+      "lbAzureEngine";
+
+    engineStatus.textContent =
+      "Voice engine: loading Azure voices…";
+
+    voiceChoice.insertAdjacentElement(
+      "afterend",
+      engineStatus
+    );
+
+
+    const languageSelect =
+      document.getElementById(
+        "listenerLanguage"
+      );
+
+    if (languageSelect) {
+
+      languageSelect.addEventListener(
+        "change",
+        updateEngineStatus
+      );
+    }
+
+
+    const maleButton =
+      document.getElementById(
+        "maleVoiceButton"
+      );
+
+    const femaleButton =
+      document.getElementById(
+        "femaleVoiceButton"
+      );
+
+    if (maleButton) {
+
+      maleButton.addEventListener(
+        "click",
+        function () {
+
+          setTimeout(
+            updateEngineStatus,
+            0
+          );
+        }
+      );
+    }
+
+    if (femaleButton) {
+
+      femaleButton.addEventListener(
+        "click",
+        function () {
+
+          setTimeout(
+            updateEngineStatus,
+            0
+          );
+        }
+      );
+    }
+
+
+    /*
+      Existing listener mute button still controls the
+      listenerAudioMuted flag. This additionally stops
+      an Azure MP3 that is currently playing.
+    */
+    const audioButton =
+      document.getElementById(
+        "listenerAudioButton"
+      );
+
+    if (audioButton) {
+
+      audioButton.addEventListener(
+        "click",
+        function () {
+
+          setTimeout(
+            function () {
+
+              if (
+                audioButton.textContent
+                  .includes(
+                    "Muted"
+                  )
+              ) {
+                stopAzureAudio();
+              }
+
+            },
+            0
+          );
+        }
+      );
+    }
+
+  }
+
+
+  buildAzureControls();
+  loadAzureVoices();
+  loadOrganizationSpeechRate();
+
+  setInterval(
+    loadOrganizationSpeechRate,
+    30000
+  );
+
+})();
+
+  function getListenerShareURL(){
+
+    const room =
+      String(
+        document.getElementById(
+          "listenerRoom"
+        )?.value ||
+        new URLSearchParams(
+          window.location.search
+        ).get("room") ||
+        ""
+      )
+      .trim()
+      .toUpperCase();
+
+
+    const url =
+      new URL(
+        "/t/",
+        window.location.origin
+      );
+
+
+    if(room){
+      url.searchParams.set(
+        "room",
+        room
+      );
+    }
+return url.toString();
+  }
+
+
+  function refreshListenerShare(){
+
+    const url =
+      getListenerShareURL();
+
+
+    const text =
+      document.getElementById(
+        "lbListenerShareURL"
+      );
+
+
+    const qr =
+      document.getElementById(
+        "lbListenerQR"
+      );
+
+
+    if(text){
+      text.textContent =
+        url;
+    }
+
+
+    if(qr){
+
+      qr.src =
+        "https://api.qrserver.com/v1/create-qr-code/" +
+        "?size=300x300&margin=5&data=" +
+        encodeURIComponent(
+          url
+        );
+    }
+  }
+
+
+  document.getElementById(
+    "lbListenerCopy"
+  )?.addEventListener(
+    "click",
+    async function(){
+
+      const url =
+        getListenerShareURL();
+
+
+      await navigator.clipboard.writeText(
+        url
+      );
+
+
+      const old =
+        this.textContent;
+
+
+      this.textContent =
+        "✓ Copied";
+
+
+      setTimeout(
+        () =>
+          this.textContent =
+            old,
+        1400
+      );
+    }
+  );
+
+
+  document.getElementById(
+    "lbListenerShare"
+  )?.addEventListener(
+    "click",
+    async function(){
+
+      const url =
+        getListenerShareURL();
+
+
+      if(
+        navigator.share
+      ){
+
+        try{
+
+          await navigator.share({
+            title:
+              "LiveBridge Room",
+
+            text:
+              "Join this LiveBridge room.",
+
+            url
+          });
+
+        }catch{}
+
+
+      }else{
+
+        await navigator.clipboard.writeText(
+          url
+        );
+
+
+        alert(
+          "Room link copied."
+        );
+      }
+    }
+  );
+
+
+  document.getElementById(
+    "lbListenerOpen"
+  )?.addEventListener(
+    "click",
+    function(){
+
+      window.open(
+        getListenerShareURL(),
+        "_blank"
+      );
+    }
+  );
+
+
+  document.getElementById(
+    "listenerRoom"
+  )?.addEventListener(
+    "input",
+    refreshListenerShare
+  );
+
+
+  document.getElementById(
+    "joinRoomButton"
+  )?.addEventListener(
+    "click",
+    function(){
+
+      setTimeout(
+        refreshListenerShare,
+        50
+      );
+    }
+  );
+
+
+  refreshListenerShare();
+
+
+</script>
+        <script>
+(function(){
+
+  const languages = [
+    {code:"en",flag:"🇬🇧",native:"Click here to listen in English",english:"English"},
+    {code:"fr",flag:"🇫🇷",native:"Cliquez ici pour écouter en français",english:"French"},
+    {code:"es",flag:"🇪🇸",native:"Haz clic aquí para escuchar en español",english:"Spanish"},
+    {code:"de",flag:"🇩🇪",native:"Hier klicken, um auf Deutsch zuzuhören",english:"German"},
+    {code:"pt",flag:"🇵🇹",native:"Clique aqui para ouvir em português",english:"Portuguese"},
+    {code:"it",flag:"🇮🇹",native:"Clicca qui per ascoltare in italiano",english:"Italian"},
+    {code:"pl",flag:"🇵🇱",native:"Kliknij tutaj, aby słuchać po polsku",english:"Polish"},
+    {code:"ru",flag:"🇷🇺",native:"Нажмите здесь, чтобы слушать на русском",english:"Russian"},
+    {code:"uk",flag:"🇺🇦",native:"Натисніть тут, щоб слухати українською",english:"Ukrainian"},
+    {code:"nl",flag:"🇳🇱",native:"Klik hier om in het Nederlands te luisteren",english:"Dutch"},
+    {code:"cs",flag:"🇨🇿",native:"Klikněte zde a poslouchejte česky",english:"Czech"},
+    {code:"fil",flag:"🇵🇭",native:"Pindutin dito para makinig sa Filipino",english:"Filipino"},
+    {code:"he",flag:"🇮🇱",native:"לחצו כאן כדי להאזין בעברית",english:"Hebrew"},
+    {code:"yo",flag:"🇳🇬",native:"Tẹ ibi láti tẹ́tí sí ní Yorùbá",english:"Yoruba"},
+    {code:"ig",flag:"🇳🇬",native:"Pịa ebe a ka ị gee ntị n'Igbo",english:"Igbo"},
+    {code:"ha",flag:"🇳🇬",native:"Danna nan don sauraro da Hausa",english:"Hausa"},
+    {code:"zh",flag:"🇨🇳",native:"点击这里收听普通话",english:"Mandarin Chinese"},
+    {code:"yue",flag:"🇭🇰",native:"撳呢度用廣東話收聽",english:"Cantonese"}
+  ];
+
+  function params(){
+    return new URLSearchParams(window.location.search);
+  }
+
+  function applyLanguageFromURL(){
+    const requested =
+      String(params().get("lang") || "")
+        .trim()
+        .toLowerCase();
+
+    if(!requested){
+      return false;
+    }
+
+    const select =
+      document.getElementById("listenerLanguage");
+
+    if(select){
+      const option =
+        Array.from(select.options).find(item =>
+          String(item.value)
+            .split("|")[0]
+            .toLowerCase() === requested
+        );
+
+      if(option){
+        select.value = option.value;
+        select.dispatchEvent(
+          new Event("change",{bubbles:true})
+        );
+      }
+    }
+
+    return true;
+  }
+
+  function chooseLanguage(code){
+    const p = params();
+    p.set("lang",code);
+
+    window.location.href =
+      window.location.pathname +
+      "?" +
+      p.toString();
+  }
+
+  function renderGate(){
+    const gate =
+      document.getElementById("lbLanguageGate");
+
+    const page =
+      document.querySelector(".lb-live-page");
+
+    const grid =
+      document.getElementById("lbLanguageGrid");
+
+    if(!gate || !page || !grid){
+      return;
+    }
+
+    const p = params();
+    const hasLanguage =
+      String(p.get("lang") || "").trim() !== "";
+
+    if(hasLanguage){
+      gate.classList.remove("show");
+      page.style.display = "";
+      applyLanguageFromURL();
+      return;
+    }
+
+    page.style.display = "none";
+    gate.classList.add("show");
+
+    const room =
+      String(p.get("room") || "")
+        .trim()
+        .toUpperCase();
+
+    const roomBadge =
+      document.getElementById("lbLanguageGateRoom");
+
+    if(roomBadge){
+      roomBadge.textContent =
+        room
+          ? "Live room: " + room
+          : "Choose a language to continue";
+    }
+
+    grid.innerHTML =
+      languages.map(item => `
+        <button
+          type="button"
+          class="lb-language-choice"
+          data-lang="${item.code}"
+        >
+          <span class="lb-language-flag">${item.flag}</span>
+          <span>
+            <span class="lb-language-native">${item.native}</span>
+            <span class="lb-language-english">${item.english}</span>
+          </span>
+        </button>
+      `).join("");
+
+    grid.querySelectorAll("[data-lang]").forEach(button => {
+      button.addEventListener("click",function(){
+        chooseLanguage(this.dataset.lang);
+      });
+    });
+  }
+
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded",renderGate);
+  }else{
+    renderGate();
+  }
+
+})();
+</script>
+        <script>
+(function(){
+  const UI={
+    en:{back:"← Back to LiveBridge",subtitle:"Join a room. Choose your language. Understand live.",room:"Room Name",roomPh:"Enter room name",language:"Listening Language",join:"Join Live Room",noticeTitle:"Live Translation Notice:",notice:"This event may be transcribed and processed using automated translation and text-to-speech technology. Automated results may contain errors.",privacy:"Privacy Policy",voice:"Translated Voice",male:"👨 Male Voice",female:"👩 Female Voice",notConnected:"Not Connected",waiting:"Connected — Waiting for Live Feed",live:"Live Feed Connected",noLive:"No Live Feed",audioOn:"🔊 Audio On",audioMuted:"🔇 Audio Muted",roomPrefix:"Room",languagePrefix:"Language",viewers:"Viewers",output:"Join a room to begin receiving the live message.",email:"✉ Email Transcript & AI Notes",textSize:"Text Size",audioCaption:"🎧 Translated Audio   •   💬 Live Captions",shareTitle:"Share This Room",shareCopy:"Send this listener link to someone else so they can join the same LiveBridge room.",copy:"Copy Link",share:"Send / Share",open:"Open",scan:"Scan to join this room",engine:"Voice engine"},
+    fr:{back:"← Retour à LiveBridge",subtitle:"Rejoignez une salle. Choisissez votre langue. Comprenez en direct.",room:"Nom de la salle",roomPh:"Entrez le nom de la salle",language:"Langue d’écoute",join:"Rejoindre la salle en direct",noticeTitle:"Avis de traduction en direct :",notice:"Cet événement peut être transcrit et traité à l’aide de technologies de traduction automatisée et de synthèse vocale. Les résultats automatisés peuvent contenir des erreurs.",privacy:"Politique de confidentialité",voice:"Voix traduite",male:"👨 Voix masculine",female:"👩 Voix féminine",notConnected:"Non connecté",waiting:"Connecté — En attente du direct",live:"Flux en direct connecté",noLive:"Aucun flux en direct",audioOn:"🔊 Audio activé",audioMuted:"🔇 Audio coupé",roomPrefix:"Salle",languagePrefix:"Langue",viewers:"auditeurs",output:"Rejoignez une salle pour commencer à recevoir le message en direct.",email:"✉ Envoyer la transcription et les notes IA",textSize:"Taille du texte",audioCaption:"🎧 Audio traduit   •   💬 Sous-titres en direct",shareTitle:"Partager cette salle",shareCopy:"Envoyez ce lien à une autre personne pour qu’elle puisse rejoindre la même salle LiveBridge.",copy:"Copier le lien",share:"Envoyer / Partager",open:"Ouvrir",scan:"Scannez pour rejoindre cette salle",engine:"Moteur vocal"},
+    es:{back:"← Volver a LiveBridge",subtitle:"Únete a una sala. Elige tu idioma. Comprende en directo.",room:"Nombre de la sala",roomPh:"Introduce el nombre de la sala",language:"Idioma de escucha",join:"Entrar a la sala en vivo",noticeTitle:"Aviso de traducción en vivo:",notice:"Este evento puede ser transcrito y procesado mediante traducción automatizada y tecnología de texto a voz. Los resultados automáticos pueden contener errores.",privacy:"Política de privacidad",voice:"Voz traducida",male:"👨 Voz masculina",female:"👩 Voz femenina",notConnected:"No conectado",waiting:"Conectado — Esperando la transmisión",live:"Transmisión en vivo conectada",noLive:"Sin transmisión en vivo",audioOn:"🔊 Audio activado",audioMuted:"🔇 Audio silenciado",roomPrefix:"Sala",languagePrefix:"Idioma",viewers:"oyentes",output:"Únete a una sala para comenzar a recibir el mensaje en vivo.",email:"✉ Enviar transcripción y notas de IA",textSize:"Tamaño del texto",audioCaption:"🎧 Audio traducido   •   💬 Subtítulos en vivo",shareTitle:"Compartir esta sala",shareCopy:"Envía este enlace a otra persona para que pueda unirse a la misma sala de LiveBridge.",copy:"Copiar enlace",share:"Enviar / Compartir",open:"Abrir",scan:"Escanea para unirte a esta sala",engine:"Motor de voz"},
+    de:{back:"← Zurück zu LiveBridge",subtitle:"Raum beitreten. Sprache wählen. Live verstehen.",room:"Raumname",roomPh:"Raumname eingeben",language:"Hörsprache",join:"Live-Raum beitreten",noticeTitle:"Hinweis zur Live-Übersetzung:",notice:"Diese Veranstaltung kann mit automatischer Übersetzung und Text-zu-Sprache-Technologie transkribiert und verarbeitet werden. Automatische Ergebnisse können Fehler enthalten.",privacy:"Datenschutzrichtlinie",voice:"Übersetzte Stimme",male:"👨 Männliche Stimme",female:"👩 Weibliche Stimme",notConnected:"Nicht verbunden",waiting:"Verbunden — Warte auf Live-Feed",live:"Live-Feed verbunden",noLive:"Kein Live-Feed",audioOn:"🔊 Audio an",audioMuted:"🔇 Audio stumm",roomPrefix:"Raum",languagePrefix:"Sprache",viewers:"Zuhörer",output:"Treten Sie einem Raum bei, um die Live-Nachricht zu empfangen.",email:"✉ Transkript & KI-Notizen senden",textSize:"Textgröße",audioCaption:"🎧 Übersetztes Audio   •   💬 Live-Untertitel",shareTitle:"Diesen Raum teilen",shareCopy:"Senden Sie diesen Link an andere, damit sie demselben LiveBridge-Raum beitreten können.",copy:"Link kopieren",share:"Senden / Teilen",open:"Öffnen",scan:"Scannen, um diesem Raum beizutreten",engine:"Sprachmodul"},
+    pt:{back:"← Voltar ao LiveBridge",subtitle:"Entre em uma sala. Escolha seu idioma. Entenda ao vivo.",room:"Nome da sala",roomPh:"Digite o nome da sala",language:"Idioma de escuta",join:"Entrar na sala ao vivo",noticeTitle:"Aviso de tradução ao vivo:",notice:"Este evento pode ser transcrito e processado usando tradução automatizada e tecnologia de texto para fala. Os resultados automáticos podem conter erros.",privacy:"Política de privacidade",voice:"Voz traduzida",male:"👨 Voz masculina",female:"👩 Voz feminina",notConnected:"Não conectado",waiting:"Conectado — Aguardando transmissão",live:"Transmissão ao vivo conectada",noLive:"Sem transmissão ao vivo",audioOn:"🔊 Áudio ligado",audioMuted:"🔇 Áudio silenciado",roomPrefix:"Sala",languagePrefix:"Idioma",viewers:"ouvintes",output:"Entre em uma sala para começar a receber a mensagem ao vivo.",email:"✉ Enviar transcrição e notas de IA",textSize:"Tamanho do texto",audioCaption:"🎧 Áudio traduzido   •   💬 Legendas ao vivo",shareTitle:"Compartilhar esta sala",shareCopy:"Envie este link para outra pessoa entrar na mesma sala LiveBridge.",copy:"Copiar link",share:"Enviar / Compartilhar",open:"Abrir",scan:"Escaneie para entrar nesta sala",engine:"Mecanismo de voz"},
+    it:{back:"← Torna a LiveBridge",subtitle:"Entra in una stanza. Scegli la lingua. Comprendi dal vivo.",room:"Nome stanza",roomPh:"Inserisci il nome della stanza",language:"Lingua di ascolto",join:"Entra nella stanza live",noticeTitle:"Avviso traduzione live:",notice:"Questo evento può essere trascritto ed elaborato tramite traduzione automatica e sintesi vocale. I risultati automatici possono contenere errori.",privacy:"Informativa sulla privacy",voice:"Voce tradotta",male:"👨 Voce maschile",female:"👩 Voce femminile",notConnected:"Non connesso",waiting:"Connesso — In attesa del live",live:"Live connesso",noLive:"Nessun live",audioOn:"🔊 Audio attivo",audioMuted:"🔇 Audio disattivato",roomPrefix:"Stanza",languagePrefix:"Lingua",viewers:"ascoltatori",output:"Entra in una stanza per iniziare a ricevere il messaggio live.",email:"✉ Invia trascrizione e note IA",textSize:"Dimensione testo",audioCaption:"🎧 Audio tradotto   •   💬 Sottotitoli live",shareTitle:"Condividi questa stanza",shareCopy:"Invia questo link a un’altra persona per farla entrare nella stessa stanza LiveBridge.",copy:"Copia link",share:"Invia / Condividi",open:"Apri",scan:"Scansiona per entrare in questa stanza",engine:"Motore vocale"},
+    pl:{back:"← Wróć do LiveBridge",subtitle:"Dołącz do pokoju. Wybierz język. Rozumiej na żywo.",room:"Nazwa pokoju",roomPh:"Wpisz nazwę pokoju",language:"Język odsłuchu",join:"Dołącz do pokoju na żywo",noticeTitle:"Informacja o tłumaczeniu na żywo:",notice:"To wydarzenie może być transkrybowane i przetwarzane przy użyciu automatycznego tłumaczenia i syntezy mowy. Wyniki automatyczne mogą zawierać błędy.",privacy:"Polityka prywatności",voice:"Przetłumaczony głos",male:"👨 Głos męski",female:"👩 Głos żeński",notConnected:"Nie połączono",waiting:"Połączono — Oczekiwanie na transmisję",live:"Transmisja na żywo połączona",noLive:"Brak transmisji",audioOn:"🔊 Dźwięk włączony",audioMuted:"🔇 Dźwięk wyciszony",roomPrefix:"Pokój",languagePrefix:"Język",viewers:"słuchaczy",output:"Dołącz do pokoju, aby zacząć odbierać wiadomość na żywo.",email:"✉ Wyślij transkrypcję i notatki AI",textSize:"Rozmiar tekstu",audioCaption:"🎧 Tłumaczony dźwięk   •   💬 Napisy na żywo",shareTitle:"Udostępnij ten pokój",shareCopy:"Wyślij ten link innej osobie, aby mogła dołączyć do tego samego pokoju LiveBridge.",copy:"Kopiuj link",share:"Wyślij / Udostępnij",open:"Otwórz",scan:"Zeskanuj, aby dołączyć do pokoju",engine:"Silnik głosowy"},
+    ru:{back:"← Назад в LiveBridge",subtitle:"Войдите в комнату. Выберите язык. Понимайте вживую.",room:"Название комнаты",roomPh:"Введите название комнаты",language:"Язык прослушивания",join:"Войти в прямую трансляцию",noticeTitle:"Уведомление о переводе:",notice:"Это событие может расшифровываться и обрабатываться с помощью автоматического перевода и синтеза речи. Автоматические результаты могут содержать ошибки.",privacy:"Политика конфиденциальности",voice:"Переведённый голос",male:"👨 Мужской голос",female:"👩 Женский голос",notConnected:"Не подключено",waiting:"Подключено — Ожидание трансляции",live:"Прямая трансляция подключена",noLive:"Нет прямой трансляции",audioOn:"🔊 Звук включён",audioMuted:"🔇 Звук выключен",roomPrefix:"Комната",languagePrefix:"Язык",viewers:"слушателей",output:"Войдите в комнату, чтобы начать получать сообщение вживую.",email:"✉ Отправить расшифровку и заметки ИИ",textSize:"Размер текста",audioCaption:"🎧 Переведённый звук   •   💬 Живые субтитры",shareTitle:"Поделиться комнатой",shareCopy:"Отправьте эту ссылку другому человеку, чтобы он мог войти в ту же комнату LiveBridge.",copy:"Копировать ссылку",share:"Отправить / Поделиться",open:"Открыть",scan:"Сканируйте, чтобы войти в комнату",engine:"Голосовой движок"},
+    uk:{back:"← Назад до LiveBridge",subtitle:"Приєднайтеся до кімнати. Оберіть мову. Розумійте наживо.",room:"Назва кімнати",roomPh:"Введіть назву кімнати",language:"Мова прослуховування",join:"Приєднатися до прямої трансляції",noticeTitle:"Повідомлення про живий переклад:",notice:"Ця подія може транскрибуватися та оброблятися за допомогою автоматичного перекладу і синтезу мовлення. Автоматичні результати можуть містити помилки.",privacy:"Політика конфіденційності",voice:"Перекладений голос",male:"👨 Чоловічий голос",female:"👩 Жіночий голос",notConnected:"Не підключено",waiting:"Підключено — Очікування трансляції",live:"Пряму трансляцію підключено",noLive:"Немає прямої трансляції",audioOn:"🔊 Аудіо увімкнено",audioMuted:"🔇 Аудіо вимкнено",roomPrefix:"Кімната",languagePrefix:"Мова",viewers:"слухачів",output:"Приєднайтеся до кімнати, щоб почати отримувати повідомлення наживо.",email:"✉ Надіслати транскрипт і нотатки ШІ",textSize:"Розмір тексту",audioCaption:"🎧 Перекладене аудіо   •   💬 Живі субтитри",shareTitle:"Поділитися кімнатою",shareCopy:"Надішліть це посилання іншій людині, щоб вона могла приєднатися до тієї ж кімнати LiveBridge.",copy:"Копіювати",share:"Надіслати / Поділитися",open:"Відкрити",scan:"Скануйте, щоб приєднатися",engine:"Голосовий рушій"},
+    nl:{back:"← Terug naar LiveBridge",subtitle:"Ga een ruimte binnen. Kies je taal. Begrijp live.",room:"Ruimtenaam",roomPh:"Voer de ruimtenaam in",language:"Luistertaal",join:"Live-ruimte binnengaan",noticeTitle:"Melding livevertaling:",notice:"Dit evenement kan worden getranscribeerd en verwerkt met automatische vertaling en tekst-naar-spraak. Automatische resultaten kunnen fouten bevatten.",privacy:"Privacybeleid",voice:"Vertaalde stem",male:"👨 Mannelijke stem",female:"👩 Vrouwelijke stem",notConnected:"Niet verbonden",waiting:"Verbonden — Wachten op livefeed",live:"Livefeed verbonden",noLive:"Geen livefeed",audioOn:"🔊 Audio aan",audioMuted:"🔇 Audio gedempt",roomPrefix:"Ruimte",languagePrefix:"Taal",viewers:"luisteraars",output:"Ga een ruimte binnen om het livebericht te ontvangen.",email:"✉ Transcript en AI-notities e-mailen",textSize:"Tekstgrootte",audioCaption:"🎧 Vertaald audio   •   💬 Live ondertiteling",shareTitle:"Deze ruimte delen",shareCopy:"Stuur deze link naar iemand anders zodat die dezelfde LiveBridge-ruimte kan binnengaan.",copy:"Link kopiëren",share:"Verzenden / Delen",open:"Openen",scan:"Scan om deze ruimte binnen te gaan",engine:"Stemengine"},
+    cs:{back:"← Zpět na LiveBridge",subtitle:"Připojte se k místnosti. Vyberte jazyk. Rozumějte živě.",room:"Název místnosti",roomPh:"Zadejte název místnosti",language:"Jazyk poslechu",join:"Připojit se k živé místnosti",noticeTitle:"Upozornění na živý překlad:",notice:"Tato událost může být přepisována a zpracovávána pomocí automatického překladu a převodu textu na řeč. Automatické výsledky mohou obsahovat chyby.",privacy:"Zásady ochrany osobních údajů",voice:"Přeložený hlas",male:"👨 Mužský hlas",female:"👩 Ženský hlas",notConnected:"Nepřipojeno",waiting:"Připojeno — Čekání na živý přenos",live:"Živý přenos připojen",noLive:"Žádný živý přenos",audioOn:"🔊 Zvuk zapnut",audioMuted:"🔇 Zvuk vypnut",roomPrefix:"Místnost",languagePrefix:"Jazyk",viewers:"posluchačů",output:"Připojte se k místnosti a začněte přijímat živou zprávu.",email:"✉ Odeslat přepis a poznámky AI",textSize:"Velikost textu",audioCaption:"🎧 Přeložený zvuk   •   💬 Živé titulky",shareTitle:"Sdílet tuto místnost",shareCopy:"Pošlete tento odkaz další osobě, aby se mohla připojit ke stejné místnosti LiveBridge.",copy:"Kopírovat odkaz",share:"Odeslat / Sdílet",open:"Otevřít",scan:"Naskenujte pro připojení",engine:"Hlasový modul"},
+    fil:{back:"← Bumalik sa LiveBridge",subtitle:"Sumali sa room. Piliin ang wika. Umintindi nang live.",room:"Pangalan ng Room",roomPh:"Ilagay ang pangalan ng room",language:"Wikang Pakikinggan",join:"Sumali sa Live Room",noticeTitle:"Paunawa sa Live Translation:",notice:"Maaaring i-transcribe at iproseso ang event na ito gamit ang automated translation at text-to-speech. Maaaring may pagkakamali ang automated na resulta.",privacy:"Patakaran sa Privacy",voice:"Isinaling Boses",male:"👨 Boses ng Lalaki",female:"👩 Boses ng Babae",notConnected:"Hindi nakakonekta",waiting:"Nakakonekta — Naghihintay ng Live Feed",live:"Nakakonekta ang Live Feed",noLive:"Walang Live Feed",audioOn:"🔊 Naka-on ang Audio",audioMuted:"🔇 Naka-mute ang Audio",roomPrefix:"Room",languagePrefix:"Wika",viewers:"tagapakinig",output:"Sumali sa room para simulang matanggap ang live na mensahe.",email:"✉ I-email ang Transcript at AI Notes",textSize:"Laki ng Teksto",audioCaption:"🎧 Isinaling Audio   •   💬 Live Captions",shareTitle:"Ibahagi ang Room na Ito",shareCopy:"Ipadala ang link na ito sa iba para makasali sila sa parehong LiveBridge room.",copy:"Kopyahin ang Link",share:"Ipadala / Ibahagi",open:"Buksan",scan:"I-scan para sumali sa room",engine:"Voice engine"},
+    he:{back:"← חזרה ל-LiveBridge",subtitle:"הצטרפו לחדר. בחרו שפה. הבינו בשידור חי.",room:"שם החדר",roomPh:"הזינו שם חדר",language:"שפת האזנה",join:"הצטרפות לחדר החי",noticeTitle:"הודעת תרגום חי:",notice:"ייתכן שאירוע זה יתומלל ויעובד באמצעות תרגום אוטומטי וטכנולוגיית טקסט לדיבור. תוצאות אוטומטיות עלולות להכיל שגיאות.",privacy:"מדיניות פרטיות",voice:"קול מתורגם",male:"👨 קול גברי",female:"👩 קול נשי",notConnected:"לא מחובר",waiting:"מחובר — ממתין לשידור",live:"השידור החי מחובר",noLive:"אין שידור חי",audioOn:"🔊 שמע פעיל",audioMuted:"🔇 שמע מושתק",roomPrefix:"חדר",languagePrefix:"שפה",viewers:"מאזינים",output:"הצטרפו לחדר כדי להתחיל לקבל את המסר החי.",email:"✉ שליחת תמלול והערות AI",textSize:"גודל טקסט",audioCaption:"🎧 שמע מתורגם   •   💬 כתוביות חיות",shareTitle:"שיתוף החדר",shareCopy:"שלחו את הקישור לאדם נוסף כדי שיוכל להצטרף לאותו חדר LiveBridge.",copy:"העתקת קישור",share:"שליחה / שיתוף",open:"פתיחה",scan:"סרקו כדי להצטרף לחדר",engine:"מנוע קול"},
+    yo:{back:"← Padà sí LiveBridge",subtitle:"Darapọ mọ yara. Yan èdè rẹ. Loye ní ààyè.",room:"Orúkọ Yara",roomPh:"Tẹ orúkọ yara sii",language:"Èdè Títẹ́tí",join:"Darapọ mọ Yara Live",noticeTitle:"Àkíyèsí Ìtumọ̀ Live:",notice:"A lè kọ ohun tí a sọ sínú ọrọ̀ kí a sì ṣe e pẹ̀lú ìtumọ̀ aládàáṣiṣẹ́ àti imọ̀ text-to-speech. Àbájáde le ní àṣìṣe.",privacy:"Ilana Asiri",voice:"Ohùn Ìtumọ̀",male:"👨 Ohùn Ọkùnrin",female:"👩 Ohùn Obìnrin",notConnected:"Kò sopọ̀",waiting:"Ti sopọ̀ — N dúró de Live Feed",live:"Live Feed ti sopọ̀",noLive:"Ko si Live Feed",audioOn:"🔊 Audio wa ni titan",audioMuted:"🔇 Audio dakẹ",roomPrefix:"Yara",languagePrefix:"Èdè",viewers:"olugbọ",output:"Darapọ mọ yara lati bẹrẹ gbigba ifiranṣẹ laaye.",email:"✉ Fi Transcript ati AI Notes ranṣẹ",textSize:"Iwọn Ọrọ",audioCaption:"🎧 Audio Ìtumọ̀   •   💬 Live Captions",shareTitle:"Pin Yara Yi",shareCopy:"Fi ọna asopọ yii ranṣẹ si ẹlomiiran ki wọn le darapọ mọ yara LiveBridge kanna.",copy:"Da ọna asopọ",share:"Firanṣẹ / Pin",open:"Ṣii",scan:"Ṣayẹwo lati darapọ mọ yara",engine:"Ẹrọ ohun"},
+    ig:{back:"← Laghachi na LiveBridge",subtitle:"Banye n'ime ụlọ. Họrọ asụsụ gị. Ghọta ozugbo.",room:"Aha Ụlọ",roomPh:"Tinye aha ụlọ",language:"Asụsụ Ntị",join:"Banye na Live Room",noticeTitle:"Ọkwa Nsụgharị Live:",notice:"Enwere ike idegharị ihe omume a ma hazie ya site na nsụgharị akpaghị aka na teknụzụ text-to-speech. Nsonaazụ akpaghị aka nwere ike inwe njehie.",privacy:"Iwu Nzuzo",voice:"Olu A Sụgharịrị",male:"👨 Olu Nwoke",female:"👩 Olu Nwanyị",notConnected:"Ejikọghị",waiting:"Ejikọtara — Na-echere Live Feed",live:"Live Feed ejikọrọ",noLive:"Enweghị Live Feed",audioOn:"🔊 Audio dị",audioMuted:"🔇 Audio gbachiri",roomPrefix:"Ụlọ",languagePrefix:"Asụsụ",viewers:"ndị na-ege ntị",output:"Banye n'ime ụlọ ka ịmalite ịnata ozi live.",email:"✉ Zipu Transcript & AI Notes",textSize:"Nha Ederede",audioCaption:"🎧 Audio A Sụgharịrị   •   💬 Live Captions",shareTitle:"Kekọrịta Ụlọ A",shareCopy:"Ziga njikọ a onye ọzọ ka o nwee ike ịbanye n'otu LiveBridge room.",copy:"Detuo njikọ",share:"Zipu / Kekọrịta",open:"Mepee",scan:"Nyochaa ka ịbanye",engine:"Igwe olu"},
+    ha:{back:"← Koma LiveBridge",subtitle:"Shiga daki. Zaɓi harshenka. Fahimta kai tsaye.",room:"Sunan Daki",roomPh:"Shigar da sunan daki",language:"Harshen Sauraro",join:"Shiga Dakin Kai Tsaye",noticeTitle:"Sanarwar Fassarar Kai Tsaye:",notice:"Ana iya rubuta wannan taron da sarrafa shi ta amfani da fassarar atomatik da fasahar text-to-speech. Sakamakon atomatik na iya ƙunsar kuskure.",privacy:"Manufar Sirri",voice:"Muryar Fassara",male:"👨 Muryar Namiji",female:"👩 Muryar Mace",notConnected:"Ba a haɗa ba",waiting:"An haɗa — Ana jiran Live Feed",live:"Live Feed ya haɗu",noLive:"Babu Live Feed",audioOn:"🔊 Sauti yana kunne",audioMuted:"🔇 Sauti a kashe",roomPrefix:"Daki",languagePrefix:"Harshe",viewers:"masu sauraro",output:"Shiga daki don fara karɓar saƙon kai tsaye.",email:"✉ Aika Transcript & AI Notes",textSize:"Girman Rubutu",audioCaption:"🎧 Sauti Mai Fassara   •   💬 Live Captions",shareTitle:"Raba Wannan Daki",shareCopy:"Aika wannan hanyar haɗin ga wani domin ya shiga dakin LiveBridge ɗaya.",copy:"Kwafi Link",share:"Aika / Raba",open:"Buɗe",scan:"Duba don shiga daki",engine:"Injin murya"},
+    zh:{back:"← 返回 LiveBridge",subtitle:"加入房间。选择语言。实时理解。",room:"房间名称",roomPh:"输入房间名称",language:"收听语言",join:"加入直播房间",noticeTitle:"实时翻译提示：",notice:"本活动可能使用自动翻译和文字转语音技术进行转录和处理。自动生成的结果可能包含错误。",privacy:"隐私政策",voice:"翻译语音",male:"👨 男声",female:"👩 女声",notConnected:"未连接",waiting:"已连接 — 等待直播",live:"直播已连接",noLive:"暂无直播",audioOn:"🔊 音频开启",audioMuted:"🔇 音频静音",roomPrefix:"房间",languagePrefix:"语言",viewers:"听众",output:"加入房间后即可开始接收实时信息。",email:"✉ 发送转录和 AI 笔记",textSize:"文字大小",audioCaption:"🎧 翻译音频   •   💬 实时字幕",shareTitle:"分享此房间",shareCopy:"将此链接发送给其他人，他们即可加入同一个 LiveBridge 房间。",copy:"复制链接",share:"发送 / 分享",open:"打开",scan:"扫描加入此房间",engine:"语音引擎"},
+    yue:{back:"← 返回 LiveBridge",subtitle:"加入房間。揀你嘅語言。即時聽明。",room:"房間名稱",roomPh:"輸入房間名稱",language:"收聽語言",join:"加入直播房間",noticeTitle:"即時翻譯提示：",notice:"本活動可能會使用自動翻譯同文字轉語音技術進行轉錄同處理。自動結果可能會有錯誤。",privacy:"私隱政策",voice:"翻譯語音",male:"👨 男聲",female:"👩 女聲",notConnected:"未連線",waiting:"已連線 — 等候直播",live:"直播已連線",noLive:"暫無直播",audioOn:"🔊 音訊開啟",audioMuted:"🔇 音訊靜音",roomPrefix:"房間",languagePrefix:"語言",viewers:"聽眾",output:"加入房間後即可開始接收即時訊息。",email:"✉ 傳送逐字稿同 AI 筆記",textSize:"文字大小",audioCaption:"🎧 翻譯音訊   •   💬 即時字幕",shareTitle:"分享呢個房間",shareCopy:"將呢條連結傳畀其他人，佢哋就可以加入同一個 LiveBridge 房間。",copy:"複製連結",share:"傳送 / 分享",open:"開啟",scan:"掃描加入房間",engine:"語音引擎"}
+  };
+
+  function langCode(){
+    return String(new URLSearchParams(location.search).get("lang")||"en").toLowerCase();
+  }
+
+  function t(){ return UI[langCode()] || UI.en; }
+
+  function setText(selector,value){
+    const el=document.querySelector(selector);
+    if(el && value) el.textContent=value;
+  }
+
+  function applyStatic(){
+    const x=t();
+    document.documentElement.lang=langCode();
+    if(langCode()==="he") document.documentElement.dir="rtl"; else document.documentElement.dir="ltr";
+    setText(".lb-listener-home",x.back);
+    setText(".lb-live-subtitle",x.subtitle);
+    const labels=document.querySelectorAll(".lb-live-controls > .lb-live-label");
+    if(labels[0]) labels[0].textContent=x.room;
+    if(labels[1]) labels[1].textContent=x.language;
+    const room=document.getElementById("listenerRoom");
+    if(room) room.placeholder=x.roomPh;
+    setText("#joinRoomButton",x.join);
+    const noticeTitle=document.getElementById("lbNoticeTitle");
+    if(noticeTitle && noticeTitle.parentElement){
+      noticeTitle.parentElement.innerHTML='<strong id="lbNoticeTitle" style="color:#dce9f5;">'+x.noticeTitle+'</strong> '+x.notice+' <a href="/privacy/" target="_blank" style="color:#78b7ff;font-weight:800;">'+x.privacy+'</a>';
+    }
+    setText(".lb-voice-label",x.voice);
+    setText("#maleVoiceButton",x.male);
+    setText("#femaleVoiceButton",x.female);
+    setText("#emailTranscriptButton",x.email);
+    const size=document.querySelector(".lb-live-size span"); if(size) size.textContent=x.textSize;
+    const footer=document.querySelector(".lb-live-footer > div:last-child"); if(footer) footer.textContent=x.audioCaption;
+    setText(".lb-listener-share-title",x.shareTitle);
+    setText(".lb-listener-share-copy",x.shareCopy);
+    setText("#lbListenerCopy",x.copy);
+    setText("#lbListenerShare",x.share);
+    setText("#lbListenerOpen",x.open);
+    setText(".lb-listener-qr-caption",x.scan);
+  }
+
+  function applyDynamic(){
+    const x=t();
+    const status=document.getElementById("listenerStatus");
+    if(status){
+      const s=status.textContent.trim();
+      if(["Not Connected",UI.en.notConnected].includes(s)) status.textContent=x.notConnected;
+      else if(s.includes("Connected — Waiting for Live Feed") || s===UI.en.waiting) status.textContent=x.waiting;
+      else if(s.includes("Live Feed Connected") || s===UI.en.live) status.textContent=x.live;
+      else if(s.includes("No Live Feed") || s===UI.en.noLive) status.textContent=x.noLive;
+    }
+    const audio=document.getElementById("listenerAudioButton");
+    if(audio){
+      const s=audio.textContent.trim();
+      if(s.includes("Audio Muted") || s===UI.en.audioMuted) audio.textContent=x.audioMuted;
+      else if(s.includes("Audio On") || s===UI.en.audioOn) audio.textContent=x.audioOn;
+    }
+    const rl=document.getElementById("listenerRoomLabel");
+    if(rl){ const val=rl.textContent.split(":").slice(1).join(":").trim()||"—"; rl.textContent=x.roomPrefix+": "+val; }
+    const ll=document.getElementById("listenerLangLabel");
+    if(ll){ const val=ll.textContent.split(":").slice(1).join(":").trim()||"—"; ll.textContent=x.languagePrefix+": "+val; }
+    const vl=document.getElementById("listenerCountLabel");
+    if(vl){ const n=(vl.textContent.match(/\d+/)||["0"])[0]; vl.textContent="👥 "+n+" "+x.viewers; }
+    const output=document.getElementById("listenerOutput");
+    if(output && (output.textContent.trim()===UI.en.output || output.textContent.trim()==="Join a room to begin receiving the live message.")) output.textContent=x.output;
+    document.querySelectorAll(".lb-live-controls div,.lb-live-controls span").forEach(el=>{
+      if(el.children.length) return;
+      const s=el.textContent.trim();
+      if(s.startsWith("Voice engine:")) el.textContent=s.replace(/^Voice engine:/,x.engine+":");
+    });
+  }
+
+  let scheduled=false;
+  function schedule(){
+    if(scheduled) return;
+    scheduled=true;
+    requestAnimationFrame(()=>{ scheduled=false; applyStatic(); applyDynamic(); });
+  }
+
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",schedule); else schedule();
+  new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});
+})();
+</script>
+      </body>
+    </html>

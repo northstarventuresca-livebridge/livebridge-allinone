@@ -1,0 +1,5620 @@
+<!doctype html>
+<!-- LiveBridge v1.0.18 account unified localized share graphic -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+<style>
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:#07111f;
+  color:white;
+  font-family:Arial,Helvetica,sans-serif;
+}
+
+#lb-account-page{
+  min-height:100vh;
+  background:
+    radial-gradient(circle at top left,#163d70 0%,transparent 31%),
+    radial-gradient(circle at top right,#35145c 0%,transparent 27%),
+    #07111f;
+}
+
+.lb-account-shell{
+  min-height:100vh;
+  display:grid;
+  grid-template-columns:270px 1fr;
+}
+
+.lb-account-sidebar{
+  background:rgba(0,0,0,.22);
+  border-right:1px solid rgba(255,255,255,.09);
+  padding:24px 18px;
+}
+
+.lb-account-brand{
+  font-size:28px;
+  font-weight:900;
+  margin-bottom:4px;
+  padding:0 10px;
+}
+
+.lb-account-brand span{
+  background:linear-gradient(90deg,#34d4bd,#2897ff,#a14cff);
+  -webkit-background-clip:text;
+  color:transparent;
+}
+
+.lb-account-subbrand{
+  color:#899eb6;
+  font-size:13px;
+  padding:0 10px;
+  margin-bottom:28px;
+}
+
+.lb-org-mini{
+  margin-bottom:22px;
+  padding:14px;
+  border-radius:14px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.09);
+}
+
+.lb-org-mini-label{
+  font-size:11px;
+  color:#71869f;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+  margin-bottom:5px;
+}
+
+.lb-org-mini-name{
+  font-weight:800;
+  line-height:1.35;
+}
+
+.lb-account-nav{
+  display:grid;
+  gap:6px;
+}
+
+.lb-nav-button{
+  width:100%;
+  text-align:left;
+  padding:12px 13px;
+  border:none;
+  border-radius:10px;
+  background:transparent;
+  color:#a9bbcf;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:700;
+}
+
+.lb-nav-button:hover{
+  background:rgba(255,255,255,.055);
+  color:white;
+}
+
+.lb-nav-button.active{
+  background:linear-gradient(
+    135deg,
+    rgba(37,136,255,.25),
+    rgba(111,67,223,.25)
+  );
+  border:1px solid rgba(58,156,255,.30);
+  color:white;
+}
+
+.lb-nav-divider{
+  height:1px;
+  background:rgba(255,255,255,.08);
+  margin:12px 0;
+}
+
+.lb-account-main{
+  padding:28px;
+  min-width:0;
+}
+
+.lb-account-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  margin-bottom:25px;
+}
+
+.lb-account-heading{
+  font-size:29px;
+  font-weight:900;
+}
+
+.lb-account-heading-sub{
+  color:#899eb6;
+  margin-top:4px;
+  font-size:14px;
+}
+
+.lb-panel{display:none}
+.lb-panel.active{display:block}
+
+.lb-grid-4{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:14px;
+}
+
+.lb-grid-2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+
+.lb-card{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:18px;
+  padding:20px;
+}
+
+.lb-card-title{
+  font-size:17px;
+  font-weight:900;
+  margin-bottom:12px;
+}
+
+.lb-metric-number{
+  font-size:28px;
+  font-weight:900;
+  margin-bottom:4px;
+}
+
+.lb-muted{
+  color:#8ea3ba;
+  font-size:13px;
+  line-height:1.5;
+}
+
+.lb-plan-card{
+  background:
+    linear-gradient(
+      135deg,
+      rgba(52,212,189,.09),
+      rgba(40,151,255,.07)
+    );
+  border-color:rgba(52,212,189,.22);
+}
+
+.lb-plan-badge{
+  display:inline-block;
+  font-size:11px;
+  text-transform:uppercase;
+  font-weight:900;
+  letter-spacing:.07em;
+  color:#69e4c6;
+  background:rgba(52,212,189,.10);
+  padding:6px 9px;
+  border-radius:8px;
+  margin-bottom:10px;
+}
+
+.lb-big-room{
+  font-size:24px;
+  font-weight:900;
+  margin:8px 0;
+}
+
+.lb-primary-button,
+.lb-secondary-button{
+  border:none;
+  border-radius:11px;
+  padding:14px 18px;
+  color:white;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.lb-primary-button{
+  background:linear-gradient(135deg,#2588ff,#6f43df);
+}
+
+.lb-secondary-button{
+  background:#14263b;
+  border:1px solid rgba(255,255,255,.14);
+}
+
+.lb-wide{width:100%}
+
+.lb-hero-card{
+  margin-top:17px;
+  display:grid;
+  grid-template-columns:1.25fr .75fr;
+  gap:18px;
+  align-items:center;
+}
+
+.lb-hero-title{
+  font-size:28px;
+  font-weight:900;
+  margin-bottom:9px;
+}
+
+.lb-hero-text{
+  color:#a3b5c9;
+  line-height:1.6;
+  max-width:650px;
+}
+
+.lb-room-display{
+  background:#0d1928;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:15px;
+  padding:18px;
+}
+
+.lb-room-display-label{
+  color:#71879f;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.07em;
+}
+
+.lb-detail-row{
+  display:grid;
+  grid-template-columns:180px 1fr;
+  gap:18px;
+  padding:13px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+
+.lb-detail-row:last-child{border-bottom:none}
+
+.lb-detail-label{
+  color:#8297ae;
+  font-size:13px;
+}
+
+.lb-detail-value{
+  color:#eef4fb;
+  font-weight:700;
+  word-break:break-word;
+}
+
+.lb-status-good{color:#63e7a1}
+
+.lb-share-card{
+  margin-top:16px;
+  padding:22px;
+  border-radius:18px;
+  background:rgba(15,118,80,.09);
+  border:1px solid rgba(52,211,153,.32);
+  display:grid;
+  grid-template-columns:1fr 220px;
+  gap:25px;
+  align-items:center;
+}
+
+.lb-share-title{
+  color:#48f59a;
+  font-size:24px;
+  font-weight:900;
+  margin-bottom:5px;
+}
+
+.lb-share-copy{
+  color:#c5d4e5;
+  line-height:1.5;
+  margin-bottom:15px;
+}
+
+.lb-share-link-row{
+  display:grid;
+  grid-template-columns:1fr auto auto auto;
+  gap:9px;
+}
+
+.lb-share-link{
+  background:#09241f;
+  border:1px solid rgba(52,211,153,.30);
+  color:#53f49a;
+  border-radius:10px;
+  padding:13px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:800;
+}
+
+.lb-share-small-button{
+  padding:12px 14px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.13);
+  background:#14263b;
+  color:white;
+  cursor:pointer;
+  font-weight:800;
+}
+
+.lb-share-small-button.green{
+  background:#3dde83;
+  color:#06120b;
+  border:none;
+}
+
+.lb-qr-wrap{
+  text-align:center;
+}
+
+.lb-qr-box{
+  width:190px;
+  height:190px;
+  background:white;
+  padding:8px;
+  border-radius:12px;
+  margin:auto;
+}
+
+.lb-qr-box img{
+  width:100%;
+  height:100%;
+  display:block;
+}
+
+.lb-qr-caption{
+  color:#98acc2;
+  font-size:12px;
+  margin-top:8px;
+}
+
+.lb-account-share-language-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:14px 0 12px;
+  flex-wrap:wrap;
+}
+
+.lb-account-share-language-label{
+  color:#9fb4ca;
+  font-size:12px;
+  font-weight:800;
+}
+
+.lb-account-share-language-select{
+  min-width:210px;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.12);
+  background:#102338;
+  color:#fff;
+  font-weight:800;
+}
+
+.lb-account-share-language-note{
+  color:#7890aa;
+  font-size:11px;
+}
+
+.lb-account-share-preview{
+  display:none;
+  margin-top:16px;
+  border:1px solid rgba(52,211,153,.28);
+  border-radius:14px;
+  overflow:hidden;
+  background:#061321;
+}
+
+.lb-account-share-preview.show{
+  display:block;
+}
+
+.lb-account-share-preview img{
+  width:100%;
+  display:block;
+}
+
+.lb-account-share-preview-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:10px;
+  background:#0a1928;
+}
+
+.lb-account-share-preview-actions button{
+  padding:10px 12px;
+  border-radius:9px;
+  border:1px solid rgba(255,255,255,.12);
+  background:#13263c;
+  color:white;
+  cursor:pointer;
+  font-weight:800;
+  font-size:12px;
+}
+
+.lb-history-row{
+  display:grid;
+  grid-template-columns:1.4fr .8fr .7fr .7fr .9fr 1.2fr;
+  gap:12px;
+  padding:14px 0;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  align-items:center;
+  font-size:13px;
+}
+
+.lb-history-head{
+  color:#7890aa;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  font-size:11px;
+  font-weight:800;
+}
+
+.lb-history-row:last-child{
+  border-bottom:none;
+}
+
+.lb-history-langs{
+  color:#a8bad0;
+}
+
+.lb-empty{
+  text-align:center;
+  padding:30px;
+  color:#8399b0;
+}
+
+.lb-plan-lock{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 9px;
+  border-radius:9px;
+  background:rgba(255,193,7,.08);
+  border:1px solid rgba(255,193,7,.18);
+  color:#ffd978;
+  font-size:11px;
+  font-weight:850;
+}
+
+.lb-upgrade-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:34px;
+  padding:0 10px;
+  border-radius:9px;
+  margin-top:7px;
+  background:linear-gradient(135deg,#1788ff,#2fc7ff);
+  color:#fff;
+  text-decoration:none;
+  font-size:11px;
+  font-weight:900;
+}
+
+.lb-pro-export{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:16px;
+  margin-top:16px;
+  border-radius:14px;
+  border:1px solid rgba(168,85,247,.22);
+  background:rgba(168,85,247,.055);
+}
+
+.lb-pro-export-copy{
+  color:#9fb2c6;
+  font-size:12px;
+  line-height:1.55;
+}
+
+.lb-pro-export-title{
+  color:#e6d6ff;
+  font-weight:900;
+  margin-bottom:4px;
+}
+
+.lb-pro-export-btn{
+  border:0;
+  min-height:38px;
+  padding:0 13px;
+  border-radius:10px;
+  cursor:pointer;
+  background:linear-gradient(135deg,#7c3aed,#a855f7);
+  color:#fff;
+  font-size:11px;
+  font-weight:900;
+  white-space:nowrap;
+}
+
+.lb-pro-export-btn.locked{
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.11);
+  color:#d2c6e8;
+}
+
+.lb-plan-summary{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin-top:14px;
+}
+
+.lb-plan-summary > div{
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.035);
+  border-radius:12px;
+  padding:12px;
+}
+
+.lb-plan-summary strong{
+  display:block;
+  font-size:17px;
+  margin-bottom:3px;
+}
+
+.lb-retention-banner{
+  margin:0 0 16px;
+  padding:14px 16px;
+  border-radius:13px;
+  border:1px solid rgba(52,211,153,.20);
+  background:rgba(52,211,153,.055);
+  color:#a9bdd0;
+  font-size:12px;
+  line-height:1.55;
+}
+
+.lb-retention-banner strong{
+  color:#dff9ea;
+}
+
+.lb-retention-banner.locked{
+  border-color:rgba(255,193,7,.20);
+  background:rgba(255,193,7,.055);
+}
+
+.lb-retention-banner.locked strong{
+  color:#ffd978;
+}
+
+.lb-retention-date{
+  margin-top:5px;
+  color:#8ea5bb;
+  font-size:10px;
+  line-height:1.4;
+}
+
+@media(max-width:720px){
+  .lb-plan-summary{
+    grid-template-columns:1fr;
+  }
+}
+
+#lb-loading{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+
+.lb-spinner{
+  width:46px;
+  height:46px;
+  border:4px solid rgba(255,255,255,.12);
+  border-top-color:#2897ff;
+  border-radius:50%;
+  margin:0 auto 16px;
+  animation:lbspin .8s linear infinite;
+}
+
+@keyframes lbspin{
+  to{transform:rotate(360deg)}
+}
+
+.lb-login-screen{
+  min-height:100vh;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+}
+
+.lb-login-layout{
+  width:100%;
+  max-width:1000px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:28px;
+  align-items:center;
+}
+
+.lb-login-brand{
+  font-size:48px;
+  font-weight:900;
+}
+
+.lb-login-brand span{
+  background:linear-gradient(90deg,#34d4bd,#2897ff,#a14cff);
+  -webkit-background-clip:text;
+  color:transparent;
+}
+
+.lb-login-copy{
+  color:#a6b7cb;
+  line-height:1.6;
+  margin-top:12px;
+}
+
+.lb-login-card{
+  padding:24px;
+  border-radius:22px;
+  border:1px solid rgba(255,255,255,.11);
+  background:rgba(255,255,255,.055);
+}
+
+.cl-formFieldLabel{
+  color:#111827!important;
+  font-weight:700!important;
+}
+
+.cl-rootBox,
+.cl-cardBox,
+.cl-card{
+  width:100%!important;
+  max-width:100%!important;
+}
+
+@media(max-width:1050px){
+  .lb-share-card{
+    grid-template-columns:1fr;
+  }
+
+  .lb-share-link-row{
+    grid-template-columns:1fr 1fr;
+  }
+}
+
+@media(max-width:950px){
+  .lb-account-shell{
+    grid-template-columns:1fr;
+  }
+
+  .lb-account-sidebar{
+    border-right:none;
+    border-bottom:1px solid rgba(255,255,255,.09);
+  }
+
+  .lb-account-nav{
+    grid-template-columns:repeat(4,1fr);
+  }
+
+  .lb-grid-4{
+    grid-template-columns:repeat(2,1fr);
+  }
+
+  .lb-hero-card{
+    grid-template-columns:1fr;
+  }
+
+  .lb-history-row{
+    grid-template-columns:1fr 1fr 1fr;
+  }
+
+  .lb-history-head{
+    display:none;
+  }
+}
+
+@media(max-width:650px){
+  .lb-account-main{
+    padding:17px;
+  }
+
+  .lb-account-nav{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .lb-grid-4,
+  .lb-grid-2,
+  .lb-login-layout{
+    grid-template-columns:1fr;
+  }
+
+  .lb-account-top{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .lb-detail-row{
+    grid-template-columns:1fr;
+    gap:5px;
+  }
+
+  .lb-share-link-row{
+    grid-template-columns:1fr;
+  }
+
+  .lb-history-row{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+
+<div id="lb-account-page">
+
+<div id="lb-loading">
+  <div>
+    <div class="lb-spinner"></div>
+    <div style="font-size:20px;font-weight:900;margin-bottom:5px;">
+      LiveBridge
+    </div>
+    <div class="lb-muted">Loading your account...</div>
+  </div>
+</div>
+
+<div id="lb-login-screen" class="lb-login-screen">
+  <div class="lb-login-layout">
+
+    <div>
+      <div class="lb-login-brand">
+        Live<span>Bridge</span>
+      </div>
+
+      <div style="font-size:22px;font-weight:900;">
+        Speak Once. Reach Everyone.
+      </div>
+
+      <div class="lb-login-copy">
+        Sign in to manage your organization, open your broadcaster,
+        review usage and control your LiveBridge account.
+      </div>
+    </div>
+
+    <div class="lb-login-card">
+      <div id="clerk-auth"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="lb-dashboard" class="lb-account-shell" style="display:none;">
+
+<aside class="lb-account-sidebar">
+
+  <div class="lb-account-brand">
+    Live<span>Bridge</span>
+  </div>
+
+  <div class="lb-account-subbrand">
+    Account Dashboard
+  </div>
+
+  <div class="lb-org-mini">
+    <div class="lb-org-mini-label">
+      Organization
+    </div>
+
+    <div class="lb-org-mini-name" id="sidebarOrganization">
+      —
+    </div>
+  </div>
+
+  <div class="lb-account-nav">
+
+    <button class="lb-nav-button active" data-panel="overview">
+      🏠 Overview
+    </button>
+
+    <button class="lb-nav-button" data-panel="account">
+      🏢 Account Info
+    </button>
+
+    <button class="lb-nav-button" data-panel="usage">
+      📊 Usage & Stats
+    </button>
+
+    <button class="lb-nav-button" data-panel="history">
+      🕘 Broadcast History
+    </button>
+
+    <button class="lb-nav-button" data-panel="billing">
+      💳 Billing
+    </button>
+
+    <button class="lb-nav-button" data-panel="security">
+      🔐 Security
+    </button>
+
+    <div class="lb-nav-divider"></div>
+
+    <button class="lb-nav-button" id="openBroadcasterNav">
+      🎙 Broadcaster
+    </button>
+
+    <button
+      class="lb-nav-button"
+      id="openAdminNav"
+      style="display:none;"
+    >
+      🛡 Administration
+    </button>
+
+    <button class="lb-nav-button" id="logoutButton">
+      ↪ Logout
+    </button>
+
+  </div>
+
+</aside>
+
+<main class="lb-account-main">
+
+<div class="lb-account-top">
+
+  <div>
+    <div class="lb-account-heading" id="pageHeading">
+      Account Overview
+    </div>
+
+    <div class="lb-account-heading-sub" id="pageHeadingSub">
+      Manage your LiveBridge organization.
+    </div>
+  </div>
+
+  <div id="user-button"></div>
+
+</div>
+
+<section id="panel-overview" class="lb-panel active">
+
+  <div class="lb-grid-4">
+
+    <div class="lb-card">
+      <div class="lb-metric-number" id="overviewBroadcasts">0</div>
+      <div class="lb-muted">Total Broadcasts</div>
+    </div>
+
+    <div class="lb-card">
+      <div class="lb-metric-number" id="overviewListeners">0</div>
+      <div class="lb-muted">Total Listener Sessions</div>
+    </div>
+
+    <div class="lb-card">
+      <div class="lb-metric-number" id="overviewListening">0m</div>
+      <div class="lb-muted">
+        Total Listening Time
+        <span style="font-size:10px;">· Growth+</span>
+      </div>
+    </div>
+
+    <div class="lb-card">
+      <div class="lb-metric-number lb-status-good">Active</div>
+      <div class="lb-muted">Account Status</div>
+    </div>
+
+  </div>
+
+  <div class="lb-card lb-hero-card">
+
+    <div>
+      <div class="lb-hero-title">
+        Ready to broadcast?
+      </div>
+
+      <div class="lb-hero-text">
+        Open your organization broadcaster. Your LiveBridge room
+        automatically uses your organization's default room name.
+      </div>
+
+      <button
+        class="lb-primary-button"
+        id="openBroadcasterButton"
+        style="margin-top:18px;"
+      >
+        🎙 Open Broadcaster
+      </button>
+    </div>
+
+    <div class="lb-room-display">
+
+      <div class="lb-room-display-label">
+        Your Default Room
+      </div>
+
+      <div class="lb-big-room" id="defaultRoomDisplay">
+        —
+      </div>
+
+      <div class="lb-muted">
+        Your permanent LiveBridge room.
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="lb-share-card">
+
+    <div>
+
+      <div class="lb-share-title">
+        Share Your Live Room
+      </div>
+
+      <div class="lb-share-copy">
+        Send this link or QR code to anyone who needs to join
+        your LiveBridge room. No listener account is required.
+      </div>
+
+      <div class="lb-account-share-language-row">
+
+        <div class="lb-account-share-language-label">
+          Share invite language
+        </div>
+
+        <select
+          class="lb-account-share-language-select"
+          id="accountShareLanguage"
+        >
+          <option value="en">English</option>
+          <option value="fr">Français — French</option>
+          <option value="es">Español — Spanish</option>
+          <option value="de">Deutsch — German</option>
+          <option value="pt">Português — Portuguese</option>
+          <option value="it">Italiano — Italian</option>
+          <option value="nl">Nederlands — Dutch</option>
+          <option value="pl">Polski — Polish</option>
+          <option value="uk">Українська — Ukrainian</option>
+          <option value="ru">Русский — Russian</option>
+          <option value="ar">العربية — Arabic</option>
+          <option value="zh">中文 — Chinese</option>
+          <option value="ja">日本語 — Japanese</option>
+          <option value="ko">한국어 — Korean</option>
+          <option value="hi">हिन्दी — Hindi</option>
+        </select>
+
+        <div class="lb-account-share-language-note">
+          Invite text, graphic and destination page use this language.
+        </div>
+
+      </div>
+
+      <div class="lb-share-link-row">
+
+        <div class="lb-share-link" id="listenerShareURL">
+          —
+        </div>
+
+        <button class="lb-share-small-button" id="copyShareLink">
+          Copy Link
+        </button>
+
+        <button class="lb-share-small-button green" id="nativeShareLink">
+          Send / Share
+        </button>
+
+        <button class="lb-share-small-button" id="openListenerLink">
+          Open
+        </button>
+
+      </div>
+
+      <div
+        class="lb-account-share-preview"
+        id="accountSharePreview"
+      >
+        <img
+          id="accountSharePreviewImage"
+          alt="LiveBridge invite preview"
+        >
+
+        <div class="lb-account-share-preview-actions">
+
+          <button
+            type="button"
+            id="downloadAccountShareGraphic"
+          >
+            Download Graphic
+          </button>
+
+          <button
+            type="button"
+            id="copyAccountInviteText"
+          >
+            Copy Invite Text
+          </button>
+
+        </div>
+      </div>
+
+    </div>
+
+    <div class="lb-qr-wrap">
+
+      <div class="lb-qr-box">
+        <img
+          id="listenerQRCode"
+          alt="LiveBridge room QR code"
+        >
+      </div>
+
+      <div class="lb-qr-caption">
+        Scan to join this LiveBridge room
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="lb-grid-2" style="margin-top:16px;">
+
+    <div class="lb-card lb-plan-card">
+
+      <div class="lb-plan-badge">
+        Current Plan
+      </div>
+
+      <div class="lb-card-title">
+        Free Account Demo
+      </div>
+
+      <div class="lb-muted">
+        Unlimited access during the LiveBridge demonstration
+        and launch phase. No payment method required.
+      </div>
+
+    </div>
+
+    <div class="lb-card">
+
+      <div class="lb-card-title">
+        Listener Access
+      </div>
+
+      <div class="lb-muted">
+        Listeners open the room link or scan your QR code,
+        choose their language, and join directly from their browser.
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
+
+<section id="panel-account" class="lb-panel">
+
+  <div class="lb-card">
+
+    <div class="lb-card-title">
+      Organization Information
+    </div>
+
+    <div class="lb-detail-row">
+      <div class="lb-detail-label">Organization Name</div>
+      <div class="lb-detail-value" id="accountOrganization">—</div>
+    </div>
+
+    <div class="lb-detail-row">
+      <div class="lb-detail-label">Account Holder</div>
+      <div class="lb-detail-value" id="accountHolder">—</div>
+    </div>
+
+    <div class="lb-detail-row">
+      <div class="lb-detail-label">Email</div>
+      <div class="lb-detail-value" id="accountEmail">—</div>
+    </div>
+
+    <div class="lb-detail-row">
+      <div class="lb-detail-label">Phone</div>
+      <div class="lb-detail-value" id="accountPhone">—</div>
+    </div>
+
+    <div class="lb-detail-row">
+      <div class="lb-detail-label">Default Room</div>
+      <div class="lb-detail-value" id="accountRoom">—</div>
+    </div>
+
+    <div class="lb-detail-row">
+      <div class="lb-detail-label">Current Plan</div>
+      <div class="lb-detail-value" id="accountCurrentPlan">—</div>
+    </div>
+
+  </div>
+
+</section>
+
+<section id="panel-usage" class="lb-panel">
+
+  <div class="lb-grid-4">
+
+    <div class="lb-card">
+      <div class="lb-metric-number" id="usageBroadcasts">0</div>
+      <div class="lb-muted">Broadcasts</div>
+    </div>
+
+    <div class="lb-card">
+      <div class="lb-metric-number" id="usageListeners">0</div>
+      <div class="lb-muted">Total Listener Sessions</div>
+    </div>
+
+    <div class="lb-card">
+      <div class="lb-metric-number" id="usagePeak">0</div>
+      <div class="lb-muted">Highest Peak Audience</div>
+    </div>
+
+    <div class="lb-card">
+      <div class="lb-metric-number" id="usageLanguages">0</div>
+      <div class="lb-muted">
+        Languages Used
+        <span style="font-size:10px;">· Growth+</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="lb-grid-2" style="margin-top:16px;">
+
+    <div class="lb-card">
+      <div class="lb-card-title">
+        Total Listening Time
+      </div>
+      <div
+        class="lb-metric-number"
+        id="usageListeningTime"
+      >
+        0m
+      </div>
+      <div class="lb-muted">
+        Combined listener time across your broadcasts.
+      </div>
+    </div>
+
+    <div class="lb-card">
+      <div class="lb-card-title">
+        Average Listener Session
+      </div>
+      <div
+        class="lb-metric-number"
+        id="usageAverageListen"
+      >
+        0m
+      </div>
+      <div class="lb-muted">
+        Average listening time per listener session.
+      </div>
+    </div>
+
+  </div>
+
+  <div class="lb-card" style="margin-top:16px;">
+
+    <div class="lb-card-title">
+      Languages Used
+    </div>
+
+    <div
+      id="usageLanguageList"
+      class="lb-muted"
+    >
+      No listener languages recorded yet.
+    </div>
+
+  </div>
+
+  <div class="lb-pro-export">
+
+    <div>
+
+      <div class="lb-pro-export-title">
+        Pro Reporting Export
+      </div>
+
+      <div
+        class="lb-pro-export-copy"
+        id="lbProExportCopy"
+      >
+        Download your broadcast analytics as a CSV file
+        for reports, records or internal review.
+      </div>
+
+    </div>
+
+    <button
+      type="button"
+      class="lb-pro-export-btn"
+      id="lbExportAnalyticsButton"
+    >
+      Export CSV
+    </button>
+
+  </div>
+
+</section>
+
+<section id="panel-history" class="lb-panel">
+
+  <div class="lb-card">
+
+    <div class="lb-card-title">
+      Broadcast History
+    </div>
+
+    <div
+      id="lbTranscriptRetentionBanner"
+      class="lb-retention-banner"
+    >
+      Loading transcript retention details...
+    </div>
+
+    <div class="lb-history-row lb-history-head">
+      <div>Date</div>
+      <div>Duration</div>
+      <div>Listeners</div>
+      <div>Peak</div>
+      <div>Listen Time</div>
+      <div>Languages</div>
+      <div>Transcript</div>
+    </div>
+
+    <div id="broadcastHistoryRows">
+      <div class="lb-empty">
+        Loading broadcast history...
+      </div>
+    </div>
+
+  </div>
+
+</section>
+
+<section id="panel-billing" class="lb-panel">
+
+  <div class="lb-card lb-plan-card">
+
+    <div
+      class="lb-plan-badge"
+      id="lbCurrentPlanBadge"
+    >
+      LiveBridge Plan
+    </div>
+
+    <div class="lb-card-title">
+      Broadcast Time & Plan
+    </div>
+
+    <div
+      class="lb-muted"
+      id="lbCurrentPlanDescription"
+    >
+      Loading your current plan and feature access...
+    </div>
+
+    <div class="lb-plan-summary">
+
+      <div>
+        <strong id="lbCurrentPlanName">—</strong>
+        <span class="lb-muted">Current plan</span>
+      </div>
+
+      <div>
+        <strong id="lbCurrentPlanMinutes">—</strong>
+        <span class="lb-muted">Included each month</span>
+      </div>
+
+      <div>
+        <strong id="lbCurrentPlanViewers">—</strong>
+        <span class="lb-muted">Simultaneous listeners</span>
+      </div>
+
+      <div>
+        <strong id="lbTranscriptRetentionSummary">—</strong>
+        <span class="lb-muted">Transcript access</span>
+      </div>
+
+    </div>
+
+    <a
+      class="lb-button primary"
+      href="/plans/index.html"
+      style="
+        margin-top:14px;
+        display:inline-flex;
+        text-decoration:none;
+      "
+    >
+      Compare Plans & Features
+    </a>
+
+  </div>
+
+  <div class="lb-card" style="margin-top:16px;">
+
+    <div class="lb-card-title">
+      Top Up Broadcast Time
+    </div>
+
+    <div class="lb-muted" style="margin-bottom:18px;">
+      Need extra time before your monthly allowance resets?
+    </div>
+
+    <div class="lb-grid-3">
+
+      <div class="lb-card" style="background:#0f1d2d;">
+
+        <div class="lb-muted">
+          +1 Hour
+        </div>
+
+        <div class="lb-metric-number">
+          $12
+        </div>
+
+        <div class="lb-muted">
+          CAD one-time top up
+        </div>
+
+        <button
+          class="lb-primary-button lb-wide"
+          style="margin-top:16px;"
+          onclick="requestLiveBridgeTopUp('+1 Hour','$12 CAD')"
+        >
+          Request +1 Hour
+        </button>
+
+      </div>
+
+      <div class="lb-card" style="background:#0f1d2d;">
+
+        <div class="lb-muted">
+          +5 Hours
+        </div>
+
+        <div class="lb-metric-number">
+          $49
+        </div>
+
+        <div class="lb-muted">
+          CAD one-time top up
+        </div>
+
+        <button
+          class="lb-primary-button lb-wide"
+          style="margin-top:16px;"
+          onclick="requestLiveBridgeTopUp('+5 Hours','$49 CAD')"
+        >
+          Request +5 Hours
+        </button>
+
+      </div>
+
+      <div class="lb-card" style="background:#0f1d2d;">
+
+        <div class="lb-muted">
+          +10 Hours
+        </div>
+
+        <div class="lb-metric-number">
+          $89
+        </div>
+
+        <div class="lb-muted">
+          CAD one-time top up
+        </div>
+
+        <button
+          class="lb-primary-button lb-wide"
+          style="margin-top:16px;"
+          onclick="requestLiveBridgeTopUp('+10 Hours','$89 CAD')"
+        >
+          Request +10 Hours
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="lb-card" style="margin-top:16px;">
+
+    <div class="lb-card-title">
+      Need More Every Month?
+    </div>
+
+    <div class="lb-muted">
+      Upgrading your monthly plan is usually better value
+      than regularly purchasing top-up hours.
+    </div>
+
+    <button
+      class="lb-secondary-button"
+      style="margin-top:16px;"
+      onclick="requestLiveBridgeUpgrade()"
+    >
+      Request Plan Upgrade
+    </button>
+
+  </div>
+
+</section>
+
+<section id="panel-security" class="lb-panel">
+
+  <div class="lb-grid-2">
+
+    <div class="lb-card">
+
+      <div class="lb-card-title">
+        Password & Security
+      </div>
+
+      <div class="lb-muted">
+        Manage your password, sign-in methods and account security.
+      </div>
+
+      <button
+        class="lb-secondary-button lb-wide"
+        id="manageAccountButton"
+        style="margin-top:18px;"
+      >
+        Manage Password & Security
+      </button>
+
+    </div>
+
+    <div class="lb-card">
+
+      <div class="lb-card-title">
+        Sign Out
+      </div>
+
+      <div class="lb-muted">
+        Sign out of your LiveBridge account on this device.
+      </div>
+
+      <button
+        class="lb-secondary-button lb-wide"
+        id="securityLogoutButton"
+        style="margin-top:18px;"
+      >
+        Logout
+      </button>
+
+    </div>
+
+  </div>
+
+</section>
+
+</main>
+</div>
+</div>
+
+<script
+async
+crossorigin="anonymous"
+data-clerk-publishable-key="pk_test_c3RhYmxlLXN3aW5lLTY1NTQuY2xlcmsuYWNjb3VudHMuZGV2JA"
+src="https://stable-swine-6554.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"
+type="text/javascript">
+</script>
+
+<script>
+
+const LB_PENDING_KEY =
+  "livebridge_pending_signup";
+
+const LB_WORKER =
+  "https://livebridge.northstarventures-ca.workers.dev";
+
+const LB_LISTENER_BASE =
+  "https://livebridge.ca/t/";
+
+async function activateExistingClerkSession(){
+
+  if(
+    Clerk.isSignedIn &&
+    Clerk.user
+  ){
+    return Clerk.user;
+  }
+
+  const sessions =
+    Clerk.client?.sessions ||
+    Clerk.client?.signedInSessions ||
+    [];
+
+  if(!sessions.length){
+    return null;
+  }
+
+  const lastActiveId =
+    Clerk.client?.lastActiveSessionId ||
+    "";
+
+  const session =
+    sessions.find(item =>
+      item.id === lastActiveId
+    ) ||
+    sessions.find(item =>
+      item.status === "active"
+    ) ||
+    sessions[0];
+
+  if(!session){
+    return null;
+  }
+
+  await Clerk.setActive({
+    session:session.id
+  });
+
+  if(
+    Clerk.client &&
+    typeof Clerk.client.reload === "function"
+  ){
+    try{
+      await Clerk.client.reload();
+    }catch{}
+  }
+
+  return (
+    Clerk.user ||
+    session.user ||
+    null
+  );
+}
+
+async function completePendingSetup(user){
+
+  const raw =
+    localStorage.getItem(
+      LB_PENDING_KEY
+    );
+
+  if(
+    !raw ||
+    !user
+  ){
+    return;
+  }
+
+  let pending;
+
+  try{
+    pending =
+      JSON.parse(
+        raw
+      );
+  }catch{
+    localStorage.removeItem(
+      LB_PENDING_KEY
+    );
+    return;
+  }
+
+  const metadata =
+    user.unsafeMetadata ||
+    {};
+
+  if(
+    !metadata.liveBridge
+  ){
+
+    await user.update({
+      unsafeMetadata:{
+        ...metadata,
+
+        liveBridge:{
+          organizationName:
+            pending.organizationName,
+
+          accountHolder:
+            pending.accountHolder,
+
+          phone:
+            pending.phone,
+
+          email:
+            pending.email,
+
+          plan:
+            pending.plan,
+
+          planCode:
+            pending.planCode,
+
+          defaultRoom:
+            pending.defaultRoom,
+
+          termsAccepted:
+            true,
+
+          termsAcceptedAt:
+            pending.termsAcceptedAt,
+
+          accountCreatedAt:
+            pending.createdAt,
+
+          accountStatus:
+            "active"
+        }
+      }
+    });
+  }
+
+  localStorage.removeItem(
+    LB_PENDING_KEY
+  );
+}
+
+function getAccount(user){
+
+  const stored =
+    user
+      ?.unsafeMetadata
+      ?.liveBridge ||
+    {};
+
+  const email =
+    stored.email ||
+    user
+      ?.primaryEmailAddress
+      ?.emailAddress ||
+    user
+      ?.emailAddresses
+      ?.[0]
+      ?.emailAddress ||
+    "";
+
+  return{
+    organizationName:
+      stored.organizationName ||
+      "LiveBridge Organization",
+
+    accountHolder:
+      stored.accountHolder ||
+      user?.fullName ||
+      "Account Holder",
+
+    email,
+
+    phone:
+      stored.phone ||
+      "",
+
+    plan:
+      stored.plan ||
+      "Free Account Demo — Unlimited Access",
+
+    defaultRoom:
+      stored.defaultRoom ||
+      "LIVEBRIDGE",
+
+    accountStatus:
+      stored.accountStatus ||
+      "active"
+  };
+}
+
+function formatDuration(ms){
+
+  const seconds =
+    Math.max(
+      0,
+      Math.round(
+        Number(
+          ms ||
+          0
+        ) /
+        1000
+      )
+    );
+
+  const hours =
+    Math.floor(
+      seconds /
+      3600
+    );
+
+  const minutes =
+    Math.floor(
+      (
+        seconds %
+        3600
+      ) /
+      60
+    );
+
+  const secs =
+    seconds %
+    60;
+
+  if(hours){
+    return (
+      hours +
+      "h " +
+      minutes +
+      "m"
+    );
+  }
+
+  if(minutes){
+    return (
+      minutes +
+      "m " +
+      secs +
+      "s"
+    );
+  }
+
+  return (
+    secs +
+    "s"
+  );
+}
+
+function createListenerURL(
+  room,
+  language = ""
+){
+
+  const lang =
+    String(
+      language ||
+      document.getElementById(
+        "accountShareLanguage"
+      )?.value ||
+      "en"
+    )
+    .trim()
+    .toLowerCase();
+
+  return (
+    LB_LISTENER_BASE +
+    "?room=" +
+    encodeURIComponent(
+      room
+    ) +
+    "&lang=" +
+    encodeURIComponent(
+      lang
+    )
+  );
+}
+
+function updateSharing(
+  account
+){
+
+  const language =
+    document.getElementById(
+      "accountShareLanguage"
+    )?.value ||
+    "en";
+
+  const url =
+    createListenerURL(
+      account.defaultRoom,
+      language
+    );
+
+  window.liveBridgeListenerURL =
+    url;
+
+  document.getElementById(
+    "listenerShareURL"
+  ).textContent =
+    url;
+
+  document.getElementById(
+    "listenerQRCode"
+  ).src =
+    "https://api.qrserver.com/v1/create-qr-code/" +
+    "?size=300x300" +
+    "&margin=5" +
+    "&data=" +
+    encodeURIComponent(
+      url
+    );
+}
+
+async function loadBroadcastHistory(
+  account
+){
+
+  try{
+
+    const token =
+      await getLiveBridgeSessionToken();
+
+    if(!token){
+      throw new Error(
+        "Please sign in again."
+      );
+    }
+
+    const response =
+      await fetch(
+        LB_WORKER +
+        "/broadcast-history?room=" +
+        encodeURIComponent(
+          account.defaultRoom
+        ) +
+        "&limit=50",
+        {
+          headers:{
+            "Authorization":
+              "Bearer " +
+              token
+          }
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(
+      !response.ok ||
+      !data.success
+    ){
+      throw new Error(
+        data.error ||
+        "Broadcast history could not be loaded."
+      );
+    }
+
+    const broadcasts =
+      Array.isArray(
+        data.broadcasts
+      )
+        ? data.broadcasts
+        : [];
+
+    window.liveBridgeBroadcastHistory =
+      broadcasts;
+
+    renderAccountStats(
+      broadcasts
+    );
+
+    renderBroadcastHistory(
+      broadcasts
+    );
+
+  }catch(error){
+
+    console.error(
+      "LiveBridge history failed:",
+      error
+    );
+
+    document.getElementById(
+      "broadcastHistoryRows"
+    ).innerHTML =
+      '<div class="lb-empty">Broadcast history could not be loaded.</div>';
+  }
+}
+
+function renderAccountStats(
+  broadcasts
+){
+
+  const detailed =
+    canAccessDetailedAnalytics();
+
+  const totalBroadcasts =
+    broadcasts.length;
+
+  const totalListeners =
+    broadcasts.reduce(
+      (
+        sum,
+        item
+      ) =>
+        sum +
+        Number(
+          item.totalListeners ||
+          0
+        ),
+      0
+    );
+
+  const peak =
+    broadcasts.reduce(
+      (
+        max,
+        item
+      ) =>
+        Math.max(
+          max,
+          Number(
+            item.peakListeners ||
+            0
+          )
+        ),
+      0
+    );
+
+  document.getElementById(
+    "overviewBroadcasts"
+  ).textContent =
+    totalBroadcasts;
+
+  document.getElementById(
+    "overviewListeners"
+  ).textContent =
+    totalListeners;
+
+  document.getElementById(
+    "usageBroadcasts"
+  ).textContent =
+    totalBroadcasts;
+
+  document.getElementById(
+    "usageListeners"
+  ).textContent =
+    totalListeners;
+
+  document.getElementById(
+    "usagePeak"
+  ).textContent =
+    peak;
+
+  if(!detailed){
+
+    document.getElementById(
+      "overviewListening"
+    ).innerHTML =
+      '🔒 <span style="font-size:12px;">Growth</span>';
+
+    document.getElementById(
+      "usageLanguages"
+    ).innerHTML =
+      '🔒';
+
+    document.getElementById(
+      "usageListeningTime"
+    ).innerHTML =
+      '🔒 Growth';
+
+    document.getElementById(
+      "usageAverageListen"
+    ).innerHTML =
+      '🔒 Growth';
+
+    const languageList =
+      document.getElementById(
+        "usageLanguageList"
+      );
+
+    languageList.innerHTML = `
+      <div style="
+        padding:16px;
+        border-radius:12px;
+        border:1px solid rgba(255,193,7,.18);
+        background:rgba(255,193,7,.06);
+      ">
+        <strong style="color:#ffd978;">
+          🔒 Detailed Listener & Language Analytics
+        </strong>
+
+        <div style="
+          margin-top:7px;
+          line-height:1.55;
+          color:#9fb2c6;
+        ">
+          Growth and Pro unlock total listening time,
+          average listener duration and language-by-language
+          audience reporting.
+        </div>
+
+        <a
+          class="lb-upgrade-link"
+          href="/plans/index.html"
+          style="margin-top:12px;"
+        >
+          Compare Plans & Upgrade
+        </a>
+      </div>
+    `;
+
+    return;
+  }
+
+  const totalListening =
+    broadcasts.reduce(
+      (
+        sum,
+        item
+      ) =>
+        sum +
+        Number(
+          item.totalListeningMs ||
+          0
+        ),
+      0
+    );
+
+  const averageListen =
+    totalListeners
+      ? totalListening /
+        totalListeners
+      : 0;
+
+  const languageMap =
+    {};
+
+  broadcasts.forEach(
+    item => {
+
+      (
+        item.languages ||
+        []
+      )
+      .forEach(
+        lang => {
+
+          const code =
+            String(
+              lang.language ||
+              ""
+            )
+            .toUpperCase();
+
+          if(!code){
+            return;
+          }
+
+          languageMap[
+            code
+          ] =
+            (
+              languageMap[
+                code
+              ] ||
+              0
+            ) +
+            Number(
+              lang.listeners ||
+              0
+            );
+        }
+      );
+    }
+  );
+
+  const languageCodes =
+    Object.keys(
+      languageMap
+    );
+
+  document.getElementById(
+    "overviewListening"
+  ).textContent =
+    formatDuration(
+      totalListening
+    );
+
+  document.getElementById(
+    "usageLanguages"
+  ).textContent =
+    languageCodes.length;
+
+  document.getElementById(
+    "usageListeningTime"
+  ).textContent =
+    formatDuration(
+      totalListening
+    );
+
+  document.getElementById(
+    "usageAverageListen"
+  ).textContent =
+    formatDuration(
+      averageListen
+    );
+
+  const languageList =
+    document.getElementById(
+      "usageLanguageList"
+    );
+
+  if(
+    !languageCodes.length
+  ){
+
+    languageList.textContent =
+      "No listener languages recorded yet.";
+
+  }else{
+
+    languageList.innerHTML =
+      languageCodes
+        .sort(
+          (
+            a,
+            b
+          ) =>
+            languageMap[
+              b
+            ] -
+            languageMap[
+              a
+            ]
+        )
+        .map(
+          code => `
+            <div style="
+              display:flex;
+              justify-content:space-between;
+              padding:10px 0;
+              border-bottom:1px solid rgba(255,255,255,.08);
+            ">
+              <span>
+                🌎 ${code}
+              </span>
+              <strong>
+                ${languageMap[code]} listener sessions
+              </strong>
+            </div>
+          `
+        )
+        .join(
+          ""
+        );
+  }
+}
+
+function getAccountEntitlements(){
+
+  return (
+    window
+      .liveBridgeServerAccount
+      ?.entitlements ||
+    {}
+  );
+}
+
+function canAccessTranscripts(){
+
+  return (
+    getAccountEntitlements()
+      .transcriptAccess ===
+      true
+  );
+}
+
+function getTranscriptRetentionDays(){
+
+  return Number(
+    getAccountEntitlements()
+      .transcriptRetentionDays ||
+    0
+  );
+}
+
+function renderTranscriptRetentionUI(){
+
+  const retention =
+    getTranscriptRetentionDays();
+
+  const canAccess =
+    canAccessTranscripts();
+
+  const summary =
+    document.getElementById(
+      "lbTranscriptRetentionSummary"
+    );
+
+  const banner =
+    document.getElementById(
+      "lbTranscriptRetentionBanner"
+    );
+
+  if(summary){
+
+    summary.textContent =
+      canAccess &&
+      retention
+        ? retention +
+          " days"
+        : "Locked";
+  }
+
+  if(!banner){
+    return;
+  }
+
+  if(
+    !canAccess ||
+    !retention
+  ){
+
+    banner.classList.add(
+      "locked"
+    );
+
+    banner.innerHTML = `
+      <strong>
+        🔒 Post-broadcast transcripts are a Growth feature.
+      </strong>
+
+      Starter still records broadcast history, but transcript viewing and
+      downloading are unavailable on this plan.
+
+      <a
+        href="/plans/index.html"
+        style="
+          color:#ffd978;
+          font-weight:900;
+          text-decoration:none;
+          margin-left:4px;
+        "
+      >
+        Compare plans
+      </a>
+    `;
+
+    return;
+  }
+
+  banner.classList.remove(
+    "locked"
+  );
+
+  banner.innerHTML =
+    retention >= 90
+      ? '<strong>Pro transcript access: 90 days.</strong> Completed broadcast transcripts remain available to view or download for up to 90 days after each broadcast.'
+      : '<strong>Growth transcript access: 30 days.</strong> Completed broadcast transcripts remain available to view or download for up to 30 days after each broadcast. Pro extends this to 90 days.';
+}
+
+function getTranscriptAccessUntil(
+  item
+){
+
+  const retention =
+    getTranscriptRetentionDays();
+
+  if(
+    !retention ||
+    !item?.startedAt
+  ){
+    return null;
+  }
+
+  const planExpiry =
+    Number(
+      item.startedAt
+    ) +
+    retention *
+    24 *
+    60 *
+    60 *
+    1000;
+
+  const storedExpiry =
+    Number(
+      item.transcriptExpiresAt ||
+      0
+    );
+
+  if(
+    storedExpiry >
+    0
+  ){
+    return Math.min(
+      planExpiry,
+      storedExpiry
+    );
+  }
+
+  return planExpiry;
+}
+
+function canAccessDetailedAnalytics(){
+
+  return (
+    getAccountEntitlements()
+      .detailedAnalytics ===
+      true
+  );
+}
+
+function canExportReports(){
+
+  return (
+    getAccountEntitlements()
+      .reportExport ===
+      true
+  );
+}
+
+function renderProReportingExport(){
+
+  const button =
+    document.getElementById(
+      "lbExportAnalyticsButton"
+    );
+
+  const copy =
+    document.getElementById(
+      "lbProExportCopy"
+    );
+
+  if(
+    !button ||
+    !copy
+  ){
+    return;
+  }
+
+  if(
+    canExportReports()
+  ){
+
+    button.classList.remove(
+      "locked"
+    );
+
+    button.textContent =
+      "Export CSV";
+
+    copy.textContent =
+      "Download your detailed broadcast analytics as a CSV file for reporting, records or internal review.";
+
+    return;
+  }
+
+  button.classList.add(
+    "locked"
+  );
+
+  button.textContent =
+    "🔒 Pro Feature";
+
+  copy.innerHTML =
+    'Analytics/report export is available on <strong>LiveBridge Pro</strong>. ' +
+    '<a href="/plans/index.html" style="color:#bda4ff;font-weight:900;text-decoration:none;">View Pro</a>';
+}
+
+function csvEscape(
+  value
+){
+
+  const text =
+    String(
+      value ??
+      ""
+    );
+
+  if(
+    /[",\n]/.test(
+      text
+    )
+  ){
+    return (
+      '"' +
+      text.replace(
+        /"/g,
+        '""'
+      ) +
+      '"'
+    );
+  }
+
+  return text;
+}
+
+function exportLiveBridgeAnalyticsCsv(){
+
+  if(
+    !canExportReports()
+  ){
+    window.location.href =
+      "/plans/index.html";
+    return;
+  }
+
+  const broadcasts =
+    Array.isArray(
+      window
+        .liveBridgeBroadcastHistory
+    )
+      ? window
+          .liveBridgeBroadcastHistory
+      : [];
+
+  if(
+    !broadcasts.length
+  ){
+    alert(
+      "There is no broadcast history to export yet."
+    );
+    return;
+  }
+
+  const rows = [
+    [
+      "Date",
+      "Room",
+      "Duration Minutes",
+      "Total Listener Sessions",
+      "Peak Listeners",
+      "Total Listening Minutes",
+      "Average Listener Minutes",
+      "Languages"
+    ]
+  ];
+
+  broadcasts.forEach(
+    item => {
+
+      const languages =
+        (
+          item.languages ||
+          []
+        )
+        .map(
+          lang =>
+            String(
+              lang.language ||
+              ""
+            )
+            .toUpperCase() +
+            ": " +
+            Number(
+              lang.listeners ||
+              0
+            )
+        )
+        .join(
+          " | "
+        );
+
+      rows.push([
+        new Date(
+          Number(
+            item.startedAt ||
+            0
+          )
+        )
+        .toLocaleString(),
+
+        item.room ||
+        "",
+
+        (
+          Number(
+            item.durationMs ||
+            0
+          ) /
+          60000
+        ).toFixed(
+          2
+        ),
+
+        Number(
+          item.totalListeners ||
+          0
+        ),
+
+        Number(
+          item.peakListeners ||
+          0
+        ),
+
+        (
+          Number(
+            item.totalListeningMs ||
+            0
+          ) /
+          60000
+        ).toFixed(
+          2
+        ),
+
+        (
+          Number(
+            item.averageListeningMs ||
+            0
+          ) /
+          60000
+        ).toFixed(
+          2
+        ),
+
+        languages
+      ]);
+    }
+  );
+
+  const csv =
+    rows
+      .map(
+        row =>
+          row
+            .map(
+              csvEscape
+            )
+            .join(
+              ","
+            )
+      )
+      .join(
+        "\n"
+      );
+
+  const blob =
+    new Blob(
+      [csv],
+      {
+        type:
+          "text/csv;charset=utf-8"
+      }
+    );
+
+  const url =
+    URL.createObjectURL(
+      blob
+    );
+
+  const link =
+    document.createElement(
+      "a"
+    );
+
+  link.href =
+    url;
+
+  link.download =
+    "LiveBridge-Analytics-" +
+    new Date()
+      .toISOString()
+      .slice(
+        0,
+        10
+      ) +
+    ".csv";
+
+  document.body.appendChild(
+    link
+  );
+
+  link.click();
+
+  link.remove();
+
+  URL.revokeObjectURL(
+    url
+  );
+}
+
+function renderPlanSummary(){
+
+  const account =
+    window
+      .liveBridgeServerAccount ||
+    {};
+
+  const entitlements =
+    account.entitlements ||
+    {};
+
+  const planName =
+    String(
+      account.planName ||
+      account.planCode ||
+      "LiveBridge"
+    );
+
+  const includedMinutes =
+    Number(
+      account.includedMinutes ||
+      0
+    );
+
+  const viewerLimit =
+    Number(
+      account.viewerLimit ||
+      0
+    );
+
+  const hours =
+    includedMinutes /
+    60;
+
+  const hoursText =
+    Number.isInteger(
+      hours
+    )
+      ? hours +
+        " hrs"
+      : hours.toFixed(
+          1
+        ) +
+        " hrs";
+
+  const nameEl =
+    document.getElementById(
+      "lbCurrentPlanName"
+    );
+
+  const minutesEl =
+    document.getElementById(
+      "lbCurrentPlanMinutes"
+    );
+
+  const viewersEl =
+    document.getElementById(
+      "lbCurrentPlanViewers"
+    );
+
+  const descEl =
+    document.getElementById(
+      "lbCurrentPlanDescription"
+    );
+
+  const badgeEl =
+    document.getElementById(
+      "lbCurrentPlanBadge"
+    );
+
+  if(nameEl){
+    nameEl.textContent =
+      planName;
+  }
+
+  if(minutesEl){
+    minutesEl.textContent =
+      hoursText;
+  }
+
+  if(viewersEl){
+    viewersEl.textContent =
+      viewerLimit
+        .toLocaleString();
+  }
+
+  if(badgeEl){
+    badgeEl.textContent =
+      planName +
+      " Plan";
+  }
+
+  if(descEl){
+
+    if(
+      entitlements
+        .transcriptAccess ===
+        true
+    ){
+
+      const retention =
+        Number(
+          entitlements
+            .transcriptRetentionDays ||
+          0
+        );
+
+      descEl.textContent =
+        "Your plan includes post-broadcast transcript access" +
+        (
+          retention
+            ? " for up to " +
+              retention +
+              " days"
+            : ""
+        ) +
+        (
+          retention ===
+          30
+            ? ". Pro extends transcript access to 90 days."
+            : ""
+        ) +
+        " Your other LiveBridge features continue according to your current plan.";
+
+    }else{
+
+      descEl.innerHTML =
+        'Your plan includes the core LiveBridge live translation experience. ' +
+        '<strong>Growth and Pro unlock post-broadcast transcript access and additional workflow tools.</strong>';
+    }
+  }
+}
+
+function renderBroadcastHistory(
+  broadcasts
+){
+
+  const box =
+    document.getElementById(
+      "broadcastHistoryRows"
+    );
+
+  const detailed =
+    canAccessDetailedAnalytics();
+
+  if(
+    !broadcasts.length
+  ){
+
+    box.innerHTML =
+      '<div class="lb-empty">No completed broadcasts yet.</div>';
+
+    return;
+  }
+
+  box.innerHTML =
+    broadcasts
+      .map(
+        item => {
+
+          const date =
+            new Date(
+              Number(
+                item.startedAt
+              )
+            );
+
+          const dateText =
+            date
+              .toLocaleString();
+
+          const languages =
+            detailed
+              ? (
+                  (
+                    item.languages ||
+                    []
+                  )
+                  .map(
+                    lang =>
+                      String(
+                        lang.language ||
+                        ""
+                      )
+                      .toUpperCase()
+                  )
+                  .join(
+                    ", "
+                  ) ||
+                  "—"
+                )
+              : "🔒 Growth";
+
+          const listenTime =
+            detailed
+              ? formatDuration(
+                  item.totalListeningMs
+                )
+              : "🔒 Growth";
+
+          return `
+            <div class="lb-history-row">
+
+              <div>
+                <strong>
+                  ${dateText}
+                </strong>
+              </div>
+
+              <div>
+                ${formatDuration(
+                  item.durationMs
+                )}
+              </div>
+
+              <div>
+                ${Number(
+                  item.totalListeners ||
+                  0
+                )}
+              </div>
+
+              <div>
+                ${Number(
+                  item.peakListeners ||
+                  0
+                )}
+              </div>
+
+              <div>
+                ${listenTime}
+              </div>
+
+              <div class="lb-history-langs">
+                ${languages}
+              </div>
+
+              <div>
+                ${
+                  item.hasTranscript
+                    ? (
+                        canAccessTranscripts()
+                          ? `
+                            <button
+                              class="lb-button secondary"
+                              style="
+                                padding:8px 10px;
+                                font-size:12px;
+                              "
+                              onclick="viewBroadcastTranscript('${item.broadcastId}')"
+                            >
+                              View
+                            </button>
+
+                            <button
+                              class="lb-button secondary"
+                              style="
+                                padding:8px 10px;
+                                font-size:12px;
+                                margin-left:5px;
+                              "
+                              onclick="downloadBroadcastTranscript('${item.broadcastId}')"
+                            >
+                              Download
+                            </button>
+
+                            <div class="lb-retention-date">
+                              ${
+                                getTranscriptAccessUntil(
+                                  item
+                                )
+                                  ? "Available until " +
+                                    new Date(
+                                      getTranscriptAccessUntil(
+                                        item
+                                      )
+                                    )
+                                    .toLocaleDateString()
+                                  : "Available under your current plan"
+                              }
+                            </div>
+                          `
+                          : `
+                            <div class="lb-plan-lock">
+                              🔒 Growth feature
+                            </div>
+
+                            <div>
+                              <a
+                                class="lb-upgrade-link"
+                                href="/plans/index.html"
+                              >
+                                Upgrade to unlock
+                              </a>
+                            </div>
+                          `
+                      )
+                    : `
+                      <span class="lb-muted">
+                        Expired / unavailable
+                      </span>
+                    `
+                }
+              </div>
+
+            </div>
+          `;
+        }
+      )
+      .join(
+        ""
+      );
+}
+
+async function getBroadcastTranscript(
+  broadcastId
+){
+
+  if(
+    !canAccessTranscripts()
+  ){
+    throw new Error(
+      "Broadcast transcript access is available on LiveBridge Growth and Pro. Visit Plans & Pricing to upgrade."
+    );
+  }
+
+  const token =
+    await getLiveBridgeSessionToken();
+
+  if(!token){
+    throw new Error(
+      "Please sign in again."
+    );
+  }
+
+  const response =
+    await fetch(
+      LB_WORKER +
+      "/broadcast-transcript?broadcastId=" +
+      encodeURIComponent(
+        broadcastId
+      ),
+      {
+        headers:{
+          "Authorization":
+            "Bearer " +
+            token
+        }
+      }
+    );
+
+  const data =
+    await response.json();
+
+  if(
+    !response.ok ||
+    !data.success
+  ){
+    throw new Error(
+      data.error ||
+      "Transcript unavailable."
+    );
+  }
+
+  return data.transcript;
+}
+
+async function viewBroadcastTranscript(
+  broadcastId
+){
+
+  try{
+
+    const transcript =
+      await getBroadcastTranscript(
+        broadcastId
+      );
+
+    const oldModal =
+      document.getElementById(
+        "lbTranscriptModal"
+      );
+
+    if(oldModal){
+      oldModal.remove();
+    }
+
+    const overlay =
+      document.createElement(
+        "div"
+      );
+
+    overlay.id =
+      "lbTranscriptModal";
+
+    overlay.style.cssText = `
+      position:fixed;
+      inset:0;
+      z-index:999999;
+      background:rgba(2,8,18,.84);
+      backdrop-filter:blur(5px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    `;
+
+    overlay.innerHTML = `
+      <div style="
+        width:100%;
+        max-width:820px;
+        max-height:86vh;
+        display:flex;
+        flex-direction:column;
+        background:#101d2d;
+        border:1px solid rgba(255,255,255,.13);
+        border-radius:20px;
+        padding:24px;
+        box-shadow:0 25px 70px rgba(0,0,0,.45);
+        color:white;
+      ">
+
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          gap:16px;
+          align-items:flex-start;
+          margin-bottom:16px;
+        ">
+
+          <div>
+
+            <div style="
+              font-size:24px;
+              font-weight:900;
+            ">
+              LiveBridge Transcript
+            </div>
+
+            <div style="
+              color:#8fa6bd;
+              font-size:12px;
+              margin-top:5px;
+            ">
+              ${new Date(
+                transcript.startedAt
+              ).toLocaleString()}
+              · Room ${transcript.room}
+              · Available until
+              ${new Date(
+                transcript.expiresAt
+              ).toLocaleString()}
+            </div>
+
+          </div>
+
+          <button
+            id="lbTranscriptClose"
+            class="lb-button secondary"
+          >
+            Close
+          </button>
+
+        </div>
+
+        <div style="
+          overflow:auto;
+          white-space:pre-wrap;
+          line-height:1.65;
+          background:#07111f;
+          border:1px solid rgba(255,255,255,.09);
+          border-radius:14px;
+          padding:18px;
+          color:#eef5fb;
+          font-size:14px;
+        "></div>
+
+      </div>
+    `;
+
+    overlay
+      .querySelector(
+        "div[style*='white-space:pre-wrap']"
+      )
+      .textContent =
+        transcript.text;
+
+    document.body.appendChild(
+      overlay
+    );
+
+    document.getElementById(
+      "lbTranscriptClose"
+    ).onclick =
+      () =>
+        overlay.remove();
+
+  }catch(error){
+
+    alert(
+      error.message ||
+      "Transcript unavailable."
+    );
+  }
+}
+
+async function downloadBroadcastTranscript(
+  broadcastId
+){
+
+  try{
+
+    const transcript =
+      await getBroadcastTranscript(
+        broadcastId
+      );
+
+    const date =
+      new Date(
+        transcript.startedAt
+      );
+
+    const safeDate =
+      date
+        .toISOString()
+        .slice(
+          0,
+          10
+        );
+
+    const safeRoom =
+      String(
+        transcript.room ||
+        "ROOM"
+      )
+      .replace(
+        /[^A-Z0-9_-]/gi,
+        "-"
+      );
+
+    const fileText =
+      "LiveBridge Transcript\n" +
+      "Room: " +
+      transcript.room +
+      "\nBroadcast: " +
+      date.toLocaleString() +
+      "\n\n" +
+      transcript.text;
+
+    const blob =
+      new Blob(
+        [fileText],
+        {
+          type:
+            "text/plain;charset=utf-8"
+        }
+      );
+
+    const url =
+      URL.createObjectURL(
+        blob
+      );
+
+    const link =
+      document.createElement(
+        "a"
+      );
+
+    link.href =
+      url;
+
+    link.download =
+      "LiveBridge-" +
+      safeRoom +
+      "-" +
+      safeDate +
+      ".txt";
+
+    document.body.appendChild(
+      link
+    );
+
+    link.click();
+
+    link.remove();
+
+    URL.revokeObjectURL(
+      url
+    );
+
+  }catch(error){
+
+    alert(
+      error.message ||
+      "Transcript unavailable."
+    );
+  }
+}
+
+async function getLiveBridgeSessionToken(){
+
+  const currentUserId =
+    Clerk.user?.id ||
+    "";
+
+  const sessions =
+    Clerk.client?.sessions ||
+    Clerk.client?.signedInSessions ||
+    [];
+
+  let session =
+    Clerk.session ||
+    null;
+
+  if(
+    currentUserId &&
+    session?.user?.id !==
+      currentUserId
+  ){
+    session =
+      sessions.find(
+        item =>
+          item?.user?.id ===
+          currentUserId
+      ) ||
+      null;
+  }
+
+  if(
+    !session &&
+    currentUserId
+  ){
+    session =
+      sessions.find(
+        item =>
+          item?.user?.id ===
+          currentUserId
+      ) ||
+      null;
+  }
+
+  if(!session){
+
+    session =
+      sessions.find(
+        item =>
+          item.status ===
+          "active"
+      ) ||
+      sessions[0] ||
+      null;
+  }
+
+  if(!session){
+    return null;
+  }
+
+  try{
+
+    if(
+      Clerk.session?.id !==
+      session.id
+    ){
+      await Clerk.setActive({
+        session:
+          session.id
+      });
+    }
+
+    return await session
+      .getToken();
+
+  }catch(error){
+
+    console.error(
+      "LiveBridge token error:",
+      error
+    );
+
+    return null;
+  }
+}
+
+async function loadAuthoritativeAccount(){
+
+  try{
+
+    const token =
+      await getLiveBridgeSessionToken();
+
+    if(!token){
+      throw new Error(
+        "No Clerk session token available."
+      );
+    }
+
+    const response =
+      await fetch(
+        LB_WORKER +
+        "/account",
+        {
+          headers:{
+            "Authorization":
+              "Bearer " +
+              token
+          }
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(
+      response.status ===
+        404 ||
+      data?.exists ===
+        false
+    ){
+      return {
+        missing:true,
+        account:null
+      };
+    }
+
+    if(
+      !response.ok ||
+      !data.success ||
+      !data.account
+    ){
+      throw new Error(
+        data.error ||
+        "Account lookup failed."
+      );
+    }
+
+    window.liveBridgeServerAccount =
+      data.account;
+
+    console.log(
+      "LiveBridge authoritative D1 account loaded:",
+      data.account
+    );
+
+    return {
+      missing:false,
+      account:
+        data.account
+    };
+
+  }catch(error){
+
+    console.error(
+      "LiveBridge authoritative account load failed:",
+      error
+    );
+
+    return {
+      missing:false,
+      account:null,
+      error:
+        error.message ||
+        "Unable to load LiveBridge account."
+    };
+  }
+}
+
+async function checkAdminAccess(){
+
+  try{
+
+    const token =
+      await getLiveBridgeSessionToken();
+
+    if(!token){
+      return false;
+    }
+
+    const response =
+      await fetch(
+        LB_WORKER +
+        "/admin/me",
+        {
+          headers:{
+            "Authorization":
+              "Bearer " +
+              token
+          }
+        }
+      );
+
+    if(
+      !response.ok
+    ){
+      return false;
+    }
+
+    const data =
+      await response.json();
+
+    return (
+      data.success ===
+      true
+    );
+
+  }catch(error){
+
+    console.error(
+      "LiveBridge admin access check failed:",
+      error
+    );
+
+    return false;
+  }
+}
+
+async function renderDashboard(
+  user
+){
+
+  const result =
+    await loadAuthoritativeAccount();
+
+  if(
+    result?.missing ===
+    true
+  ){
+
+    window.location.replace(
+      "/plans/index.html"
+    );
+
+    return;
+  }
+
+  const serverAccount =
+    result?.account ||
+    null;
+
+  if(
+    !serverAccount
+  ){
+
+    document.getElementById(
+      "lb-loading"
+    ).style.display =
+      "none";
+
+    document.getElementById(
+      "lb-dashboard"
+    ).style.display =
+      "none";
+
+    document.getElementById(
+      "lb-login-screen"
+    ).style.display =
+      "flex";
+
+    const authBox =
+      document.getElementById(
+        "clerk-auth"
+      );
+
+    if(authBox){
+
+      authBox.innerHTML = `
+        <div style="
+          padding:18px;
+          border-radius:12px;
+          border:1px solid rgba(255,255,255,.12);
+          background:#0f1d2d;
+          color:#dbe8f5;
+          line-height:1.55;
+        ">
+          <strong>
+            LiveBridge account could not be loaded.
+          </strong>
+
+          <div style="
+            margin-top:8px;
+            color:#8fa6bf;
+          ">
+            Please refresh the page. If the problem continues,
+            contact LiveBridge support.
+          </div>
+        </div>
+      `;
+    }
+
+    return;
+  }
+
+  const account = {
+    organizationName:
+      String(
+        serverAccount.organizationName ||
+        ""
+      ),
+
+    accountHolder:
+      String(
+        serverAccount.accountHolder ||
+        ""
+      ),
+
+    email:
+      String(
+        serverAccount.accountEmail ||
+        serverAccount.email ||
+        ""
+      ),
+
+    phone:
+      String(
+        serverAccount.phone ||
+        ""
+      ),
+
+    plan:
+      String(
+        serverAccount.planName ||
+        serverAccount.planCode ||
+        ""
+      ),
+
+    defaultRoom:
+      String(
+        serverAccount.roomName ||
+        ""
+      )
+      .trim()
+      .toUpperCase(),
+
+    accountStatus:
+      String(
+        serverAccount.accountStatus ||
+        ""
+      )
+  };
+
+  window.liveBridgeAccount =
+    account;
+
+  window.liveBridgeServerAccount =
+    serverAccount;
+
+  document.getElementById(
+    "lb-loading"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "lb-login-screen"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "lb-dashboard"
+  ).style.display =
+    "grid";
+
+  const isAdmin =
+    await checkAdminAccess();
+
+  document.getElementById(
+    "openAdminNav"
+  ).style.display =
+    isAdmin
+      ? "block"
+      : "none";
+
+  document.getElementById(
+    "sidebarOrganization"
+  ).textContent =
+    account.organizationName ||
+    "—";
+
+  document.getElementById(
+    "defaultRoomDisplay"
+  ).textContent =
+    account.defaultRoom ||
+    "—";
+
+  document.getElementById(
+    "accountOrganization"
+  ).textContent =
+    account.organizationName ||
+    "—";
+
+  document.getElementById(
+    "accountHolder"
+  ).textContent =
+    account.accountHolder ||
+    "—";
+
+  document.getElementById(
+    "accountEmail"
+  ).textContent =
+    account.email ||
+    "—";
+
+  document.getElementById(
+    "accountPhone"
+  ).textContent =
+    account.phone ||
+    "—";
+
+  document.getElementById(
+    "accountRoom"
+  ).textContent =
+    account.defaultRoom ||
+    "—";
+
+  const planInfo =
+    document.getElementById(
+      "accountCurrentPlan"
+    );
+
+  if(planInfo){
+
+    planInfo.textContent =
+      serverAccount.planName ||
+      serverAccount.planCode ||
+      "—";
+  }
+
+  Clerk.mountUserButton(
+    document.getElementById(
+      "user-button"
+    )
+  );
+
+  updateSharing(
+    account
+  );
+
+  renderPlanSummary();
+
+  renderTranscriptRetentionUI();
+
+  renderProReportingExport();
+
+  loadBroadcastHistory(
+    account
+  );
+}
+
+function showLogin(){
+
+  document.getElementById(
+    "lb-loading"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "lb-dashboard"
+  ).style.display =
+    "none";
+
+  document.getElementById(
+    "lb-login-screen"
+  ).style.display =
+    "flex";
+
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
+
+  const returnTo =
+    params.get(
+      "returnTo"
+    ) ===
+    "/admin"
+      ? "/admin"
+      : "/account";
+
+  Clerk.mountSignIn(
+    document.getElementById(
+      "clerk-auth"
+    ),
+    {
+      routing:
+        "hash",
+
+      signUpUrl:
+        "/signup",
+
+      forceRedirectUrl:
+        returnTo,
+
+      fallbackRedirectUrl:
+        returnTo
+    }
+  );
+}
+
+function openBroadcaster(){
+
+  const room =
+    window
+      .liveBridgeAccount
+      ?.defaultRoom ||
+    "";
+
+  window.location.href =
+    "/sunday/?room=" +
+    encodeURIComponent(
+      room
+    );
+}
+
+async function logout(){
+
+  try{
+    await Clerk.signOut();
+  }catch(error){
+
+    console.error(
+      "LiveBridge logout error:",
+      error
+    );
+  }
+
+  window.location.replace(
+    "/"
+  );
+}
+
+function requestLiveBridgeTopUp(
+  packageName,
+  price
+){
+
+  const organization =
+    window.liveBridgeAccount
+      ?.organizationName ||
+    window.liveBridgeAccount
+      ?.organization ||
+    "LiveBridge Customer";
+
+  const room =
+    window.liveBridgeAccount
+      ?.defaultRoom ||
+    "";
+
+  const subject =
+    encodeURIComponent(
+      "LiveBridge Top Up Request"
+    );
+
+  const body =
+    encodeURIComponent(
+      "Hello LiveBridge Team,\n\n" +
+      "I would like to request the following broadcast-time top up:\n\n" +
+      packageName +
+      " — " +
+      price +
+      "\n\n" +
+      "Organization: " +
+      organization +
+      "\n" +
+      "Room: " +
+      room +
+      "\n\n" +
+      "Please contact me to complete the top up."
+    );
+
+  window.location.href =
+    "mailto:globalconnectionschurch@gmail.com" +
+    "?subject=" +
+    subject +
+    "&body=" +
+    body;
+}
+
+function requestLiveBridgeUpgrade(){
+
+  const organization =
+    window.liveBridgeAccount
+      ?.organizationName ||
+    window.liveBridgeAccount
+      ?.organization ||
+    "LiveBridge Customer";
+
+  const subject =
+    encodeURIComponent(
+      "LiveBridge Plan Upgrade Request"
+    );
+
+  const body =
+    encodeURIComponent(
+      "Hello LiveBridge Team,\n\n" +
+      "I would like to discuss upgrading my LiveBridge plan.\n\n" +
+      "Organization: " +
+      organization +
+      "\n\n" +
+      "Please contact me with the available upgrade options."
+    );
+
+  window.location.href =
+    "mailto:globalconnectionschurch@gmail.com" +
+    "?subject=" +
+    subject +
+    "&body=" +
+    body;
+}
+
+function openRequestedAccountPanel(){
+
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
+
+  const requestedPanel =
+    String(
+      params.get(
+        "panel"
+      ) ||
+      ""
+    )
+    .trim();
+
+  if(
+    !requestedPanel
+  ){
+    return;
+  }
+
+  const button =
+    document.querySelector(
+      '.lb-nav-button[data-panel="' +
+      requestedPanel +
+      '"]'
+    );
+
+  if(button){
+    button.click();
+  }
+}
+
+const LB_ACCOUNT_SHARE_TRANSLATIONS = {
+
+  en:{
+    title:"Join Our Live Broadcast Now",
+    subtitle:"Listen in your own language",
+    message:"We’re live now. Join our LiveBridge broadcast and listen in your own language.",
+    room:"ROOM"
+  },
+
+  fr:{
+    title:"Rejoignez notre diffusion en direct",
+    subtitle:"Écoutez dans votre propre langue",
+    message:"Nous sommes en direct. Rejoignez notre diffusion LiveBridge et écoutez dans votre propre langue.",
+    room:"SALLE"
+  },
+
+  es:{
+    title:"Únase a nuestra transmisión en vivo",
+    subtitle:"Escuche en su propio idioma",
+    message:"Estamos en vivo. Únase a nuestra transmisión de LiveBridge y escuche en su propio idioma.",
+    room:"SALA"
+  },
+
+  de:{
+    title:"Jetzt unserer Live-Übertragung beitreten",
+    subtitle:"Hören Sie in Ihrer eigenen Sprache",
+    message:"Wir sind jetzt live. Treten Sie unserer LiveBridge-Übertragung bei und hören Sie in Ihrer eigenen Sprache.",
+    room:"RAUM"
+  },
+
+  pt:{
+    title:"Entre na nossa transmissão ao vivo",
+    subtitle:"Ouça no seu próprio idioma",
+    message:"Estamos ao vivo. Entre na nossa transmissão LiveBridge e ouça no seu próprio idioma.",
+    room:"SALA"
+  },
+
+  it:{
+    title:"Partecipa alla nostra diretta",
+    subtitle:"Ascolta nella tua lingua",
+    message:"Siamo in diretta. Partecipa alla nostra trasmissione LiveBridge e ascolta nella tua lingua.",
+    room:"STANZA"
+  },
+
+  nl:{
+    title:"Doe nu mee met onze live-uitzending",
+    subtitle:"Luister in uw eigen taal",
+    message:"We zijn nu live. Doe mee met onze LiveBridge-uitzending en luister in uw eigen taal.",
+    room:"KAMER"
+  },
+
+  pl:{
+    title:"Dołącz do naszej transmisji na żywo",
+    subtitle:"Słuchaj w swoim języku",
+    message:"Jesteśmy na żywo. Dołącz do transmisji LiveBridge i słuchaj w swoim języku.",
+    room:"POKÓJ"
+  },
+
+  uk:{
+    title:"Приєднуйтесь до нашої прямої трансляції",
+    subtitle:"Слухайте своєю мовою",
+    message:"Ми вже в ефірі. Приєднуйтесь до трансляції LiveBridge і слухайте своєю мовою.",
+    room:"КІМНАТА"
+  },
+
+  ru:{
+    title:"Присоединяйтесь к нашей прямой трансляции",
+    subtitle:"Слушайте на своем языке",
+    message:"Мы уже в эфире. Присоединяйтесь к трансляции LiveBridge и слушайте на своем языке.",
+    room:"КОМНАТА"
+  },
+
+  ar:{
+    title:"انضم إلى البث المباشر الآن",
+    subtitle:"استمع بلغتك الخاصة",
+    message:"نحن على الهواء الآن. انضم إلى بث LiveBridge واستمع بلغتك الخاصة.",
+    room:"الغرفة"
+  },
+
+  zh:{
+    title:"立即加入我们的直播",
+    subtitle:"用您自己的语言收听",
+    message:"我们正在直播。加入 LiveBridge 直播，用您自己的语言收听。",
+    room:"房间"
+  },
+
+  ja:{
+    title:"ライブ配信に今すぐ参加",
+    subtitle:"あなたの言語でお聴きください",
+    message:"現在ライブ配信中です。LiveBridgeに参加して、あなたの言語でお聴きください。",
+    room:"ルーム"
+  },
+
+  ko:{
+    title:"지금 라이브 방송에 참여하세요",
+    subtitle:"자신의 언어로 들으세요",
+    message:"지금 라이브 중입니다. LiveBridge 방송에 참여해 자신의 언어로 들으세요.",
+    room:"방"
+  },
+
+  hi:{
+    title:"अभी हमारे लाइव प्रसारण से जुड़ें",
+    subtitle:"अपनी भाषा में सुनें",
+    message:"हम अभी लाइव हैं। हमारे LiveBridge प्रसारण से जुड़ें और अपनी भाषा में सुनें।",
+    room:"रूम"
+  }
+};
+
+function wrapAccountShareText(
+  ctx,
+  text,
+  maxWidth
+){
+
+  const words =
+    String(
+      text
+    )
+    .split(
+      /\s+/
+    );
+
+  const lines =
+    [];
+
+  let line =
+    "";
+
+  for(
+    const word of
+    words
+  ){
+
+    const test =
+      line
+        ? line +
+          " " +
+          word
+        : word;
+
+    if(
+      ctx.measureText(
+        test
+      ).width >
+        maxWidth &&
+      line
+    ){
+
+      lines.push(
+        line
+      );
+
+      line =
+        word;
+
+    }else{
+
+      line =
+        test;
+    }
+  }
+
+  if(line){
+    lines.push(
+      line
+    );
+  }
+
+  return lines;
+}
+
+async function makeAccountShareGraphic(){
+
+  const account =
+    window.liveBridgeAccount ||
+    {};
+
+  const room =
+    String(
+      account.defaultRoom ||
+      ""
+    )
+    .trim()
+    .toUpperCase();
+
+  const lang =
+    String(
+      document.getElementById(
+        "accountShareLanguage"
+      )?.value ||
+      "en"
+    )
+    .trim()
+    .toLowerCase();
+
+  const t =
+    LB_ACCOUNT_SHARE_TRANSLATIONS[
+      lang
+    ] ||
+    LB_ACCOUNT_SHARE_TRANSLATIONS.en;
+
+  const url =
+    createListenerURL(
+      room,
+      lang
+    );
+
+  const qr =
+    new Image();
+
+  qr.crossOrigin =
+    "anonymous";
+
+  qr.src =
+    "https://api.qrserver.com/v1/create-qr-code/" +
+    "?size=500x500&margin=8&data=" +
+    encodeURIComponent(
+      url
+    );
+
+  await new Promise(
+    (
+      resolve,
+      reject
+    ) => {
+
+      qr.onload =
+        resolve;
+
+      qr.onerror =
+        reject;
+    }
+  );
+
+  const canvas =
+    document.createElement(
+      "canvas"
+    );
+
+  canvas.width =
+    1600;
+
+  canvas.height =
+    1000;
+
+  const ctx =
+    canvas.getContext(
+      "2d"
+    );
+
+  const gradient =
+    ctx.createLinearGradient(
+      0,
+      0,
+      1600,
+      1000
+    );
+
+  gradient.addColorStop(
+    0,
+    "#061325"
+  );
+
+  gradient.addColorStop(
+    .65,
+    "#0a2747"
+  );
+
+  gradient.addColorStop(
+    1,
+    "#04111e"
+  );
+
+  ctx.fillStyle =
+    gradient;
+
+  ctx.fillRect(
+    0,
+    0,
+    1600,
+    1000
+  );
+
+  ctx.font =
+    "900 70px Arial";
+
+  ctx.fillStyle =
+    "#fff";
+
+  ctx.fillText(
+    "Live",
+    70,
+    105
+  );
+
+  ctx.fillStyle =
+    "#42f5a1";
+
+  ctx.fillText(
+    "Bridge",
+    205,
+    105
+  );
+
+  ctx.font =
+    "700 20px Arial";
+
+  ctx.fillStyle =
+    "#90a9c4";
+
+  ctx.fillText(
+    "Live multilingual translation",
+    72,
+    145
+  );
+
+  ctx.font =
+    "900 78px Arial";
+
+  ctx.fillStyle =
+    "#fff";
+
+  let y =
+    275;
+
+  for(
+    const line of
+      wrapAccountShareText(
+        ctx,
+        t.title,
+        930
+      )
+  ){
+
+    ctx.fillText(
+      line,
+      70,
+      y
+    );
+
+    y +=
+      88;
+  }
+
+  ctx.font =
+    "700 46px Arial";
+
+  ctx.fillStyle =
+    "#42f5a1";
+
+  for(
+    const line of
+      wrapAccountShareText(
+        ctx,
+        t.subtitle,
+        900
+      )
+  ){
+
+    ctx.fillText(
+      line,
+      72,
+      y
+    );
+
+    y +=
+      56;
+  }
+
+  ctx.fillStyle =
+    "#fff";
+
+  ctx.beginPath();
+
+  ctx.roundRect(
+    1110,
+    180,
+    365,
+    365,
+    24
+  );
+
+  ctx.fill();
+
+  ctx.drawImage(
+    qr,
+    1132,
+    202,
+    321,
+    321
+  );
+
+  ctx.font =
+    "800 26px Arial";
+
+  ctx.fillStyle =
+    "#fff";
+
+  ctx.fillText(
+    "Scan QR to join live",
+    1130,
+    600
+  );
+
+  ctx.fillStyle =
+    "rgba(3,19,34,.82)";
+
+  ctx.strokeStyle =
+    "#24d98b";
+
+  ctx.lineWidth =
+    2;
+
+  ctx.beginPath();
+
+  ctx.roundRect(
+    70,
+    700,
+    1460,
+    165,
+    24
+  );
+
+  ctx.fill();
+
+  ctx.stroke();
+
+  ctx.font =
+    "800 20px Arial";
+
+  ctx.fillStyle =
+    "#42f5a1";
+
+  ctx.fillText(
+    t.room,
+    105,
+    742
+  );
+
+  ctx.font =
+    "900 44px Arial";
+
+  ctx.fillStyle =
+    "#fff";
+
+  ctx.fillText(
+    room ||
+    "LIVE",
+    105,
+    805
+  );
+
+  ctx.font =
+    "700 24px Arial";
+
+  ctx.fillStyle =
+    "#42f5a1";
+
+  const urlLines =
+    wrapAccountShareText(
+      ctx,
+      url,
+      1000
+    );
+
+  urlLines
+    .slice(
+      0,
+      2
+    )
+    .forEach(
+      (
+        line,
+        index
+      ) => {
+
+        ctx.fillText(
+          line,
+          430,
+          755 +
+          (
+            index *
+            34
+          )
+        );
+      }
+    );
+
+  ctx.font =
+    "700 20px Arial";
+
+  ctx.fillStyle =
+    "#91a8c0";
+
+  ctx.fillText(
+    "English  •  Français  •  Español  •  Deutsch  •  Português  •  中文  •  العربية  •  + many more",
+    74,
+    930
+  );
+
+  const blob =
+    await new Promise(
+      resolve =>
+        canvas.toBlob(
+          resolve,
+          "image/png",
+          .96
+        )
+    );
+
+  return {
+    canvas,
+    blob,
+
+    filename:
+      "LiveBridge-" +
+      (
+        room ||
+        "Room"
+      ) +
+      "-" +
+      lang +
+      ".png",
+
+    message:
+      t.message +
+      "\n\n" +
+      t.room +
+      ": " +
+      room +
+      "\n" +
+      url
+  };
+}
+
+async function previewAccountShareInvite(){
+
+  const generated =
+    await makeAccountShareGraphic();
+
+  document.getElementById(
+    "accountSharePreviewImage"
+  ).src =
+    generated.canvas
+      .toDataURL(
+        "image/png"
+      );
+
+  document.getElementById(
+    "accountSharePreview"
+  ).classList.add(
+    "show"
+  );
+
+  window.currentAccountShareInvite =
+    generated;
+
+  return generated;
+}
+
+function setupNavigation(){
+
+  document
+    .querySelectorAll(
+      ".lb-nav-button[data-panel]"
+    )
+    .forEach(
+      button => {
+
+        button.addEventListener(
+          "click",
+          function(){
+
+            const panel =
+              this.dataset.panel;
+
+            document
+              .querySelectorAll(
+                ".lb-nav-button[data-panel]"
+              )
+              .forEach(
+                item =>
+                  item.classList.remove(
+                    "active"
+                  )
+              );
+
+            this.classList.add(
+              "active"
+            );
+
+            document
+              .querySelectorAll(
+                ".lb-panel"
+              )
+              .forEach(
+                item =>
+                  item.classList.remove(
+                    "active"
+                  )
+              );
+
+            document.getElementById(
+              "panel-" +
+              panel
+            ).classList.add(
+              "active"
+            );
+
+            const titles = {
+
+              overview:[
+                "Account Overview",
+                "Manage your LiveBridge organization."
+              ],
+
+              account:[
+                "Account Information",
+                "Your organization and account details."
+              ],
+
+              usage:[
+                "Usage & Statistics",
+                "Your LiveBridge activity and audience usage."
+              ],
+
+              history:[
+                "Broadcast History",
+                "Review your completed LiveBridge broadcasts."
+              ],
+
+              billing:[
+                "Billing",
+                "Your plan and billing information."
+              ],
+
+              security:[
+                "Security",
+                "Manage your login and account security."
+              ]
+            };
+
+            document.getElementById(
+              "pageHeading"
+            ).textContent =
+              titles[
+                panel
+              ][0];
+
+            document.getElementById(
+              "pageHeadingSub"
+            ).textContent =
+              titles[
+                panel
+              ][1];
+          }
+        );
+      }
+    );
+}
+
+document.getElementById(
+  "copyShareLink"
+).addEventListener(
+  "click",
+  async function(){
+
+    const url =
+      window.liveBridgeListenerURL;
+
+    await navigator.clipboard
+      .writeText(
+        url
+      );
+
+    const old =
+      this.textContent;
+
+    this.textContent =
+      "✓ Copied";
+
+    setTimeout(
+      () =>
+        this.textContent =
+          old,
+      1800
+    );
+  }
+);
+
+document.getElementById(
+  "nativeShareLink"
+).addEventListener(
+  "click",
+  async function(){
+
+    try{
+
+      const generated =
+        await previewAccountShareInvite();
+
+      const file =
+        new File(
+          [
+            generated.blob
+          ],
+          generated.filename,
+          {
+            type:
+              "image/png"
+          }
+        );
+
+      if(
+        navigator.share &&
+        navigator.canShare &&
+        navigator.canShare({
+          files:[
+            file
+          ]
+        })
+      ){
+
+        await navigator.share({
+          title:
+            "LiveBridge Live Room",
+
+          text:
+            generated.message,
+
+          files:[
+            file
+          ]
+        });
+
+        return;
+      }
+
+      if(
+        navigator.share
+      ){
+
+        await navigator.share({
+          title:
+            "LiveBridge Live Room",
+
+          text:
+            generated.message,
+
+          url:
+            window.liveBridgeListenerURL
+        });
+
+        return;
+      }
+
+      await navigator.clipboard
+        .writeText(
+          generated.message
+        );
+
+      alert(
+        "Invite text copied. The share graphic is shown below."
+      );
+
+    }catch(error){
+
+      if(
+        error?.name !==
+        "AbortError"
+      ){
+
+        console.error(
+          "LiveBridge account sharing failed:",
+          error
+        );
+
+        alert(
+          "The invite preview is shown below."
+        );
+      }
+    }
+  }
+);
+
+document.getElementById(
+  "accountShareLanguage"
+)?.addEventListener(
+  "change",
+  async function(){
+
+    if(
+      window.liveBridgeAccount
+    ){
+
+      updateSharing(
+        window.liveBridgeAccount
+      );
+    }
+
+    if(
+      document.getElementById(
+        "accountSharePreview"
+      )?.classList.contains(
+        "show"
+      )
+    ){
+
+      await previewAccountShareInvite();
+    }
+  }
+);
+
+document.getElementById(
+  "downloadAccountShareGraphic"
+)?.addEventListener(
+  "click",
+  async function(){
+
+    const generated =
+      window.currentAccountShareInvite ||
+      await previewAccountShareInvite();
+
+    const link =
+      document.createElement(
+        "a"
+      );
+
+    link.href =
+      generated.canvas
+        .toDataURL(
+          "image/png"
+        );
+
+    link.download =
+      generated.filename;
+
+    link.click();
+  }
+);
+
+document.getElementById(
+  "copyAccountInviteText"
+)?.addEventListener(
+  "click",
+  async function(){
+
+    const generated =
+      window.currentAccountShareInvite ||
+      await previewAccountShareInvite();
+
+    await navigator.clipboard
+      .writeText(
+        generated.message
+      );
+
+    const old =
+      this.textContent;
+
+    this.textContent =
+      "✓ Copied";
+
+    setTimeout(
+      () =>
+        this.textContent =
+          old,
+      1500
+    );
+  }
+);
+
+document.getElementById(
+  "openListenerLink"
+).addEventListener(
+  "click",
+  function(){
+
+    window.open(
+      window.liveBridgeListenerURL,
+      "_blank"
+    );
+  }
+);
+
+document.getElementById(
+  "openBroadcasterButton"
+).addEventListener(
+  "click",
+  openBroadcaster
+);
+
+document.getElementById(
+  "openBroadcasterNav"
+).addEventListener(
+  "click",
+  openBroadcaster
+);
+
+document.getElementById(
+  "openAdminNav"
+).addEventListener(
+  "click",
+  function(){
+
+    window.location.href =
+      "/admin";
+  }
+);
+
+document.getElementById(
+  "logoutButton"
+).addEventListener(
+  "click",
+  logout
+);
+
+document.getElementById(
+  "securityLogoutButton"
+).addEventListener(
+  "click",
+  logout
+);
+
+document.getElementById(
+  "manageAccountButton"
+).addEventListener(
+  "click",
+  () =>
+    Clerk.openUserProfile()
+);
+
+window.addEventListener(
+  "load",
+  async function(){
+
+    try{
+
+      await Clerk.load();
+
+      let user =
+        null;
+
+      if(
+        Clerk.isSignedIn &&
+        Clerk.user
+      ){
+
+        user =
+          Clerk.user;
+
+      }else{
+
+        user =
+          await activateExistingClerkSession();
+      }
+
+      if(!user){
+
+        showLogin();
+
+        return;
+      }
+
+      await completePendingSetup(
+        user
+      );
+
+      user =
+        Clerk.user ||
+        user;
+
+      const params =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      if(
+        params.get(
+          "returnTo"
+        ) ===
+        "/admin"
+      ){
+
+        window.location.replace(
+          "/admin"
+        );
+
+        return;
+      }
+
+      await renderDashboard(
+        user
+      );
+
+      setupNavigation();
+
+      openRequestedAccountPanel();
+
+    }catch(error){
+
+      console.error(
+        "LiveBridge account error:",
+        error
+      );
+
+      document.getElementById(
+        "lb-loading"
+      ).innerHTML =
+        '<div><strong>LiveBridge Account Error</strong><br><br>Please refresh the page.</div>';
+    }
+  }
+);
+
+</script>
+
+<style>
+.lb-speech-rate-card{
+  margin-top:16px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:18px;
+  padding:20px;
+}
+
+.lb-speech-rate-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:16px;
+  margin-bottom:16px;
+}
+
+.lb-speech-rate-title{
+  font-size:17px;
+  font-weight:900;
+  color:white;
+}
+
+.lb-speech-rate-sub{
+  margin-top:5px;
+  color:#8ea3ba;
+  font-size:13px;
+  line-height:1.5;
+  max-width:700px;
+}
+
+.lb-speech-rate-badge{
+  flex:0 0 auto;
+  padding:7px 10px;
+  border-radius:999px;
+  background:rgba(52,212,189,.10);
+  border:1px solid rgba(52,212,189,.22);
+  color:#69e4c6;
+  font-size:12px;
+  font-weight:900;
+}
+
+.lb-speech-rate-row{
+  display:grid;
+  grid-template-columns:52px 1fr 52px;
+  gap:10px;
+  align-items:center;
+}
+
+.lb-speech-rate-button{
+  height:46px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:10px;
+  background:#14263b;
+  color:white;
+  font-size:23px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.lb-speech-rate-display{
+  height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:10px;
+  background:#0d1928;
+  color:white;
+  font-size:19px;
+  font-weight:900;
+}
+
+.lb-speech-rate-actions{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-top:14px;
+  flex-wrap:wrap;
+}
+
+.lb-speech-rate-save{
+  border:none;
+  border-radius:11px;
+  padding:12px 18px;
+  color:white;
+  font-weight:900;
+  cursor:pointer;
+  background:linear-gradient(135deg,#2588ff,#6f43df);
+}
+
+.lb-speech-rate-save:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+.lb-speech-rate-status{
+  color:#8ea3ba;
+  font-size:12px;
+}
+
+@media(max-width:650px){
+  .lb-speech-rate-top{
+    flex-direction:column;
+  }
+}
+</style>
+
+<script>
+(function(){
+
+  const WORKER =
+    "https://livebridge.northstarventures-ca.workers.dev";
+
+  let speechRate =
+    1.15;
+
+  let loadAttempted =
+    false;
+
+  function clampRate(
+    value
+  ){
+
+    return Math.round(
+      Math.min(
+        1.50,
+        Math.max(
+          0.75,
+          Number(
+            value ||
+            1.15
+          )
+        )
+      ) *
+      100
+    ) /
+    100;
+  }
+
+  function updateDisplay(){
+
+    const display =
+      document.getElementById(
+        "lbAccountSpeechRateDisplay"
+      );
+
+    const badge =
+      document.getElementById(
+        "lbAccountSpeechRateBadge"
+      );
+
+    if(display){
+
+      display.textContent =
+        speechRate.toFixed(
+          2
+        ) +
+        "×";
+    }
+
+    if(badge){
+
+      badge.textContent =
+        "Current: " +
+        speechRate.toFixed(
+          2
+        ) +
+        "×";
+    }
+  }
+
+  async function getToken(){
+
+    if(
+      typeof window.getLiveBridgeSessionToken ===
+      "function"
+    ){
+
+      const token =
+        await window.getLiveBridgeSessionToken();
+
+      if(token){
+        return token;
+      }
+    }
+
+    if(
+      !window.Clerk
+    ){
+      return null;
+    }
+
+    const currentUserId =
+      window.Clerk
+        ?.user
+        ?.id ||
+      "";
+
+    const sessions =
+      window.Clerk
+        ?.client
+        ?.sessions ||
+      window.Clerk
+        ?.client
+        ?.signedInSessions ||
+      [];
+
+    let session =
+      window.Clerk
+        ?.session ||
+      null;
+
+    if(
+      currentUserId &&
+      session?.user?.id !==
+        currentUserId
+    ){
+
+      session =
+        sessions.find(
+          item =>
+            item?.user?.id ===
+            currentUserId
+        ) ||
+        null;
+    }
+
+    if(!session){
+
+      session =
+        sessions.find(
+          item =>
+            item?.status ===
+            "active"
+        ) ||
+        sessions[0] ||
+        null;
+    }
+
+    if(!session){
+      return null;
+    }
+
+    if(
+      window.Clerk
+        ?.session
+        ?.id !==
+      session.id
+    ){
+
+      try{
+
+        await window.Clerk
+          .setActive({
+            session:
+              session.id
+          });
+
+      }catch{}
+    }
+
+    try{
+
+      return await session
+        .getToken();
+
+    }catch{
+
+      return null;
+    }
+  }
+
+  function createCard(){
+
+    if(
+      document.getElementById(
+        "lbAccountSpeechRateCard"
+      )
+    ){
+      return true;
+    }
+
+    const overview =
+      document.getElementById(
+        "panel-overview"
+      );
+
+    if(
+      !overview
+    ){
+      return false;
+    }
+
+    const shareCard =
+      overview.querySelector(
+        ".lb-share-card"
+      );
+
+    const card =
+      document.createElement(
+        "div"
+      );
+
+    card.id =
+      "lbAccountSpeechRateCard";
+
+    card.className =
+      "lb-speech-rate-card";
+
+    card.innerHTML = `
+      <div class="lb-speech-rate-top">
+
+        <div>
+
+          <div class="lb-speech-rate-title">
+            🔊 Listener Speaking Speed
+          </div>
+
+          <div class="lb-speech-rate-sub">
+            Set the spoken translation speed for everyone listening
+            to your organization broadcast.
+          </div>
+
+        </div>
+
+        <div
+          id="lbAccountSpeechRateBadge"
+          class="lb-speech-rate-badge"
+        >
+          Current: 1.15×
+        </div>
+
+      </div>
+
+      <div class="lb-speech-rate-row">
+
+        <button
+          type="button"
+          id="lbAccountSpeechRateDown"
+          class="lb-speech-rate-button"
+        >
+          −
+        </button>
+
+        <div
+          id="lbAccountSpeechRateDisplay"
+          class="lb-speech-rate-display"
+        >
+          1.15×
+        </div>
+
+        <button
+          type="button"
+          id="lbAccountSpeechRateUp"
+          class="lb-speech-rate-button"
+        >
+          +
+        </button>
+
+      </div>
+
+      <div class="lb-speech-rate-actions">
+
+        <button
+          type="button"
+          id="lbAccountSpeechRateSave"
+          class="lb-speech-rate-save"
+        >
+          Save Speaking Speed
+        </button>
+
+        <div
+          id="lbAccountSpeechRateStatus"
+          class="lb-speech-rate-status"
+        >
+          Default is 1.15×.
+        </div>
+
+      </div>
+    `;
+
+    if(shareCard){
+
+      shareCard.insertAdjacentElement(
+        "beforebegin",
+        card
+      );
+
+    }else{
+
+      overview.appendChild(
+        card
+      );
+    }
+
+    document.getElementById(
+      "lbAccountSpeechRateDown"
+    ).addEventListener(
+      "click",
+      function(){
+
+        speechRate =
+          clampRate(
+            speechRate -
+            0.05
+          );
+
+        updateDisplay();
+      }
+    );
+
+    document.getElementById(
+      "lbAccountSpeechRateUp"
+    ).addEventListener(
+      "click",
+      function(){
+
+        speechRate =
+          clampRate(
+            speechRate +
+            0.05
+          );
+
+        updateDisplay();
+      }
+    );
+
+    document.getElementById(
+      "lbAccountSpeechRateSave"
+    ).addEventListener(
+      "click",
+      saveRate
+    );
+
+    updateDisplay();
+
+    return true;
+  }
+
+  async function loadRate(){
+
+    const status =
+      document.getElementById(
+        "lbAccountSpeechRateStatus"
+      );
+
+    try{
+
+      const token =
+        await getToken();
+
+      if(!token){
+
+        setTimeout(
+          loadRate,
+          750
+        );
+
+        return;
+      }
+
+      const response =
+        await fetch(
+          WORKER +
+          "/account",
+          {
+            headers:{
+              "Authorization":
+                "Bearer " +
+                token
+            }
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if(
+        !response.ok ||
+        !data.success ||
+        !data.account
+      ){
+        throw new Error(
+          data.error ||
+          "Unable to load speaking speed."
+        );
+      }
+
+      speechRate =
+        clampRate(
+          data.account.speechRate ??
+          1.15
+        );
+
+      updateDisplay();
+
+      if(status){
+
+        status.textContent =
+          "Saved organization speed.";
+      }
+
+    }catch(error){
+
+      console.error(
+        "LiveBridge speaking speed load failed:",
+        error
+      );
+
+      if(status){
+
+        status.textContent =
+          "Could not load saved speed.";
+      }
+    }
+  }
+
+  async function saveRate(){
+
+    const button =
+      document.getElementById(
+        "lbAccountSpeechRateSave"
+      );
+
+    const status =
+      document.getElementById(
+        "lbAccountSpeechRateStatus"
+      );
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      "Saving...";
+
+    status.textContent =
+      "Saving...";
+
+    try{
+
+      const token =
+        await getToken();
+
+      if(!token){
+
+        throw new Error(
+          "Please sign in again."
+        );
+      }
+
+      const response =
+        await fetch(
+          WORKER +
+          "/account-speech-rate",
+          {
+            method:
+              "POST",
+
+            headers:{
+              "Authorization":
+                "Bearer " +
+                token,
+
+              "Content-Type":
+                "application/json"
+            },
+
+            body:
+              JSON.stringify({
+                speechRate:
+                  speechRate
+              })
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if(
+        !response.ok ||
+        !data.success
+      ){
+        throw new Error(
+          data.error ||
+          "Unable to save speaking speed."
+        );
+      }
+
+      speechRate =
+        clampRate(
+          data.speechRate ??
+          speechRate
+        );
+
+      updateDisplay();
+
+      button.textContent =
+        "✓ Saved";
+
+      status.textContent =
+        "Organization speed saved at " +
+        speechRate.toFixed(
+          2
+        ) +
+        "×.";
+
+      setTimeout(
+        function(){
+
+          button.textContent =
+            "Save Speaking Speed";
+        },
+        1400
+      );
+
+    }catch(error){
+
+      console.error(
+        "LiveBridge speaking speed save failed:",
+        error
+      );
+
+      button.textContent =
+        "Save Speaking Speed";
+
+      status.textContent =
+        "Error: " +
+        error.message;
+
+    }finally{
+
+      button.disabled =
+        false;
+    }
+  }
+
+  function start(){
+
+    if(
+      createCard()
+    ){
+
+      if(
+        !loadAttempted
+      ){
+
+        loadAttempted =
+          true;
+
+        loadRate();
+      }
+
+      return;
+    }
+
+    const observer =
+      new MutationObserver(
+        function(){
+
+          if(
+            createCard()
+          ){
+
+            observer.disconnect();
+
+            if(
+              !loadAttempted
+            ){
+
+              loadAttempted =
+                true;
+
+              loadRate();
+            }
+          }
+        }
+      );
+
+    observer.observe(
+      document.documentElement,
+      {
+        childList:true,
+        subtree:true
+      }
+    );
+
+    setTimeout(
+      function(){
+
+        createCard();
+
+        if(
+          !loadAttempted &&
+          document.getElementById(
+            "lbAccountSpeechRateCard"
+          )
+        ){
+
+          loadAttempted =
+            true;
+
+          loadRate();
+        }
+      },
+      1000
+    );
+  }
+
+  start();
+
+})();
+</script>
+
+<!-- LiveBridge account data is D1-authoritative. Account creation occurs only through verified signup. -->
+
+<script>
+(function(){
+
+  function wireLiveBridgeProExport(){
+
+    const button =
+      document.getElementById(
+        "lbExportAnalyticsButton"
+      );
+
+    if(
+      !button ||
+      button.dataset
+        .liveBridgeWired ===
+        "1"
+    ){
+      return;
+    }
+
+    button.dataset
+      .liveBridgeWired =
+      "1";
+
+    button.addEventListener(
+      "click",
+      exportLiveBridgeAnalyticsCsv
+    );
+  }
+
+  if(
+    document.readyState ===
+    "loading"
+  ){
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      wireLiveBridgeProExport
+    );
+
+  }else{
+
+    wireLiveBridgeProExport();
+  }
+
+})();
+</script>
+
+</body>
+</html>
