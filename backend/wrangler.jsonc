@@ -1,0 +1,38 @@
+{
+  "name": "livebridge-allinone-backend-test",
+  "main": "./worker.js",
+  "compatibility_date": "2026-08-29",
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LIVEBRIDGE_ROOMS",
+        "class_name": "LiveBridgeRoom"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "LiveBridgeRoom"
+      ]
+    }
+  ],
+
+  "d1_databases": [
+    {
+      "binding": "TRANSLATIONS_DB",
+      "database_name": "livebridge-db",
+      "database_id": "3d757c96-ec18-4144-be5e-95cbf43a9b1f"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "AZURE_TTS_CACHE",
+      "bucket_name": "livebridge-azure-tts-cache"
+    }
+  ]
+}
