@@ -32,7 +32,7 @@
   "r2_buckets": [
     {
       "binding": "AZURE_TTS_CACHE",
-      "bucket_name": "livebridge-azure-tts-cache"
+      "bucket_name": "livebridge-promoter-test-cache"
     }
   ]
 }
