@@ -2608,6 +2608,254 @@ async function verifyAdminRequest(
     admin
   };
 }
+let returnVisitorSchemaReady = false;
+
+async function ensureReturnVisitorSchema(env) {
+  if (returnVisitorSchemaReady) {
+    return;
+  }
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_visitors (
+      organization_id INTEGER NOT NULL,
+      room TEXT NOT NULL,
+      visitor_id TEXT NOT NULL,
+      first_visit_day TEXT NOT NULL,
+      last_visit_day TEXT NOT NULL,
+      visit_days INTEGER NOT NULL DEFAULT 1,
+      first_seen_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      preferred_language TEXT NOT NULL DEFAULT '',
+      PRIMARY KEY (organization_id, visitor_id)
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_visitor_days (
+      organization_id INTEGER NOT NULL,
+      visitor_id TEXT NOT NULL,
+      visit_day TEXT NOT NULL,
+      room TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT '',
+      first_seen_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      PRIMARY KEY (organization_id, visitor_id, visit_day)
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_return_messages (
+      organization_id INTEGER NOT NULL,
+      visit_number INTEGER NOT NULL,
+      message TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (organization_id, visit_number)
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_organization_visitors_room
+    ON organization_visitors (organization_id, room)
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_organization_visitor_days_org_day
+    ON organization_visitor_days (organization_id, visit_day)
+  `).run();
+
+  returnVisitorSchemaReady = true;
+}
+__name(ensureReturnVisitorSchema, "ensureReturnVisitorSchema");
+
+async function trackAnonymousOrganizationVisitor(
+  env,
+  organization,
+  room,
+  visitorId,
+  visitDay,
+  language
+) {
+  if (!organization) {
+    return null;
+  }
+
+  const normalizedVisitorId =
+    String(visitorId || "").trim();
+
+  const normalizedVisitDay =
+    String(visitDay || "").trim();
+
+  if (
+    !/^[A-Za-z0-9_-]{8,200}$/.test(
+      normalizedVisitorId
+    ) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      normalizedVisitDay
+    )
+  ) {
+    return null;
+  }
+
+  await ensureReturnVisitorSchema(env);
+
+  const organizationId =
+    Number(organization.id || 0);
+
+  if (!organizationId) {
+    return null;
+  }
+
+  const now = Date.now();
+  const normalizedLanguage =
+    String(language || "")
+      .trim()
+      .toLowerCase()
+      .slice(0, 40);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO organization_visitor_days (
+      organization_id,
+      visitor_id,
+      visit_day,
+      room,
+      language,
+      first_seen_at,
+      last_seen_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(organization_id, visitor_id, visit_day)
+    DO UPDATE SET
+      room = excluded.room,
+      language = excluded.language,
+      last_seen_at = excluded.last_seen_at
+  `)
+  .bind(
+    organizationId,
+    normalizedVisitorId,
+    normalizedVisitDay,
+    normalizeRoom(room),
+    normalizedLanguage,
+    now,
+    now
+  )
+  .run();
+
+  const visitStats =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        COUNT(*) AS visit_days,
+        MIN(visit_day) AS first_visit_day,
+        MAX(visit_day) AS last_visit_day
+      FROM organization_visitor_days
+      WHERE organization_id = ?
+        AND visitor_id = ?
+    `)
+    .bind(
+      organizationId,
+      normalizedVisitorId
+    )
+    .first();
+
+  const visitNumber =
+    Math.max(
+      1,
+      Number(visitStats?.visit_days || 1)
+    );
+
+  const firstVisitDay =
+    String(
+      visitStats?.first_visit_day ||
+      normalizedVisitDay
+    );
+
+  const lastVisitDay =
+    String(
+      visitStats?.last_visit_day ||
+      normalizedVisitDay
+    );
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO organization_visitors (
+      organization_id,
+      room,
+      visitor_id,
+      first_visit_day,
+      last_visit_day,
+      visit_days,
+      first_seen_at,
+      last_seen_at,
+      preferred_language
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(organization_id, visitor_id)
+    DO UPDATE SET
+      room = excluded.room,
+      first_visit_day = MIN(
+        organization_visitors.first_visit_day,
+        excluded.first_visit_day
+      ),
+      last_visit_day = MAX(
+        organization_visitors.last_visit_day,
+        excluded.last_visit_day
+      ),
+      visit_days = excluded.visit_days,
+      last_seen_at = excluded.last_seen_at,
+      preferred_language = excluded.preferred_language
+  `)
+  .bind(
+    organizationId,
+    normalizeRoom(room),
+    normalizedVisitorId,
+    firstVisitDay,
+    lastVisitDay,
+    visitNumber,
+    now,
+    now,
+    normalizedLanguage
+  )
+  .run();
+
+  let returnMessage = "";
+
+  if (visitNumber >= 2) {
+    const messageRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT message
+        FROM organization_return_messages
+        WHERE organization_id = ?
+          AND visit_number = ?
+        LIMIT 1
+      `)
+      .bind(
+        organizationId,
+        visitNumber
+      )
+      .first();
+
+    returnMessage =
+      String(messageRow?.message || "").trim();
+  }
+
+  return {
+    organizationId,
+    organizationName:
+      String(
+        organization.organization_name || ""
+      ),
+    visitNumber,
+    firstVisitDay,
+    lastVisitDay,
+    returning:
+      visitNumber > 1,
+    returnMessage
+  };
+}
+__name(
+  trackAnonymousOrganizationVisitor,
+  "trackAnonymousOrganizationVisitor"
+);
+
 async function ensureAnalyticsTables(env) {
   await env.TRANSLATIONS_DB.prepare(`
     CREATE TABLE IF NOT EXISTS broadcast_sessions (
@@ -2639,6 +2887,7 @@ async function ensureAnalyticsTables(env) {
   `).run();
 
   await ensureBroadcastSafetySchema(env);
+  await ensureReturnVisitorSchema(env);
 }
 __name(ensureAnalyticsTables, "ensureAnalyticsTables");
 async function getActiveBroadcast(env, room) {
@@ -8218,6 +8467,10 @@ if (
       env
     );
 
+    await ensureReturnVisitorSchema(
+      env
+    );
+
     await verifyAdminRequest(
       request,
       env
@@ -8307,6 +8560,38 @@ if (
     }
 
 
+    const returnMessagesResult =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          visit_number,
+          message
+        FROM organization_return_messages
+        WHERE organization_id = ?
+        ORDER BY visit_number ASC
+      `)
+      .bind(organizationId)
+      .all();
+
+    const visitorStatsRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS unique_visitors,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN visit_days > 1 THEN 1
+                ELSE 0
+              END
+            ),
+            0
+          ) AS returning_visitors,
+          COALESCE(SUM(visit_days), 0) AS total_visit_days
+        FROM organization_visitors
+        WHERE organization_id = ?
+      `)
+      .bind(organizationId)
+      .first();
+
     return jsonResponse({
 
       success: true,
@@ -8316,7 +8601,34 @@ if (
           row
         ),
 
-      broadcasts
+      broadcasts,
+
+      returnMessages:
+        (returnMessagesResult.results || [])
+          .map(item => ({
+            visitNumber:
+              Number(item.visit_number || 0),
+            message:
+              String(item.message || "")
+          })),
+
+      visitorStats: {
+        uniqueVisitors:
+          Number(
+            visitorStatsRow?.unique_visitors ||
+            0
+          ),
+        returningVisitors:
+          Number(
+            visitorStatsRow?.returning_visitors ||
+            0
+          ),
+        totalVisitDays:
+          Number(
+            visitorStatsRow?.total_visit_days ||
+            0
+          )
+      }
     });
 
   } catch (error) {
@@ -8327,6 +8639,163 @@ if (
         error:
           error.message ||
           "Admin access denied."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
+ADMIN - SAVE RETURN VISITOR MESSAGE
+=======================================================
+*/
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/return-message-save"
+) {
+  try {
+    await ensureReturnVisitorSchema(env);
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const organizationId =
+      Number(body.organizationId || 0);
+
+    const visitNumber =
+      Math.floor(
+        Number(body.visitNumber || 0)
+      );
+
+    const message =
+      String(body.message || "")
+        .trim();
+
+    if (!organizationId) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID is required."
+        },
+        400
+      );
+    }
+
+    if (
+      visitNumber < 2 ||
+      visitNumber > 1000
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Visit number must be between 2 and 1000."
+        },
+        400
+      );
+    }
+
+    if (message.length > 800) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Return message must be 800 characters or fewer."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(organizationId)
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    if (!message) {
+      await env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_return_messages
+        WHERE organization_id = ?
+          AND visit_number = ?
+      `)
+      .bind(
+        organizationId,
+        visitNumber
+      )
+      .run();
+
+      return jsonResponse({
+        success: true,
+        removed: true,
+        visitNumber
+      });
+    }
+
+    const now = Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO organization_return_messages (
+        organization_id,
+        visit_number,
+        message,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id, visit_number)
+      DO UPDATE SET
+        message = excluded.message,
+        updated_at = excluded.updated_at
+    `)
+    .bind(
+      organizationId,
+      visitNumber,
+      message,
+      now,
+      now
+    )
+    .run();
+
+    return jsonResponse({
+      success: true,
+      removed: false,
+      returnMessage: {
+        visitNumber,
+        message
+      }
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to save return visitor message."
       },
       403
     );
@@ -9142,6 +9611,10 @@ if (
         env
       );
 
+    await ensureReturnVisitorSchema(
+      env
+    );
+
     const body =
       await request.json();
 
@@ -9347,6 +9820,24 @@ if (
         organizationId,
         clerkUserId
       ),
+
+      env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_return_messages
+        WHERE organization_id = ?
+      `)
+      .bind(organizationId),
+
+      env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_visitor_days
+        WHERE organization_id = ?
+      `)
+      .bind(organizationId),
+
+      env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_visitors
+        WHERE organization_id = ?
+      `)
+      .bind(organizationId),
 
       env.TRANSLATIONS_DB.prepare(`
         DELETE FROM organizations
@@ -9872,6 +10363,8 @@ if (organization) {
         const room = normalizeRoom(body.room);
         const language = String(body.language || "").trim().toLowerCase();
         const listenerId = String(body.listenerId || "").trim();
+        const visitorId = String(body.visitorId || "").trim();
+        const visitDay = String(body.visitDay || "").trim();
         if (!room || !language || !listenerId) {
           return jsonResponse(
             {
@@ -9907,11 +10400,49 @@ if (organization) {
           now,
           now
         ).run();
+
+        let visitor = null;
+
+        if (visitorId && visitDay) {
+          const organization =
+            await getOrganizationForRoom(
+              env,
+              room
+            );
+
+          visitor =
+            await trackAnonymousOrganizationVisitor(
+              env,
+              organization,
+              room,
+              visitorId,
+              visitDay,
+              language
+            );
+        }
+
         return jsonResponse({
           success: true,
           tracked: true,
           broadcastId: broadcast.id,
-          sessionId
+          sessionId,
+          visitor:
+            visitor
+              ? {
+                  visitNumber:
+                    visitor.visitNumber,
+                  firstVisitDay:
+                    visitor.firstVisitDay,
+                  lastVisitDay:
+                    visitor.lastVisitDay,
+                  returning:
+                    visitor.returning
+                }
+              : null,
+          organizationName:
+            visitor?.organizationName || "",
+          returnMessage:
+            visitor?.returnMessage || ""
         });
       } catch (error) {
         return jsonResponse(
