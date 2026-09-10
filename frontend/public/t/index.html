@@ -5009,3 +5009,12 @@ return url.toString();
 LIVEBRIDGE_T_RETURN_VISITORS_TRANSLATED_POPUP.html
 HTML
 i need a console command to reset all the users back to zero visits
+
+Run this in Cloudflare → D1 → livebridge-db → Console:
+
+DELETE FROM organization_visitor_days;
+DELETE FROM organization_visitors;
+
+That resets all organizations and all recognized listeners back to 0 visits.
+
+Then refresh Admin and the Return Visitor stats should all show zero.
