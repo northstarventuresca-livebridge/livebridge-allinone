@@ -8805,6 +8805,106 @@ if (
 
 /*
 =======================================================
+ADMIN - RESET RETURN VISITOR HISTORY
+=======================================================
+*/
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/visitor-history-reset"
+) {
+  try {
+    await ensureReturnVisitorSchema(env);
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const organizationId =
+      Number(body.organizationId || 0);
+
+    if (!organizationId) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID is required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          organization_name
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(organizationId)
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    await env.TRANSLATIONS_DB.batch([
+      env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_visitor_days
+        WHERE organization_id = ?
+      `).bind(organizationId),
+
+      env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_visitors
+        WHERE organization_id = ?
+      `).bind(organizationId)
+    ]);
+
+    return jsonResponse({
+      success: true,
+      organizationId,
+      organizationName:
+        String(
+          organization.organization_name ||
+          ""
+        ),
+      visitorStats: {
+        uniqueVisitors: 0,
+        returningVisitors: 0,
+        totalVisitDays: 0
+      }
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to reset visitor history."
+      },
+      403
+    );
+  }
+}
+
+
+
+/*
+=======================================================
 ADMIN - UPDATE ORGANIZATION
 =======================================================
 */
