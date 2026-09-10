@@ -1823,6 +1823,37 @@ body{
                 </div>
               </div>
 
+              <div style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:12px;
+                padding:12px;
+                margin-bottom:16px;
+                border:1px solid rgba(239,68,68,.20);
+                border-radius:11px;
+                background:rgba(239,68,68,.06);
+              ">
+                <div class="lb-muted" style="line-height:1.45;">
+                  Reset this organization’s anonymous visitor counts and visit history. Configured return messages are kept.
+                </div>
+
+                <button
+                  class="lb-button danger"
+                  id="resetReturnVisitorHistoryButton"
+                  type="button"
+                  style="flex:0 0 auto;"
+                >
+                  Reset Visitor History
+                </button>
+              </div>
+
+              <div
+                id="returnVisitorResetStatus"
+                class="lb-message"
+                style="margin-top:-6px;margin-bottom:12px;"
+              ></div>
+
               <div class="lb-field" style="margin-bottom:10px;">
                 <label>Show Message On Visit #</label>
                 <input
@@ -4409,6 +4440,120 @@ async function removeReturnVisitorMessage(
 }
 
 
+async function resetReturnVisitorHistory(){
+  if (!selectedOrganization) {
+    return;
+  }
+
+  const organizationId =
+    Number(
+      selectedOrganization.id || 0
+    );
+
+  if (!organizationId) {
+    return;
+  }
+
+  const organizationName =
+    String(
+      selectedOrganization.organizationName ||
+      selectedOrganization.name ||
+      "this organization"
+    ).trim();
+
+  const confirmed =
+    window.confirm(
+      "Reset all visitor history for " +
+      organizationName +
+      "?\n\n" +
+      "This will set this organization’s visitor counts back to zero. " +
+      "Configured return messages will NOT be deleted.\n\n" +
+      "This cannot be undone."
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const button =
+    document.getElementById(
+      "resetReturnVisitorHistoryButton"
+    );
+
+  const status =
+    document.getElementById(
+      "returnVisitorResetStatus"
+    );
+
+  if (button) {
+    button.disabled = true;
+    button.textContent =
+      "Resetting...";
+  }
+
+  if (status) {
+    status.textContent = "";
+    status.className =
+      "lb-message";
+  }
+
+  try {
+    const response =
+      await adminFetch(
+        "/admin/visitor-history-reset",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            organizationId
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        "Unable to reset visitor history."
+      );
+    }
+
+    await openOrganization(
+      organizationId
+    );
+
+    const refreshedStatus =
+      document.getElementById(
+        "returnVisitorResetStatus"
+      );
+
+    if (refreshedStatus) {
+      refreshedStatus.textContent =
+        "✓ Visitor history reset to zero. Configured return messages were kept.";
+      refreshedStatus.className =
+        "lb-message good";
+    }
+
+  } catch (error) {
+    if (status) {
+      status.textContent =
+        error.message;
+      status.className =
+        "lb-message bad";
+    }
+
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "Reset Visitor History";
+    }
+  }
+}
+
+
+
 function collectFeatureOverrides(){
   return {
     transcriptAccess:
@@ -5437,6 +5582,14 @@ document.getElementById(
 )?.addEventListener(
   "click",
   () => saveReturnVisitorMessage()
+);
+
+
+document.getElementById(
+  "resetReturnVisitorHistoryButton"
+)?.addEventListener(
+  "click",
+  resetReturnVisitorHistory
 );
 
 
