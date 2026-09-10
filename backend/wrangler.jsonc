@@ -1,6 +1,6 @@
 {
   "name": "livebridge-allinone-backend-test",
-  "main": "./worker.js",
+  "main": "./router.js",
   "compatibility_date": "2026-08-29",
 
   "durable_objects": {
