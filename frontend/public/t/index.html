@@ -1,3 +1,78 @@
+Yesterday 8:33 PM
+{"success":true,"service":"LiveBridge","architecture":"Shared Durable Object Translation","status":"running"}
+you lost me on step 5 this is where im at 
+how do i set the branch
+ok now what
+worker.js
+JavaScript
+index (9).html
+File
+worker (1).js
+JavaScript
+index (10).html
+File
+and this is the index inside of /promoter-admin
+brought me here...
+brought me here 
+it brought me here 
+brings me here now... and its on the brower im signed into with my admin account too
+i signed in and it broght me here... but then when i try to load that url again this one.... https://livebridge-promoter-frontend-test.northstarventures-ca.workers.dev/promoter-admin/index.html.. it than broguht me back to this .. see second photo 
+index (11).html
+File
+here you go and a copy of the index file
+never mind  just had to wait for it to build lol 
+cant find redirect rules
+i clicked safe and deploy rule
+perfect. it works  also i added the lead  whats next
+ready for next step
+none there.
+and then on promoter page shows rejected 
+Edit
+Edit
+Edit
+Edit
+Edit
+we need these colors and this logo and style of writting 
+Edit
+Edit
+ok again you did it in a way i cant read it 
+just says language
+these all look empty.... like the values arent there
+
+Perfect. We’ll do only the /t page and leave the now-working Azure audio system untouched.
+
+Go to GitHub:
+
+livebridge-allinone → frontend → public → t → index.html → Edit
+
+Don’t change anything yet. Tell me ready, and I’ll paste the entire syntax-checked replacement file with the return popup translated into the language selected at Join Live Room.
+
+im ready
+
+That’s the full replacement for:
+
+frontend/public/t/index.html
+
+It is syntax-checked, keeps the working Azure audio system unchanged, and adds automatic translation of the return-visitor popup into the language selected when they join.
+
+Now Select All → paste the replacement → Commit changes to main.
+
+Tell me committed and we’ll test it in French first. 
+
+ummm no file is here LOL
+
+😂 Yep — my mistake. It didn’t render at all.
+
+Here’s the actual full replacement file:
+
+Download the full /t/index.html replacement
+
+Then:
+
+Open file → Ctrl+A → Ctrl+C → paste over everything in frontend/public/t/index.html → Commit to main.
+
+This version keeps the working Azure audio and adds the translated return-visitor popup.
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -890,11 +965,249 @@ listenerAudioButton.addEventListener("click", () => {
   }
 
 
-  function showConfiguredReturnVisitorMessage(
+  const RETURN_VISITOR_POPUP_UI = {
+    en: {
+      title: "Welcome Back",
+      hostedBy: "Room hosted by",
+      close: "Close"
+    },
+    fr: {
+      title: "Bon retour",
+      hostedBy: "Salle hébergée par",
+      close: "Fermer"
+    },
+    es: {
+      title: "Bienvenido de nuevo",
+      hostedBy: "Sala organizada por",
+      close: "Cerrar"
+    },
+    de: {
+      title: "Willkommen zurück",
+      hostedBy: "Raum bereitgestellt von",
+      close: "Schließen"
+    },
+    pt: {
+      title: "Bem-vindo de volta",
+      hostedBy: "Sala hospedada por",
+      close: "Fechar"
+    },
+    it: {
+      title: "Bentornato",
+      hostedBy: "Stanza ospitata da",
+      close: "Chiudi"
+    },
+    pl: {
+      title: "Witamy ponownie",
+      hostedBy: "Pokój prowadzony przez",
+      close: "Zamknij"
+    },
+    ru: {
+      title: "С возвращением",
+      hostedBy: "Комната организована",
+      close: "Закрыть"
+    },
+    uk: {
+      title: "З поверненням",
+      hostedBy: "Кімнату проводить",
+      close: "Закрити"
+    },
+    nl: {
+      title: "Welkom terug",
+      hostedBy: "Ruimte gehost door",
+      close: "Sluiten"
+    },
+    cs: {
+      title: "Vítejte zpět",
+      hostedBy: "Místnost hostuje",
+      close: "Zavřít"
+    },
+    fil: {
+      title: "Maligayang pagbabalik",
+      hostedBy: "Ang room ay hino-host ng",
+      close: "Isara"
+    },
+    he: {
+      title: "ברוכים השבים",
+      hostedBy: "החדר מתארח על ידי",
+      close: "סגירה"
+    },
+    yo: {
+      title: "Káàbọ̀ Padà",
+      hostedBy: "Yàrá náà jẹ́ ti",
+      close: "Pa"
+    },
+    ig: {
+      title: "Nnọọ ọzọ",
+      hostedBy: "Ụlọ a bụ nke",
+      close: "Mechie"
+    },
+    ha: {
+      title: "Barka da dawowa",
+      hostedBy: "Dakin yana karkashin",
+      close: "Rufe"
+    },
+    zh: {
+      title: "欢迎回来",
+      hostedBy: "房间由以下机构提供",
+      close: "关闭"
+    },
+    yue: {
+      title: "歡迎返嚟",
+      hostedBy: "房間由以下機構提供",
+      close: "關閉"
+    }
+  };
+
+
+  function getSelectedReturnVisitorLanguage() {
+    const languageSelect =
+      document.getElementById(
+        "listenerLanguage"
+      );
+
+    if (!languageSelect) {
+      return {
+        code: "en",
+        locale: "en-US"
+      };
+    }
+
+    const parts =
+      String(
+        languageSelect.value || "en|en-US"
+      ).split("|");
+
+    return {
+      code:
+        String(parts[0] || "en")
+          .trim()
+          .toLowerCase(),
+      locale:
+        String(parts[1] || parts[0] || "en-US")
+          .trim()
+    };
+  }
+
+
+  async function translateReturnVisitorMessage(
+    message,
+    visitNumber
+  ) {
+    const sourceMessage =
+      String(message || "").trim();
+
+    if (!sourceMessage) {
+      return "";
+    }
+
+    const selected =
+      getSelectedReturnVisitorLanguage();
+
+    if (
+      !selected.code ||
+      selected.code === "en"
+    ) {
+      return sourceMessage;
+    }
+
+    const cacheKey =
+      "livebridgeReturnMessageTranslation:" +
+      String(ROOM_ID || "") +
+      ":" +
+      String(visitNumber || 0) +
+      ":" +
+      selected.code;
+
+    try {
+      const cachedRaw =
+        localStorage.getItem(
+          cacheKey
+        );
+
+      if (cachedRaw) {
+        const cached =
+          JSON.parse(cachedRaw);
+
+        if (
+          cached &&
+          cached.source === sourceMessage &&
+          String(
+            cached.translated || ""
+          ).trim()
+        ) {
+          return String(
+            cached.translated
+          ).trim();
+        }
+      }
+    } catch {}
+
+    try {
+      const response =
+        await fetch(
+          WORKER_URL +
+          "/azure-translate-test",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+            body: JSON.stringify({
+              text:
+                sourceMessage,
+              language:
+                selected.locale ||
+                selected.code
+            })
+          }
+        );
+
+      const data =
+        await response.json();
+
+      const translated =
+        String(
+          data?.translatedText || ""
+        ).trim();
+
+      if (
+        response.ok &&
+        data?.success &&
+        translated
+      ) {
+        try {
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              source:
+                sourceMessage,
+              translated,
+              language:
+                selected.code
+            })
+          );
+        } catch {}
+
+        return translated;
+      }
+
+    } catch (error) {
+      console.warn(
+        "Return visitor message translation failed:",
+        error
+      );
+    }
+
+    return sourceMessage;
+  }
+
+
+  async function showConfiguredReturnVisitorMessage(
     data,
     visitDay
   ) {
-    const message =
+    const sourceMessage =
       String(
         data?.returnMessage || ""
       ).trim();
@@ -906,7 +1219,7 @@ listenerAudioButton.addEventListener("click", () => {
       );
 
     if (
-      !message ||
+      !sourceMessage ||
       visitNumber < 2 ||
       !ROOM_ID
     ) {
@@ -954,14 +1267,34 @@ listenerAudioButton.addEventListener("click", () => {
       shownKey
     );
 
+    const selected =
+      getSelectedReturnVisitorLanguage();
+
+    const popupUi =
+      RETURN_VISITOR_POPUP_UI[
+        selected.code
+      ] ||
+      RETURN_VISITOR_POPUP_UI.en;
+
+    const translatedMessage =
+      await translateReturnVisitorMessage(
+        sourceMessage,
+        visitNumber
+      );
+
     showLiveBridgeRoomNotice({
       title:
-        "Welcome Back",
-      message,
+        popupUi.title,
+      message:
+        translatedMessage,
       organizationName:
         String(
           data?.organizationName || ""
-        )
+        ),
+      hostedByLabel:
+        popupUi.hostedBy,
+      closeLabel:
+        popupUi.close
     });
   }
 
@@ -978,7 +1311,9 @@ listenerAudioButton.addEventListener("click", () => {
   function showLiveBridgeRoomNotice({
     title,
     message,
-    organizationName = ""
+    organizationName = "",
+    hostedByLabel = "Room hosted by",
+    closeLabel = "Close"
   }) {
 
     const oldOverlay =
@@ -1010,6 +1345,18 @@ listenerAudioButton.addEventListener("click", () => {
 
     const safeOrganization =
       String(organizationName || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const safeHostedByLabel =
+      String(hostedByLabel || "Room hosted by")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    const safeCloseLabel =
+      String(closeLabel || "Close")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
@@ -1073,7 +1420,7 @@ listenerAudioButton.addEventListener("click", () => {
               line-height:1.5;
               margin-bottom:20px;
             ">
-              Room hosted by <strong style="color:white;">${safeOrganization}</strong>
+              ${safeHostedByLabel} <strong style="color:white;">${safeOrganization}</strong>
             </div>
           ` : `
             <div style="height:8px;"></div>
@@ -1093,7 +1440,7 @@ listenerAudioButton.addEventListener("click", () => {
               cursor:pointer;
             "
           >
-            Close
+            ${safeCloseLabel}
           </button>
 
         </div>
@@ -4659,3 +5006,6 @@ return url.toString();
 </script>
       </body>
     </html>
+LIVEBRIDGE_T_RETURN_VISITORS_TRANSLATED_POPUP.html
+HTML
+i need a console command to reset all the users back to zero visits
