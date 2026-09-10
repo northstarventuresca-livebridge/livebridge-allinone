@@ -1800,6 +1800,76 @@ body{
 
             <div class="lb-card" style="margin-top:16px;">
 
+              <div class="lb-card-title" style="margin-bottom:7px;">
+                Return Visitor Recognition
+              </div>
+
+              <div class="lb-muted" style="line-height:1.5;margin-bottom:14px;">
+                LiveBridge anonymously recognizes this browser when it returns to this organization. A visit counts once per calendar day. If no message is set for a visit number, nothing pops up.
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+                <div style="padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#0d1a2a;">
+                  <div id="returnUniqueVisitors" style="font-size:20px;font-weight:900;color:white;">0</div>
+                  <div class="lb-muted" style="font-size:10px;">Unique Browsers</div>
+                </div>
+                <div style="padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#0d1a2a;">
+                  <div id="returnReturningVisitors" style="font-size:20px;font-weight:900;color:white;">0</div>
+                  <div class="lb-muted" style="font-size:10px;">Returned 2+ Days</div>
+                </div>
+                <div style="padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#0d1a2a;">
+                  <div id="returnTotalVisitDays" style="font-size:20px;font-weight:900;color:white;">0</div>
+                  <div class="lb-muted" style="font-size:10px;">Total Visit Days</div>
+                </div>
+              </div>
+
+              <div class="lb-field" style="margin-bottom:10px;">
+                <label>Show Message On Visit #</label>
+                <input
+                  type="number"
+                  min="2"
+                  max="1000"
+                  id="returnVisitNumber"
+                  value="2"
+                >
+              </div>
+
+              <div class="lb-field" style="margin-bottom:10px;">
+                <label>Custom Popup Message</label>
+                <textarea
+                  id="returnVisitMessage"
+                  maxlength="800"
+                  placeholder="Example: We are so glad you chose to return. Welcome back!"
+                ></textarea>
+                <div class="lb-muted" style="margin-top:6px;">
+                  Leave blank and save to remove the message for that visit number.
+                </div>
+              </div>
+
+              <button
+                class="lb-button green"
+                id="saveReturnMessageButton"
+                type="button"
+              >
+                Save Return Message
+              </button>
+
+              <div id="returnMessageSaveStatus" class="lb-message"></div>
+
+              <div style="margin-top:16px;">
+                <div class="lb-small-label" style="margin-bottom:8px;">
+                  Configured Messages
+                </div>
+                <div id="returnMessageList">
+                  <div class="lb-empty">No return messages configured.</div>
+                </div>
+              </div>
+
+            </div>
+
+
+            <div class="lb-card" style="margin-top:16px;">
+
               <div class="lb-card-title" style="margin-bottom:12px;">
                 Recent Broadcasts Data
               </div>
@@ -1865,6 +1935,7 @@ const ADMIN_WORKER =
 
 let adminOrganizations = [];
 let selectedOrganization = null;
+let currentReturnMessages = [];
 let adminPlans = [];
 let selectedPlan = null;
 let lastCreatedOffer = null;
@@ -4081,12 +4152,261 @@ async function openOrganization(id){
     account.adminNotes || "";
 
 
+  renderReturnVisitorMessages(
+    data.returnMessages || [],
+    data.visitorStats || {}
+  );
+
+
   renderDetailHistory(
     data.broadcasts || []
   );
 }
 
 
+
+
+function renderReturnVisitorMessages(
+  messages,
+  stats = {}
+){
+  currentReturnMessages =
+    Array.isArray(messages)
+      ? messages
+          .filter(item =>
+            Number(item?.visitNumber || 0) >= 2 &&
+            String(item?.message || "").trim()
+          )
+          .sort(
+            (a,b) =>
+              Number(a.visitNumber) -
+              Number(b.visitNumber)
+          )
+      : [];
+
+  document.getElementById(
+    "returnUniqueVisitors"
+  ).textContent =
+    Number(stats.uniqueVisitors || 0);
+
+  document.getElementById(
+    "returnReturningVisitors"
+  ).textContent =
+    Number(stats.returningVisitors || 0);
+
+  document.getElementById(
+    "returnTotalVisitDays"
+  ).textContent =
+    Number(stats.totalVisitDays || 0);
+
+  const list =
+    document.getElementById(
+      "returnMessageList"
+    );
+
+  if (!currentReturnMessages.length) {
+    list.innerHTML =
+      '<div class="lb-empty">No return messages configured. Listeners will not see a return popup.</div>';
+    return;
+  }
+
+  list.innerHTML =
+    currentReturnMessages
+      .map(item => `
+        <div style="
+          padding:12px;
+          border:1px solid rgba(255,255,255,.09);
+          border-radius:11px;
+          background:#0d1a2a;
+          margin-bottom:8px;
+        ">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:7px;">
+            <strong style="color:#6de8c5;">
+              Visit #${Number(item.visitNumber)}
+            </strong>
+            <div style="display:flex;gap:6px;">
+              <button
+                type="button"
+                class="lb-button secondary return-message-edit"
+                data-visit-number="${Number(item.visitNumber)}"
+                style="padding:7px 10px;font-size:11px;"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                class="lb-button danger return-message-remove"
+                data-visit-number="${Number(item.visitNumber)}"
+                style="padding:7px 10px;font-size:11px;"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+          <div style="color:#cbd9e7;font-size:12px;line-height:1.5;white-space:pre-wrap;">
+            ${escapeHtml(item.message)}
+          </div>
+        </div>
+      `)
+      .join("");
+}
+
+
+async function saveReturnVisitorMessage(
+  forcedVisitNumber = null,
+  forcedMessage = null
+){
+  if (!selectedOrganization) {
+    return;
+  }
+
+  const button =
+    document.getElementById(
+      "saveReturnMessageButton"
+    );
+
+  const status =
+    document.getElementById(
+      "returnMessageSaveStatus"
+    );
+
+  const visitNumber =
+    forcedVisitNumber !== null
+      ? Number(forcedVisitNumber)
+      : Math.floor(
+          Number(
+            document.getElementById(
+              "returnVisitNumber"
+            ).value || 0
+          )
+        );
+
+  const message =
+    forcedMessage !== null
+      ? String(forcedMessage)
+      : document.getElementById(
+          "returnVisitMessage"
+        ).value.trim();
+
+  if (
+    visitNumber < 2 ||
+    visitNumber > 1000
+  ) {
+    status.textContent =
+      "Visit number must be 2 or higher.";
+    status.className =
+      "lb-message bad";
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Saving...";
+  status.className = "lb-message";
+
+  try {
+    const response =
+      await adminFetch(
+        "/admin/return-message-save",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            organizationId:
+              selectedOrganization.id,
+            visitNumber,
+            message
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        "Unable to save return message."
+      );
+    }
+
+    status.textContent =
+      message.trim()
+        ? "✓ Return message saved."
+        : "✓ Return message removed.";
+
+    status.className =
+      "lb-message good";
+
+    if (forcedMessage === null) {
+      document.getElementById(
+        "returnVisitMessage"
+      ).value = "";
+    }
+
+    await openOrganization(
+      selectedOrganization.id
+    );
+
+  } catch (error) {
+    status.textContent =
+      error.message;
+    status.className =
+      "lb-message bad";
+
+  } finally {
+    button.disabled = false;
+    button.textContent =
+      "Save Return Message";
+  }
+}
+
+
+function editReturnVisitorMessage(
+  visitNumber
+){
+  const item =
+    currentReturnMessages.find(
+      entry =>
+        Number(entry.visitNumber) ===
+        Number(visitNumber)
+    );
+
+  if (!item) {
+    return;
+  }
+
+  document.getElementById(
+    "returnVisitNumber"
+  ).value =
+    Number(item.visitNumber);
+
+  document.getElementById(
+    "returnVisitMessage"
+  ).value =
+    String(item.message || "");
+
+  document.getElementById(
+    "returnVisitMessage"
+  ).focus();
+}
+
+
+async function removeReturnVisitorMessage(
+  visitNumber
+){
+  document.getElementById(
+    "returnVisitNumber"
+  ).value =
+    Number(visitNumber);
+
+  document.getElementById(
+    "returnVisitMessage"
+  ).value = "";
+
+  await saveReturnVisitorMessage(
+    Number(visitNumber),
+    ""
+  );
+}
 
 
 function collectFeatureOverrides(){
@@ -5109,6 +5429,49 @@ document.getElementById(
 ).addEventListener(
   "click",
   saveOrganization
+);
+
+
+document.getElementById(
+  "saveReturnMessageButton"
+)?.addEventListener(
+  "click",
+  () => saveReturnVisitorMessage()
+);
+
+
+document.getElementById(
+  "returnMessageList"
+)?.addEventListener(
+  "click",
+  function(event){
+    const editButton =
+      event.target.closest(
+        ".return-message-edit"
+      );
+
+    if (editButton) {
+      editReturnVisitorMessage(
+        Number(
+          editButton.dataset.visitNumber
+        )
+      );
+      return;
+    }
+
+    const removeButton =
+      event.target.closest(
+        ".return-message-remove"
+      );
+
+    if (removeButton) {
+      removeReturnVisitorMessage(
+        Number(
+          removeButton.dataset.visitNumber
+        )
+      );
+    }
+  }
 );
 
 
