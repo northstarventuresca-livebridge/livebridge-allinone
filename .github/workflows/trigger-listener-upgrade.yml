@@ -1,4 +1,4 @@
-name: Apply listener experience upgrade
+name: Inspect listener upgrade patch
 
 on:
   push:
@@ -8,61 +8,30 @@ on:
       - .github/workflows/trigger-listener-upgrade.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  upgrade:
+  inspect:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-
-      - name: Apply listener upgrade from registered patch
+      - name: Decode and inspect patch around syntax error
         shell: bash
         run: |
           set -euo pipefail
-
           python3 - <<'PY'
           import base64
           import re
           from pathlib import Path
-
           source = Path('.github/workflows/livebridge-listener-experience-v1.yml').read_text(encoding='utf-8')
-          matches = re.findall(
-              r"printf '%s' '([^']+)' \| base64 --decode > /tmp/(livebridge_[A-Za-z0-9_-]+\.py)",
-              source,
-          )
-          wanted = {name: payload for payload, name in matches if name in {'livebridge_patch.py', 'livebridge_validate.py'}}
-          if set(wanted) != {'livebridge_patch.py', 'livebridge_validate.py'}:
-              raise SystemExit(f'Could not extract both registered scripts. Found: {sorted(wanted)}')
-          for filename, payload in wanted.items():
-              cleaned = ''.join(payload.split())
-              cleaned += '=' * ((4 - len(cleaned) % 4) % 4)
-              Path('/tmp/' + filename).write_bytes(base64.b64decode(cleaned))
-              print(filename, 'decoded bytes:', Path('/tmp/' + filename).stat().st_size)
+          matches = re.findall(r"printf '%s' '([^']+)' \| base64 --decode > /tmp/(livebridge_[A-Za-z0-9_-]+\.py)", source)
+          wanted = {name: payload for payload, name in matches if name == 'livebridge_patch.py'}
+          payload = wanted['livebridge_patch.py']
+          cleaned = ''.join(payload.split())
+          cleaned += '=' * ((4 - len(cleaned) % 4) % 4)
+          Path('/tmp/livebridge_patch.py').write_bytes(base64.b64decode(cleaned))
           PY
-
-          python3 /tmp/livebridge_patch.py
-          node --check backend/worker.js
-          python3 /tmp/livebridge_validate.py
-
-          grep -q 'listenerDataDisplay' backend/worker.js
-          grep -q 'type: "presence"' backend/worker.js
-          grep -q 'type: "chat"' backend/worker.js
-          grep -q 'listener-profile' backend/worker.js
-          grep -q 'editListenerDataDisplay' frontend/public/admin/index.html
-          grep -q 'Data this visit' frontend/public/t/index.html
-          grep -q 'With You' frontend/public/t/index.html
-
-          git config user.name "LiveBridge Automation"
-          git config user.email "actions@users.noreply.github.com"
-          git add backend/worker.js frontend/public/admin/index.html frontend/public/t/index.html
-
-          if git diff --cached --quiet; then
-            echo 'No code changes were produced.'
-            exit 1
-          fi
-
-          git commit -m "Add listener presence chat profiles and data meter"
-          git push origin main
+          nl -ba /tmp/livebridge_patch.py | sed -n '135,220p'
+          python3 -m py_compile /tmp/livebridge_patch.py
