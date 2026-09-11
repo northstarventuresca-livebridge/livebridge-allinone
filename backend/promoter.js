@@ -2578,6 +2578,490 @@ async function adminRoutes(
   }
 
 
+
+  /*
+  =========================================================
+  LIVEBRIDGE PROMOTER ADMIN OVERSIGHT V1
+  ADMIN - PROMOTER FULL DETAIL
+  =========================================================
+  */
+
+  if(
+    request.method ===
+      "GET" &&
+    url.pathname ===
+      "/promoter-admin/promoter-detail"
+  ) {
+
+    const promoterId =
+      Number(
+        url.searchParams.get("id") ||
+        0
+      );
+
+    if(!promoterId) {
+      return j(
+        {
+          success:false,
+          error:"Promoter ID is required."
+        },
+        400
+      );
+    }
+
+    const promoter =
+      await env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT *
+          FROM promoter_users
+          WHERE id = ?
+          LIMIT 1
+        `)
+        .bind(promoterId)
+        .first();
+
+    if(!promoter) {
+      return j(
+        {
+          success:false,
+          error:"Promoter not found."
+        },
+        404
+      );
+    }
+
+    const [
+      planResult,
+      leadResult,
+      offerResult,
+      commissionResult,
+      changeResult
+    ] = await Promise.all([
+      env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT *
+          FROM promoter_plan_requests
+          WHERE promoter_id = ?
+          ORDER BY created_at DESC
+        `)
+        .bind(promoterId)
+        .all(),
+
+      env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT *
+          FROM promoter_leads
+          WHERE promoter_id = ?
+          ORDER BY updated_at DESC
+        `)
+        .bind(promoterId)
+        .all(),
+
+      env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT
+            pol.*,
+            o.recipient_name,
+            o.recipient_email,
+            o.expiration_timestamp,
+            o.max_redemptions,
+            o.redemption_count,
+            o.status,
+            o.note,
+            p.plan_name,
+            p.plan_code,
+            p.price_cents,
+            p.currency,
+            p.billing_interval
+          FROM promoter_offer_links pol
+          INNER JOIN offers o
+            ON o.token = pol.offer_token
+          INNER JOIN plans p
+            ON p.id = pol.plan_id
+          WHERE pol.promoter_id = ?
+          ORDER BY pol.created_at DESC
+        `)
+        .bind(promoterId)
+        .all(),
+
+      env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT *
+          FROM promoter_commissions
+          WHERE promoter_id = ?
+          ORDER BY earned_at DESC
+        `)
+        .bind(promoterId)
+        .all(),
+
+      env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT *
+          FROM promoter_change_requests
+          WHERE promoter_id = ?
+          ORDER BY created_at DESC
+        `)
+        .bind(promoterId)
+        .all()
+    ]);
+
+    let clients = [];
+
+    try {
+      const clientResult =
+        await env.TRANSLATIONS_DB
+          .prepare(`
+            SELECT
+              pc.*,
+              o.organization_name,
+              o.account_holder,
+              o.email,
+              o.account_email,
+              o.phone,
+              o.room_name,
+              o.plan_code,
+              o.plan_name,
+              o.account_status,
+              o.billing_status
+            FROM promoter_clients pc
+            LEFT JOIN organizations o
+              ON o.id = pc.organization_id
+            WHERE pc.promoter_id = ?
+            ORDER BY pc.landed_at DESC
+          `)
+          .bind(promoterId)
+          .all();
+
+      clients =
+        clientResult.results ||
+        [];
+
+    } catch {
+      const clientResult =
+        await env.TRANSLATIONS_DB
+          .prepare(`
+            SELECT *
+            FROM promoter_clients
+            WHERE promoter_id = ?
+            ORDER BY landed_at DESC
+          `)
+          .bind(promoterId)
+          .all();
+
+      clients =
+        clientResult.results ||
+        [];
+    }
+
+    return j({
+      success:true,
+      promoter:promoterJson(promoter),
+      plans:(planResult.results || []).map(planJson),
+      leads:leadResult.results || [],
+      clients,
+      offers:offerResult.results || [],
+      commissions:commissionResult.results || [],
+      changeRequests:changeResult.results || []
+    });
+  }
+
+
+  /*
+  =========================================================
+  LIVEBRIDGE PROMOTER ADMIN OVERSIGHT V1
+  ADMIN - UPDATE PROMOTER
+  =========================================================
+  */
+
+  if(
+    request.method ===
+      "POST" &&
+    url.pathname ===
+      "/promoter-admin/promoter-update"
+  ) {
+
+    const body =
+      await request.json();
+
+    const promoterId =
+      Number(body.id || 0);
+
+    const displayName =
+      text(body.displayName, 200);
+
+    if(
+      !promoterId ||
+      !displayName
+    ) {
+      return j(
+        {
+          success:false,
+          error:"Promoter ID and name are required."
+        },
+        400
+      );
+    }
+
+    const exists =
+      await env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT id
+          FROM promoter_users
+          WHERE id = ?
+          LIMIT 1
+        `)
+        .bind(promoterId)
+        .first();
+
+    if(!exists) {
+      return j(
+        {
+          success:false,
+          error:"Promoter not found."
+        },
+        404
+      );
+    }
+
+    const monthly =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Number(
+            body.monthlyCommissionPercent ||
+            0
+          )
+        )
+      );
+
+    const annual =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Number(
+            body.annualCommissionPercent ||
+            0
+          )
+        )
+      );
+
+    const holdDays =
+      Math.max(
+        0,
+        Math.min(
+          365,
+          Math.round(
+            Number(
+              body.commissionHoldDays ||
+              0
+            )
+          )
+        )
+      );
+
+    const active =
+      body.active === false ||
+      body.active === 0
+        ? 0
+        : 1;
+
+    await env.TRANSLATIONS_DB
+      .prepare(`
+        UPDATE promoter_users
+        SET
+          display_name = ?,
+          email = ?,
+          phone = ?,
+          monthly_commission_percent = ?,
+          annual_commission_percent = ?,
+          commission_hold_days = ?,
+          notes = ?,
+          active = ?,
+          updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(
+        displayName,
+        text(body.email, 250),
+        text(body.phone, 100),
+        monthly,
+        annual,
+        holdDays,
+        text(body.notes, 2000),
+        active,
+        Date.now(),
+        promoterId
+      )
+      .run();
+
+    const updated =
+      await env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT *
+          FROM promoter_users
+          WHERE id = ?
+          LIMIT 1
+        `)
+        .bind(promoterId)
+        .first();
+
+    return j({
+      success:true,
+      promoter:promoterJson(updated)
+    });
+  }
+
+
+  /*
+  =========================================================
+  LIVEBRIDGE PROMOTER ADMIN OVERSIGHT V1
+  ADMIN - PERMANENT DELETE PROMOTER
+  =========================================================
+  */
+
+  if(
+    request.method ===
+      "POST" &&
+    url.pathname ===
+      "/promoter-admin/promoter-delete"
+  ) {
+
+    const body =
+      await request.json();
+
+    const promoterId =
+      Number(body.id || 0);
+
+    if(!promoterId) {
+      return j(
+        {
+          success:false,
+          error:"Promoter ID is required."
+        },
+        400
+      );
+    }
+
+    const promoter =
+      await env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT id, display_name
+          FROM promoter_users
+          WHERE id = ?
+          LIMIT 1
+        `)
+        .bind(promoterId)
+        .first();
+
+    if(!promoter) {
+      return j(
+        {
+          success:false,
+          error:"Promoter not found."
+        },
+        404
+      );
+    }
+
+    const dependency =
+      await env.TRANSLATIONS_DB
+        .prepare(`
+          SELECT
+            (
+              SELECT COUNT(*)
+              FROM promoter_clients
+              WHERE promoter_id = ?
+            ) AS client_count,
+            (
+              SELECT COUNT(*)
+              FROM promoter_commissions
+              WHERE promoter_id = ?
+            ) AS commission_count,
+            (
+              SELECT COUNT(*)
+              FROM promoter_offer_links
+              WHERE promoter_id = ?
+            ) AS offer_count
+        `)
+        .bind(
+          promoterId,
+          promoterId,
+          promoterId
+        )
+        .first();
+
+    const clientCount =
+      Number(
+        dependency?.client_count ||
+        0
+      );
+
+    const commissionCount =
+      Number(
+        dependency?.commission_count ||
+        0
+      );
+
+    const offerCount =
+      Number(
+        dependency?.offer_count ||
+        0
+      );
+
+    if(
+      clientCount ||
+      commissionCount ||
+      offerCount
+    ) {
+      return j(
+        {
+          success:false,
+          error:
+            "This promoter has client, commission, or offer history. Disable the employee instead so business records are preserved."
+        },
+        409
+      );
+    }
+
+    await env.TRANSLATIONS_DB
+      .batch([
+        env.TRANSLATIONS_DB
+          .prepare(`
+            DELETE FROM promoter_change_requests
+            WHERE promoter_id = ?
+          `)
+          .bind(promoterId),
+
+        env.TRANSLATIONS_DB
+          .prepare(`
+            DELETE FROM promoter_leads
+            WHERE promoter_id = ?
+          `)
+          .bind(promoterId),
+
+        env.TRANSLATIONS_DB
+          .prepare(`
+            DELETE FROM promoter_plan_requests
+            WHERE promoter_id = ?
+          `)
+          .bind(promoterId),
+
+        env.TRANSLATIONS_DB
+          .prepare(`
+            DELETE FROM promoter_users
+            WHERE id = ?
+          `)
+          .bind(promoterId)
+      ]);
+
+    return j({
+      success:true
+    });
+  }
+
+
   /*
   =========================================================
   ADMIN - CREATE PROMOTER

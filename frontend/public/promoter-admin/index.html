@@ -437,6 +437,107 @@ button:disabled{
   grid-column:1 / -1;
 }
 
+
+/* LIVEBRIDGE PROMOTER ADMIN OVERSIGHT V1 */
+
+.promoter-clickable{
+  cursor:pointer;
+  border-radius:12px;
+  padding-left:12px;
+  padding-right:12px;
+  transition:
+    background .15s ease,
+    transform .15s ease;
+}
+
+.promoter-clickable:hover{
+  background:rgba(45,151,255,.08);
+  transform:translateY(-1px);
+}
+
+.promoter-detail-card{
+  border-color:rgba(45,151,255,.28);
+}
+
+.detail-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:18px;
+}
+
+.detail-summary{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  margin:16px 0 20px;
+}
+
+.detail-section{
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+
+.detail-section-title{
+  font-size:15px;
+  font-weight:900;
+  margin-bottom:10px;
+}
+
+.detail-data-row{
+  padding:12px 0;
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+
+.detail-data-row:last-child{
+  border-bottom:none;
+}
+
+.detail-row-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+  margin-bottom:4px;
+}
+
+.detail-note{
+  margin-top:7px;
+  padding:8px 10px;
+  border-radius:9px;
+  background:rgba(255,255,255,.035);
+  color:#b8cadc;
+  font-size:11px;
+  line-height:1.5;
+}
+
+.detail-actions{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:16px;
+}
+
+.detail-danger-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+@media(max-width:760px){
+  .detail-summary{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .detail-top{
+    flex-direction:column;
+  }
+}
+
 @media(max-width:760px){
 
   .login-layout{
@@ -836,6 +937,201 @@ button:disabled{
 
 
 
+
+    <!-- LIVEBRIDGE PROMOTER ADMIN OVERSIGHT V1 -->
+
+    <div
+      class="card promoter-detail-card"
+      id="promoterDetailCard"
+      style="display:none;"
+    >
+
+      <div class="detail-top">
+
+        <div>
+          <button
+            class="secondary"
+            id="closePromoterDetailButton"
+            type="button"
+          >
+            ← Back to Promoters
+          </button>
+
+          <div
+            class="title"
+            id="detailPromoterTitle"
+            style="margin-top:14px;"
+          >
+            Employee / Promoter
+          </div>
+
+          <div
+            class="muted"
+            id="detailPromoterCode"
+          ></div>
+        </div>
+
+        <div id="detailStatusBadge"></div>
+
+      </div>
+
+
+      <div class="detail-summary">
+
+        <div class="stat">
+          <div class="muted">Portal Access</div>
+          <strong id="detailInviteStatus">—</strong>
+        </div>
+
+        <div class="stat">
+          <div class="muted">Plans</div>
+          <strong id="detailPlanCount">0</strong>
+        </div>
+
+        <div class="stat">
+          <div class="muted">Clients</div>
+          <strong id="detailClientCount">0</strong>
+        </div>
+
+        <div class="stat">
+          <div class="muted">Commission Owed</div>
+          <strong id="detailCommissionTotal">$0.00</strong>
+        </div>
+
+      </div>
+
+
+      <div class="grid">
+
+        <div class="field">
+          <label>Name</label>
+          <input id="detailName">
+        </div>
+
+        <div class="field">
+          <label>Contact Email</label>
+          <input id="detailEmail" type="email">
+        </div>
+
+        <div class="field">
+          <label>Phone</label>
+          <input id="detailPhone">
+        </div>
+
+        <div class="field">
+          <label>Promoter Code</label>
+          <input id="detailCode" readonly>
+        </div>
+
+        <div class="field">
+          <label>Monthly Commission %</label>
+          <input
+            id="detailMonthlyCommission"
+            type="number"
+            min="0"
+            max="100"
+            step=".1"
+          >
+        </div>
+
+        <div class="field">
+          <label>Annual Commission %</label>
+          <input
+            id="detailAnnualCommission"
+            type="number"
+            min="0"
+            max="100"
+            step=".1"
+          >
+        </div>
+
+        <div class="field">
+          <label>Commission Hold Days</label>
+          <input
+            id="detailHoldDays"
+            type="number"
+            min="0"
+            max="365"
+            step="1"
+          >
+        </div>
+
+        <div class="field full">
+          <label>Private Admin Notes</label>
+          <textarea id="detailNotes"></textarea>
+        </div>
+
+      </div>
+
+
+      <div class="detail-actions">
+
+        <div class="detail-danger-actions">
+
+          <button
+            class="red"
+            id="deletePromoterButton"
+            type="button"
+          >
+            Permanent Delete
+          </button>
+
+          <button
+            class="secondary"
+            id="togglePromoterButton"
+            type="button"
+          >
+            Disable Employee
+          </button>
+
+        </div>
+
+        <button
+          class="green"
+          id="savePromoterButton"
+          type="button"
+        >
+          Save Changes
+        </button>
+
+      </div>
+
+      <div id="detailMessage" class="message"></div>
+
+
+      <div class="detail-section">
+        <div class="detail-section-title">Plans</div>
+        <div id="detailPlans"></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Leads</div>
+        <div id="detailLeads"></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Clients</div>
+        <div id="detailClients"></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Offers</div>
+        <div id="detailOffers"></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Commissions</div>
+        <div id="detailCommissions"></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Client Change Requests</div>
+        <div id="detailChangeRequests"></div>
+      </div>
+
+    </div>
+
+
     <!-- PROMOTERS -->
 
 
@@ -1190,7 +1486,11 @@ async function loadPromoters(){
     list.map(
       promoter => `
 
-        <div class="promoter-row">
+        <div
+          class="promoter-row promoter-clickable"
+          onclick="openPromoter(${Number(promoter.id)})"
+          title="Click to manage this employee / promoter"
+        >
 
           <div>
 
@@ -1282,6 +1582,929 @@ async function loadPromoters(){
     .join("");
 }
 
+
+
+
+// LIVEBRIDGE PROMOTER ADMIN OVERSIGHT V1
+
+let currentPromoterDetail = null;
+
+
+function detailEmpty(value){
+  return `
+    <div class="empty">
+      ${escapeHtml(value)}
+    </div>
+  `;
+}
+
+
+function formatDate(value){
+  const n = Number(value || 0);
+  if(!n) return "—";
+  try{
+    return new Date(n).toLocaleString("en-CA");
+  }catch{
+    return "—";
+  }
+}
+
+
+function statusBadge(value){
+  const status =
+    String(value || "")
+      .trim()
+      .toLowerCase();
+
+  const badgeClass =
+    status === "approved" ||
+    status === "active" ||
+    status === "paid" ||
+    status === "payable"
+      ? "approved"
+      : status === "pending" ||
+        status === "trialing"
+        ? "pending"
+        : status === "rejected" ||
+          status === "disabled" ||
+          status === "canceled" ||
+          status === "cancelled" ||
+          status === "failed"
+          ? "rejected"
+          : "";
+
+  return `
+    <span class="badge ${badgeClass}">
+      ${escapeHtml(status || "unknown")}
+    </span>
+  `;
+}
+
+
+function renderPromoterDetail(data){
+
+  currentPromoterDetail = data;
+
+  const promoter =
+    data.promoter || {};
+
+  document.getElementById(
+    "detailPromoterTitle"
+  ).textContent =
+    promoter.displayName ||
+    "Employee / Promoter";
+
+  document.getElementById(
+    "detailPromoterCode"
+  ).textContent =
+    promoter.promoterCode
+      ? "Promoter Code: " +
+        promoter.promoterCode
+      : "";
+
+  document.getElementById(
+    "detailStatusBadge"
+  ).innerHTML =
+    statusBadge(
+      promoter.active
+        ? "active"
+        : "disabled"
+    );
+
+  document.getElementById(
+    "detailInviteStatus"
+  ).textContent =
+    promoter.inviteClaimed
+      ? "Connected"
+      : "Invite Pending";
+
+  document.getElementById(
+    "detailPlanCount"
+  ).textContent =
+    Number(
+      data.plans?.length || 0
+    );
+
+  document.getElementById(
+    "detailClientCount"
+  ).textContent =
+    Number(
+      data.clients?.length || 0
+    );
+
+  const commissionTotal =
+    (data.commissions || [])
+      .filter(
+        item =>
+          String(item.status || "")
+            .toLowerCase() !==
+          "paid"
+      )
+      .reduce(
+        (total,item) =>
+          total +
+          Number(
+            item.commission_cents || 0
+          ),
+        0
+      );
+
+  document.getElementById(
+    "detailCommissionTotal"
+  ).textContent =
+    money(commissionTotal);
+
+  document.getElementById(
+    "detailName"
+  ).value =
+    promoter.displayName || "";
+
+  document.getElementById(
+    "detailEmail"
+  ).value =
+    promoter.email || "";
+
+  document.getElementById(
+    "detailPhone"
+  ).value =
+    promoter.phone || "";
+
+  document.getElementById(
+    "detailCode"
+  ).value =
+    promoter.promoterCode || "";
+
+  document.getElementById(
+    "detailMonthlyCommission"
+  ).value =
+    Number(
+      promoter.monthlyCommissionPercent || 0
+    );
+
+  document.getElementById(
+    "detailAnnualCommission"
+  ).value =
+    Number(
+      promoter.annualCommissionPercent || 0
+    );
+
+  document.getElementById(
+    "detailHoldDays"
+  ).value =
+    Number(
+      promoter.commissionHoldDays || 0
+    );
+
+  document.getElementById(
+    "detailNotes"
+  ).value =
+    promoter.notes || "";
+
+  document.getElementById(
+    "togglePromoterButton"
+  ).textContent =
+    promoter.active
+      ? "Disable Employee"
+      : "Enable Employee";
+
+
+  const plans =
+    data.plans || [];
+
+  document.getElementById(
+    "detailPlans"
+  ).innerHTML =
+    plans.length
+      ? plans.map(
+          plan => {
+            const hours =
+              Math.round(
+                Number(
+                  plan.includedMinutes || 0
+                ) /
+                60 *
+                10
+              ) /
+              10;
+
+            return `
+              <div class="detail-data-row">
+                <div class="detail-row-head">
+                  <strong>
+                    ${escapeHtml(
+                      plan.planName ||
+                      "Unnamed Plan"
+                    )}
+                  </strong>
+                  ${statusBadge(plan.status)}
+                </div>
+
+                <div class="muted">
+                  ${escapeHtml(
+                    plan.planCode || ""
+                  )}
+                  ·
+                  ${money(
+                    plan.priceCents,
+                    plan.currency
+                  )}
+                  /
+                  ${escapeHtml(
+                    plan.billingInterval ||
+                    "month"
+                  )}
+                  ·
+                  ${hours} hours
+                  ·
+                  ${Number(
+                    plan.viewerLimit || 0
+                  )} viewers
+                </div>
+
+                ${
+                  plan.description
+                    ? `
+                      <div class="detail-note">
+                        ${escapeHtml(
+                          plan.description
+                        )}
+                      </div>
+                    `
+                    : ""
+                }
+
+                ${
+                  plan.note
+                    ? `
+                      <div class="detail-note">
+                        <strong>Promoter note:</strong>
+                        ${escapeHtml(plan.note)}
+                      </div>
+                    `
+                    : ""
+                }
+
+                ${
+                  plan.adminFeedback
+                    ? `
+                      <div class="detail-note">
+                        <strong>Admin feedback:</strong>
+                        ${escapeHtml(
+                          plan.adminFeedback
+                        )}
+                      </div>
+                    `
+                    : ""
+                }
+              </div>
+            `;
+          }
+        ).join("")
+      : detailEmpty(
+          "No plans saved."
+        );
+
+
+  const leads =
+    data.leads || [];
+
+  document.getElementById(
+    "detailLeads"
+  ).innerHTML =
+    leads.length
+      ? leads.map(
+          lead => `
+            <div class="detail-data-row">
+              <div class="detail-row-head">
+                <strong>
+                  ${escapeHtml(
+                    lead.organization_name ||
+                    "Unnamed Lead"
+                  )}
+                </strong>
+                ${statusBadge(lead.status)}
+              </div>
+
+              <div class="muted">
+                ${escapeHtml(
+                  lead.contact_name || ""
+                )}
+                ${
+                  lead.email
+                    ? " · " +
+                      escapeHtml(lead.email)
+                    : ""
+                }
+                ${
+                  lead.phone
+                    ? " · " +
+                      escapeHtml(lead.phone)
+                    : ""
+                }
+              </div>
+
+              ${
+                lead.notes
+                  ? `
+                    <div class="detail-note">
+                      ${escapeHtml(lead.notes)}
+                    </div>
+                  `
+                  : ""
+              }
+            </div>
+          `
+        ).join("")
+      : detailEmpty(
+          "No leads saved."
+        );
+
+
+  const clients =
+    data.clients || [];
+
+  document.getElementById(
+    "detailClients"
+  ).innerHTML =
+    clients.length
+      ? clients.map(
+          client => `
+            <div class="detail-data-row">
+              <div class="detail-row-head">
+                <strong>
+                  ${escapeHtml(
+                    client.organization_name ||
+                    (
+                      "Organization #" +
+                      Number(
+                        client.organization_id || 0
+                      )
+                    )
+                  )}
+                </strong>
+
+                ${statusBadge(
+                  client.active === 0
+                    ? "disabled"
+                    : (
+                        client.billing_status ||
+                        client.account_status ||
+                        "active"
+                      )
+                )}
+              </div>
+
+              <div class="muted">
+                ${escapeHtml(
+                  client.account_holder || ""
+                )}
+                ${
+                  (
+                    client.account_email ||
+                    client.email
+                  )
+                    ? " · " +
+                      escapeHtml(
+                        client.account_email ||
+                        client.email
+                      )
+                    : ""
+                }
+                ${
+                  client.phone
+                    ? " · " +
+                      escapeHtml(client.phone)
+                    : ""
+                }
+              </div>
+
+              <div class="detail-note">
+                Plan:
+                <strong>
+                  ${escapeHtml(
+                    client.plan_name ||
+                    client.plan_code ||
+                    "—"
+                  )}
+                </strong>
+                ${
+                  client.room_name
+                    ? " · Room: " +
+                      escapeHtml(
+                        client.room_name
+                      )
+                    : ""
+                }
+              </div>
+            </div>
+          `
+        ).join("")
+      : detailEmpty(
+          "No clients attributed yet."
+        );
+
+
+  const offers =
+    data.offers || [];
+
+  document.getElementById(
+    "detailOffers"
+  ).innerHTML =
+    offers.length
+      ? offers.map(
+          offer => `
+            <div class="detail-data-row">
+              <div class="detail-row-head">
+                <strong>
+                  ${escapeHtml(
+                    offer.plan_name ||
+                    offer.plan_code ||
+                    "Offer"
+                  )}
+                </strong>
+                ${statusBadge(offer.status)}
+              </div>
+
+              <div class="muted">
+                ${escapeHtml(
+                  offer.recipient_name ||
+                  "Open recipient"
+                )}
+                ${
+                  offer.recipient_email
+                    ? " · " +
+                      escapeHtml(
+                        offer.recipient_email
+                      )
+                    : ""
+                }
+                ·
+                ${Number(
+                  offer.redemption_count || 0
+                )}
+                /
+                ${Number(
+                  offer.max_redemptions || 0
+                )}
+                redeemed
+              </div>
+
+              ${
+                offer.note
+                  ? `
+                    <div class="detail-note">
+                      ${escapeHtml(offer.note)}
+                    </div>
+                  `
+                  : ""
+              }
+            </div>
+          `
+        ).join("")
+      : detailEmpty(
+          "No offers created."
+        );
+
+
+  const commissions =
+    data.commissions || [];
+
+  document.getElementById(
+    "detailCommissions"
+  ).innerHTML =
+    commissions.length
+      ? commissions.map(
+          item => `
+            <div class="detail-data-row">
+              <div class="detail-row-head">
+                <strong>
+                  ${money(
+                    item.commission_cents
+                  )}
+                </strong>
+                ${statusBadge(item.status)}
+              </div>
+
+              <div class="muted">
+                ${Number(
+                  item.commission_percent || 0
+                )}% commission
+                · Sale:
+                ${money(
+                  item.sale_amount_cents
+                )}
+                · Plan:
+                ${escapeHtml(
+                  item.plan_code || "—"
+                )}
+              </div>
+
+              <div class="detail-note">
+                Earned:
+                ${escapeHtml(
+                  formatDate(item.earned_at)
+                )}
+                · Payable:
+                ${escapeHtml(
+                  formatDate(item.payable_at)
+                )}
+              </div>
+
+              ${
+                item.notes
+                  ? `
+                    <div class="detail-note">
+                      ${escapeHtml(item.notes)}
+                    </div>
+                  `
+                  : ""
+              }
+            </div>
+          `
+        ).join("")
+      : detailEmpty(
+          "No commission records."
+        );
+
+
+  const requests =
+    data.changeRequests || [];
+
+  document.getElementById(
+    "detailChangeRequests"
+  ).innerHTML =
+    requests.length
+      ? requests.map(
+          request => `
+            <div class="detail-data-row">
+              <div class="detail-row-head">
+                <strong>
+                  ${escapeHtml(
+                    request.request_type ||
+                    "Client Request"
+                  )}
+                </strong>
+                ${statusBadge(request.status)}
+              </div>
+
+              <div class="muted">
+                Organization #
+                ${Number(
+                  request.organization_id || 0
+                )}
+                ·
+                ${escapeHtml(
+                  formatDate(
+                    request.created_at
+                  )
+                )}
+              </div>
+
+              <div class="detail-note">
+                ${escapeHtml(
+                  request.details || ""
+                )}
+              </div>
+
+              ${
+                request.admin_response
+                  ? `
+                    <div class="detail-note">
+                      <strong>Admin response:</strong>
+                      ${escapeHtml(
+                        request.admin_response
+                      )}
+                    </div>
+                  `
+                  : ""
+              }
+            </div>
+          `
+        ).join("")
+      : detailEmpty(
+          "No client change requests."
+        );
+}
+
+
+async function openPromoter(promoterId){
+
+  const card =
+    document.getElementById(
+      "promoterDetailCard"
+    );
+
+  card.style.display =
+    "block";
+
+  document.getElementById(
+    "detailPromoterTitle"
+  ).textContent =
+    "Loading employee...";
+
+  document.getElementById(
+    "detailMessage"
+  ).className =
+    "message";
+
+  card.scrollIntoView({
+    behavior:"smooth",
+    block:"start"
+  });
+
+  try{
+
+    const response =
+      await api(
+        "/promoter-admin/promoter-detail?id=" +
+        encodeURIComponent(promoterId)
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to load promoter."
+      );
+    }
+
+    renderPromoterDetail(data);
+
+  }catch(error){
+
+    const message =
+      document.getElementById(
+        "detailMessage"
+      );
+
+    message.textContent =
+      error.message ||
+      "Unable to load promoter.";
+
+    message.className =
+      "message bad";
+  }
+}
+
+
+function closePromoterDetail(){
+
+  document.getElementById(
+    "promoterDetailCard"
+  ).style.display =
+    "none";
+
+  currentPromoterDetail =
+    null;
+}
+
+
+async function savePromoterProfile(
+  activeOverride=null
+){
+
+  if(
+    !currentPromoterDetail
+      ?.promoter
+      ?.id
+  ){
+    return;
+  }
+
+  const message =
+    document.getElementById(
+      "detailMessage"
+    );
+
+  message.className =
+    "message";
+
+  const active =
+    activeOverride === null
+      ? !!currentPromoterDetail
+          .promoter
+          .active
+      : !!activeOverride;
+
+  try{
+
+    const response =
+      await api(
+        "/promoter-admin/promoter-update",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            id:
+              Number(
+                currentPromoterDetail
+                  .promoter
+                  .id
+              ),
+
+            displayName:
+              document.getElementById(
+                "detailName"
+              ).value.trim(),
+
+            email:
+              document.getElementById(
+                "detailEmail"
+              ).value.trim(),
+
+            phone:
+              document.getElementById(
+                "detailPhone"
+              ).value.trim(),
+
+            monthlyCommissionPercent:
+              Number(
+                document.getElementById(
+                  "detailMonthlyCommission"
+                ).value || 0
+              ),
+
+            annualCommissionPercent:
+              Number(
+                document.getElementById(
+                  "detailAnnualCommission"
+                ).value || 0
+              ),
+
+            commissionHoldDays:
+              Number(
+                document.getElementById(
+                  "detailHoldDays"
+                ).value || 0
+              ),
+
+            notes:
+              document.getElementById(
+                "detailNotes"
+              ).value.trim(),
+
+            active
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to save promoter."
+      );
+    }
+
+    message.textContent =
+      "✓ Employee details saved.";
+
+    message.className =
+      "message good";
+
+    await Promise.all([
+      loadPromoters(),
+      loadPlanRequests()
+    ]);
+
+    await openPromoter(
+      data.promoter.id
+    );
+
+  }catch(error){
+
+    message.textContent =
+      error.message ||
+      "Unable to save promoter.";
+
+    message.className =
+      "message bad";
+  }
+}
+
+
+async function togglePromoterAccess(){
+
+  if(
+    !currentPromoterDetail
+      ?.promoter
+  ){
+    return;
+  }
+
+  const promoter =
+    currentPromoterDetail.promoter;
+
+  const nextActive =
+    !promoter.active;
+
+  const label =
+    nextActive
+      ? "enable"
+      : "disable";
+
+  if(
+    !confirm(
+      "Are you sure you want to " +
+      label +
+      " " +
+      (
+        promoter.displayName ||
+        "this employee"
+      ) +
+      "?"
+    )
+  ){
+    return;
+  }
+
+  await savePromoterProfile(
+    nextActive
+  );
+}
+
+
+async function deletePromoterPermanently(){
+
+  if(
+    !currentPromoterDetail
+      ?.promoter
+      ?.id
+  ){
+    return;
+  }
+
+  const promoter =
+    currentPromoterDetail.promoter;
+
+  const typed =
+    prompt(
+      "Permanent delete removes this employee profile and unused test data. " +
+      "If business history exists, LiveBridge will block deletion. " +
+      "Type DELETE to permanently delete " +
+      (
+        promoter.displayName ||
+        "this employee"
+      ) +
+      "."
+    );
+
+  if(typed !== "DELETE"){
+    return;
+  }
+
+  const message =
+    document.getElementById(
+      "detailMessage"
+    );
+
+  try{
+
+    const response =
+      await api(
+        "/promoter-admin/promoter-delete",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            id:Number(promoter.id)
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to delete promoter."
+      );
+    }
+
+    closePromoterDetail();
+
+    await Promise.all([
+      loadPromoters(),
+      loadPlanRequests()
+    ]);
+
+    alert(
+      "Employee / promoter permanently deleted."
+    );
+
+  }catch(error){
+
+    message.textContent =
+      error.message ||
+      "Unable to delete promoter.";
+
+    message.className =
+      "message bad";
+  }
+}
 
 
 function planFeaturesHtml(
@@ -2346,6 +3569,46 @@ document
   .addEventListener(
     "click",
     createPromoter
+  );
+
+document
+  .getElementById(
+    "closePromoterDetailButton"
+  )
+  .addEventListener(
+    "click",
+    closePromoterDetail
+  );
+
+
+document
+  .getElementById(
+    "savePromoterButton"
+  )
+  .addEventListener(
+    "click",
+    () =>
+      savePromoterProfile()
+  );
+
+
+document
+  .getElementById(
+    "togglePromoterButton"
+  )
+  .addEventListener(
+    "click",
+    togglePromoterAccess
+  );
+
+
+document
+  .getElementById(
+    "deletePromoterButton"
+  )
+  .addEventListener(
+    "click",
+    deletePromoterPermanently
   );
 
 
