@@ -1,4 +1,4 @@
-name: Trigger listener upgrade
+name: Apply listener experience upgrade
 
 on:
   push:
@@ -11,22 +11,55 @@ permissions:
   contents: write
 
 jobs:
-  trigger:
+  upgrade:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Trigger existing listener upgrade workflow
+
+      - name: Apply listener upgrade from registered patch
         shell: bash
         run: |
           set -euo pipefail
-          printf '\n# triggered after workflow registration\n' >> .github/workflows/livebridge-listener-experience-v1.yml
+
+          python3 - <<'PY'
+          import base64
+          import re
+          from pathlib import Path
+
+          source = Path('.github/workflows/livebridge-listener-experience-v1.yml').read_text(encoding='utf-8')
+          matches = re.findall(
+              r"printf '%s' '([A-Za-z0-9+/=]+)' \| base64 --decode > /tmp/(livebridge_(?:patch|validate)\.py)",
+              source,
+          )
+          if len(matches) != 2:
+              raise SystemExit(f'Expected 2 embedded LiveBridge scripts, found {len(matches)}')
+          for payload, filename in matches:
+              Path('/tmp/' + filename).write_bytes(base64.b64decode(payload))
+          print('Extracted registered LiveBridge upgrade scripts.')
+          PY
+
+          python3 /tmp/livebridge_patch.py
+          node --check backend/worker.js
+          python3 /tmp/livebridge_validate.py
+
+          grep -q 'listenerDataDisplay' backend/worker.js
+          grep -q 'type: "presence"' backend/worker.js
+          grep -q 'type: "chat"' backend/worker.js
+          grep -q 'listener-profile' backend/worker.js
+          grep -q 'editListenerDataDisplay' frontend/public/admin/index.html
+          grep -q 'Data this visit' frontend/public/t/index.html
+          grep -q 'With You' frontend/public/t/index.html
+
           git config user.name "LiveBridge Automation"
           git config user.email "actions@users.noreply.github.com"
-          git add .github/workflows/livebridge-listener-experience-v1.yml
-          git rm .github/workflows/trigger-listener-upgrade.yml
-          git commit -m "Trigger listener experience upgrade"
-          git push origin main
+          git add backend/worker.js frontend/public/admin/index.html frontend/public/t/index.html
 
-# workflow registered; this edit intentionally triggers the one-time job
+          if git diff --cached --quiet; then
+            echo 'No code changes were produced.'
+            exit 1
+          fi
+
+          git commit -m "Add listener presence chat profiles and data meter"
+          git push origin main
