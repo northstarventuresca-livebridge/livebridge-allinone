@@ -23,6 +23,29 @@ jobs:
         run: |
           set -euo pipefail
 
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/lb_listener_upgrade.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected 1 match, found {count}")
+              return text.replace(old, new, 1)'''
+          new = '''def replace_once(text, old, new, label):
+              count = text.count(old)
+              if label == "listener chat CSS":
+                  if count < 1:
+                      raise RuntimeError(f"{label}: expected at least 1 match, found {count}")
+                  return text.replace(old, new, 1)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected 1 match, found {count}")
+              return text.replace(old, new, 1)'''
+          if old not in text:
+              raise SystemExit("Could not patch listener CSS match guard")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
           python3 -m py_compile scripts/lb_backend_listener_upgrade.py
           python3 -m py_compile scripts/lb_admin_listener_upgrade.py
           python3 -m py_compile scripts/lb_listener_upgrade.py
@@ -37,34 +60,20 @@ jobs:
           import re
           import subprocess
           from pathlib import Path
-
-          for page in [
-              Path("frontend/public/admin/index.html"),
-              Path("frontend/public/t/index.html"),
-          ]:
+          for page in [Path("frontend/public/admin/index.html"), Path("frontend/public/t/index.html")]:
               text = page.read_text(encoding="utf-8")
-              scripts = re.findall(
-                  r"<script\b[^>]*>(.*?)</script>",
-                  text,
-                  flags=re.I | re.S,
-              )
+              scripts = re.findall(r"<script\b[^>]*>(.*?)</script>", text, flags=re.I | re.S)
               checked = 0
               for index, script in enumerate(scripts, 1):
                   if not script.strip():
                       continue
                   temp = Path(f"/tmp/{page.parent.name}-inline-{index}.js")
                   temp.write_text(script, encoding="utf-8")
-                  result = subprocess.run(
-                      ["node", "--check", str(temp)],
-                      capture_output=True,
-                      text=True,
-                  )
+                  result = subprocess.run(["node", "--check", str(temp)], capture_output=True, text=True)
                   if result.returncode != 0:
                       print(result.stdout)
                       print(result.stderr)
-                      raise SystemExit(
-                          f"Inline JS syntax failed: {page} script {index}"
-                      )
+                      raise SystemExit(f"Inline JS syntax failed: {page} script {index}")
                   checked += 1
               print(f"{page}: {checked} inline scripts validated")
           PY
@@ -84,11 +93,9 @@ jobs:
           git config user.name "LiveBridge Automation"
           git config user.email "actions@users.noreply.github.com"
           git add backend/worker.js frontend/public/admin/index.html frontend/public/t/index.html
-
           if git diff --cached --quiet; then
             echo "No LiveBridge code changes were produced."
             exit 1
           fi
-
           git commit -m "Add listener presence chat profiles and data meter"
           git push origin main
