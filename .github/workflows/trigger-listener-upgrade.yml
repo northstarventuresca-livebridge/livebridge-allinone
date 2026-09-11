@@ -30,12 +30,13 @@ jobs:
 
           source = Path('.github/workflows/livebridge-listener-experience-v1.yml').read_text(encoding='utf-8')
           matches = re.findall(
-              r"printf '%s' '([A-Za-z0-9+/=]+)' \| base64 --decode > /tmp/(livebridge_(?:patch|validate)\.py)",
+              r"printf '%s' '([^']+)' \| base64 --decode > /tmp/(livebridge_[A-Za-z0-9_-]+\.py)",
               source,
           )
-          if len(matches) != 2:
-              raise SystemExit(f'Expected 2 embedded LiveBridge scripts, found {len(matches)}')
-          for payload, filename in matches:
+          wanted = {name: payload for payload, name in matches if name in {'livebridge_patch.py', 'livebridge_validate.py'}}
+          if set(wanted) != {'livebridge_patch.py', 'livebridge_validate.py'}:
+              raise SystemExit(f'Could not extract both registered scripts. Found: {sorted(wanted)}')
+          for filename, payload in wanted.items():
               Path('/tmp/' + filename).write_bytes(base64.b64decode(payload))
           print('Extracted registered LiveBridge upgrade scripts.')
           PY
