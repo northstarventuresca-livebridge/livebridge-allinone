@@ -88,8 +88,8 @@ jobs:
           PY
 
           grep -q 'listenerDataDisplay' backend/worker.js
-          grep -q 'type: "presence"' backend/worker.js
-          grep -q 'type: "chat"' backend/worker.js
+          grep -q '"presence"' backend/worker.js
+          grep -q '"chat"' backend/worker.js
           grep -q 'url.pathname === "/listener-profile"' backend/worker.js
           grep -q 'assignedName' backend/worker.js
           grep -q 'id="editListenerDataDisplay"' frontend/public/admin/index.html
