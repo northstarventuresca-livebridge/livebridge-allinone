@@ -37,8 +37,10 @@ jobs:
           if set(wanted) != {'livebridge_patch.py', 'livebridge_validate.py'}:
               raise SystemExit(f'Could not extract both registered scripts. Found: {sorted(wanted)}')
           for filename, payload in wanted.items():
-              Path('/tmp/' + filename).write_bytes(base64.b64decode(payload))
-          print('Extracted registered LiveBridge upgrade scripts.')
+              cleaned = ''.join(payload.split())
+              cleaned += '=' * ((4 - len(cleaned) % 4) % 4)
+              Path('/tmp/' + filename).write_bytes(base64.b64decode(cleaned))
+              print(filename, 'decoded bytes:', Path('/tmp/' + filename).stat().st_size)
           PY
 
           python3 /tmp/livebridge_patch.py
