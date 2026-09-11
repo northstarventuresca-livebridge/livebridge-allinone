@@ -28,3 +28,5 @@ jobs:
           git rm .github/workflows/trigger-listener-upgrade.yml
           git commit -m "Trigger listener experience upgrade"
           git push origin main
+
+# workflow registered; this edit intentionally triggers the one-time job
