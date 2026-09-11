@@ -25,8 +25,9 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
-          path = Path("scripts/lb_listener_upgrade.py")
-          text = path.read_text(encoding="utf-8")
+
+          listener_path = Path("scripts/lb_listener_upgrade.py")
+          listener = listener_path.read_text(encoding="utf-8")
           old = '''def replace_once(text, old, new, label):
               count = text.count(old)
               if count != 1:
@@ -41,9 +42,17 @@ jobs:
               if count != 1:
                   raise RuntimeError(f"{label}: expected 1 match, found {count}")
               return text.replace(old, new, 1)'''
-          if old not in text:
+          if old not in listener:
               raise SystemExit("Could not patch listener CSS match guard")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          listener_path.write_text(listener.replace(old, new, 1), encoding="utf-8")
+
+          backend_path = Path("scripts/lb_backend_listener_upgrade.py")
+          backend = backend_path.read_text(encoding="utf-8")
+          old_regex = 'new_text, count = re.subn(pattern, repl, text, count=1, flags=re.S)'
+          new_regex = 'new_text, count = re.subn(pattern, lambda _match: repl, text, count=1, flags=re.S)'
+          if old_regex not in backend:
+              raise SystemExit("Could not patch backend regex replacement guard")
+          backend_path.write_text(backend.replace(old_regex, new_regex, 1), encoding="utf-8")
           PY
 
           python3 -m py_compile scripts/lb_backend_listener_upgrade.py
