@@ -1,0 +1,30 @@
+name: Trigger listener upgrade
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/trigger-listener-upgrade.yml
+
+permissions:
+  contents: write
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Trigger existing listener upgrade workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '\n# triggered after workflow registration\n' >> .github/workflows/livebridge-listener-experience-v1.yml
+          git config user.name "LiveBridge Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/workflows/livebridge-listener-experience-v1.yml
+          git rm .github/workflows/trigger-listener-upgrade.yml
+          git commit -m "Trigger listener experience upgrade"
+          git push origin main
