@@ -34,10 +34,10 @@ jobs:
             👥 Employee / Promoter Management
           </button>
 
-'''
+          '''
 
           if '👥 Employee / Promoter Management' not in text:
-              needle = '''      <div class="lb-divider"></div>'''
+              needle = '      <div class="lb-divider"></div>'
               if needle not in text:
                   raise SystemExit('Expected admin sidebar divider was not found; refusing to modify.')
               text = text.replace(needle, button + needle, 1)
