@@ -4,6 +4,7 @@
   const POLL_MS = 5000;
   let pollTimer = null;
   let lastReferenceKey = "";
+  let lastNotesKey = "";
   let currentVerseReference = "";
 
   function getRoom() {
@@ -37,18 +38,25 @@
   }
 
   function addStyles() {
-    if (document.getElementById("lbScriptureStyles")) {
+    if (document.getElementById("lbLiveNotesStyles")) {
       return;
     }
 
     const style = document.createElement("style");
-    style.id = "lbScriptureStyles";
+    style.id = "lbLiveNotesStyles";
     style.textContent = `
+      .lb-live-notes-panel,
       .lb-scripture-panel{
         padding:16px 20px;
         border-top:1px solid rgba(255,255,255,.07);
+      }
+      .lb-live-notes-panel{
+        background:rgba(45,151,255,.045);
+      }
+      .lb-scripture-panel{
         background:rgba(52,212,189,.045);
       }
+      .lb-live-notes-head,
       .lb-scripture-head{
         display:flex;
         align-items:center;
@@ -57,15 +65,33 @@
         flex-wrap:wrap;
         margin-bottom:10px;
       }
+      .lb-live-notes-title,
       .lb-scripture-title{
         font-size:14px;
         font-weight:900;
         color:#dce9f5;
       }
+      .lb-live-notes-status{
+        font-size:10px;
+        font-weight:800;
+        color:#78b7ff;
+      }
       .lb-scripture-status{
         font-size:10px;
         font-weight:800;
         color:#6de8c5;
+      }
+      .lb-live-notes-copy{
+        color:#d6e3ef;
+        font-size:13px;
+        line-height:1.6;
+        white-space:pre-wrap;
+      }
+      .lb-live-notes-empty,
+      .lb-scripture-empty{
+        color:#8197ad;
+        font-size:11px;
+        line-height:1.45;
       }
       .lb-scripture-references{
         display:flex;
@@ -84,11 +110,6 @@
       }
       .lb-scripture-reference:hover{
         background:rgba(52,212,189,.14);
-      }
-      .lb-scripture-empty{
-        color:#8197ad;
-        font-size:11px;
-        line-height:1.45;
       }
       .lb-scripture-verse{
         margin-top:12px;
@@ -115,16 +136,7 @@
     document.head.appendChild(style);
   }
 
-  function ensurePanel() {
-    let panel =
-      document.getElementById(
-        "listenerScripturePanel"
-      );
-
-    if (panel) {
-      return panel;
-    }
-
+  function ensurePanels() {
     const output =
       document.getElementById(
         "listenerOutput"
@@ -136,69 +148,206 @@
 
     addStyles();
 
-    panel =
-      document.createElement("div");
+    let notesPanel =
+      document.getElementById(
+        "listenerLiveNotesPanel"
+      );
 
-    panel.id =
-      "listenerScripturePanel";
+    if (!notesPanel) {
+      notesPanel =
+        document.createElement("div");
 
-    panel.className =
-      "lb-scripture-panel notranslate";
+      notesPanel.id =
+        "listenerLiveNotesPanel";
 
-    panel.setAttribute(
-      "translate",
-      "no"
-    );
+      notesPanel.className =
+        "lb-live-notes-panel notranslate";
 
-    panel.hidden = true;
+      notesPanel.setAttribute(
+        "translate",
+        "no"
+      );
 
-    panel.innerHTML = `
-      <div class="lb-scripture-head">
-        <div class="lb-scripture-title">📖 Scripture</div>
-        <div id="listenerScriptureStatus" class="lb-scripture-status">Detection active</div>
-      </div>
-      <div id="listenerScriptureReferences" class="lb-scripture-references">
-        <div class="lb-scripture-empty">Detected Scripture references will appear here.</div>
-      </div>
-      <div id="listenerScriptureVerse" class="lb-scripture-verse" hidden></div>
-    `;
+      notesPanel.hidden = true;
 
-    output.insertAdjacentElement(
-      "afterend",
-      panel
-    );
+      notesPanel.innerHTML = `
+        <div class="lb-live-notes-head">
+          <div class="lb-live-notes-title">✨ AI Live Notes</div>
+          <div id="listenerLiveNotesStatus" class="lb-live-notes-status">Updates automatically</div>
+        </div>
+        <div id="listenerLiveNotesCopy" class="lb-live-notes-copy">
+          <div class="lb-live-notes-empty">Live summary notes will appear here as the message develops.</div>
+        </div>
+      `;
 
-    return panel;
-  }
-
-  function hidePanel() {
-    const panel =
-      ensurePanel();
-
-    if (panel) {
-      panel.hidden = true;
+      output.insertAdjacentElement(
+        "afterend",
+        notesPanel
+      );
     }
 
+    let scripturePanel =
+      document.getElementById(
+        "listenerScripturePanel"
+      );
+
+    if (!scripturePanel) {
+      scripturePanel =
+        document.createElement("div");
+
+      scripturePanel.id =
+        "listenerScripturePanel";
+
+      scripturePanel.className =
+        "lb-scripture-panel notranslate";
+
+      scripturePanel.setAttribute(
+        "translate",
+        "no"
+      );
+
+      scripturePanel.hidden = true;
+
+      scripturePanel.innerHTML = `
+        <div class="lb-scripture-head">
+          <div class="lb-scripture-title">📖 Scripture</div>
+          <div id="listenerScriptureStatus" class="lb-scripture-status">Detection active</div>
+        </div>
+        <div id="listenerScriptureReferences" class="lb-scripture-references">
+          <div class="lb-scripture-empty">Detected Scripture references will appear here.</div>
+        </div>
+        <div id="listenerScriptureVerse" class="lb-scripture-verse" hidden></div>
+      `;
+
+      notesPanel.insertAdjacentElement(
+        "afterend",
+        scripturePanel
+      );
+    }
+
+    return {
+      notesPanel,
+      scripturePanel
+    };
+  }
+
+  function hidePanels() {
+    const panels =
+      ensurePanels();
+
+    if (!panels) {
+      return;
+    }
+
+    panels.notesPanel.hidden = true;
+    panels.scripturePanel.hidden = true;
+
+    lastNotesKey = "";
     lastReferenceKey = "";
     currentVerseReference = "";
   }
 
-  function renderReferences(data) {
-    const panel =
-      ensurePanel();
+  function renderLiveNotes(data) {
+    const panels =
+      ensurePanels();
 
-    if (!panel) {
-      return false;
+    if (!panels) {
+      return;
+    }
+
+    panels.notesPanel.hidden = false;
+
+    const status =
+      document.getElementById(
+        "listenerLiveNotesStatus"
+      );
+
+    if (status) {
+      status.textContent =
+        data?.live
+          ? "Updating while live"
+          : "Waiting for live message";
+    }
+
+    const summary =
+      String(
+        data?.summary || ""
+      ).trim();
+
+    const noteEntries =
+      Array.isArray(data?.noteEntries)
+        ? data.noteEntries
+            .map(value =>
+              String(value || "").trim()
+            )
+            .filter(Boolean)
+        : [];
+
+    const displayText =
+      summary ||
+      noteEntries.join("\n\n");
+
+    const notesKey =
+      displayText +
+      "|" +
+      String(data?.message || "");
+
+    if (notesKey === lastNotesKey) {
+      return;
+    }
+
+    lastNotesKey = notesKey;
+
+    const container =
+      document.getElementById(
+        "listenerLiveNotesCopy"
+      );
+
+    if (!container) {
+      return;
+    }
+
+    container.textContent = "";
+
+    if (displayText) {
+      container.textContent =
+        displayText;
+      return;
+    }
+
+    const empty =
+      document.createElement("div");
+
+    empty.className =
+      "lb-live-notes-empty";
+
+    empty.textContent =
+      String(
+        data?.message ||
+        "Live summary notes will appear here as the message develops."
+      );
+
+    container.appendChild(empty);
+  }
+
+  function renderReferences(data) {
+    const panels =
+      ensurePanels();
+
+    if (!panels) {
+      return;
     }
 
     if (
       data?.scriptureEnabled !== true
     ) {
-      hidePanel();
-      return false;
+      panels.scripturePanel.hidden = true;
+      lastReferenceKey = "";
+      currentVerseReference = "";
+      return;
     }
 
-    panel.hidden = false;
+    panels.scripturePanel.hidden = false;
 
     const status =
       document.getElementById(
@@ -236,7 +385,7 @@
       referenceKey ===
       lastReferenceKey
     ) {
-      return true;
+      return;
     }
 
     lastReferenceKey =
@@ -248,7 +397,7 @@
       );
 
     if (!container) {
-      return true;
+      return;
     }
 
     container.textContent = "";
@@ -263,11 +412,8 @@
       empty.textContent =
         "Detected Scripture references will appear here.";
 
-      container.appendChild(
-        empty
-      );
-
-      return true;
+      container.appendChild(empty);
+      return;
     }
 
     for (
@@ -311,8 +457,6 @@
 
       currentVerseReference = "";
     }
-
-    return true;
   }
 
   async function loadVerse(reference) {
@@ -429,11 +573,11 @@
     }
   }
 
-  async function refreshScripture() {
+  async function refreshLiveNotes() {
     const room = getRoom();
 
     if (!room) {
-      hidePanel();
+      hidePanels();
       return false;
     }
 
@@ -456,13 +600,14 @@
         return false;
       }
 
-      return renderReferences(
-        data
-      );
+      renderLiveNotes(data);
+      renderReferences(data);
+
+      return true;
 
     } catch (error) {
       console.warn(
-        "LiveBridge Scripture refresh failed:",
+        "LiveBridge Live Notes refresh failed:",
         error
       );
       return false;
@@ -481,16 +626,11 @@
   async function startPolling() {
     stopPolling();
 
-    const enabled =
-      await refreshScripture();
-
-    if (!enabled) {
-      return;
-    }
+    await refreshLiveNotes();
 
     pollTimer =
       setInterval(
-        refreshScripture,
+        refreshLiveNotes,
         POLL_MS
       );
   }
@@ -502,7 +642,7 @@
     );
   }
 
-  ensurePanel();
+  ensurePanels();
 
   document.getElementById(
     "joinRoomButton"
