@@ -157,6 +157,13 @@ function protectListenerPage(
           addNoTranslateClass(
             element
           );
+
+          element.append(
+            '<script src="/t/scripture.js"></script>',
+            {
+              html:true
+            }
+          );
         }
       }
     )
