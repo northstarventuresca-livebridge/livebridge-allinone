@@ -278,6 +278,94 @@ function protectListenerPage(
     );
 }
 
+function enhanceAdminPage(
+  response
+) {
+  if(
+    !response ||
+    response.status >= 400
+  ) {
+    return response;
+  }
+
+  return new HTMLRewriter()
+    .on(
+      "body",
+      {
+        element(
+          element
+        ) {
+          element.append(
+            `<script>
+(() => {
+  function attachListenerDataAutosave() {
+    const checkbox =
+      document.getElementById(
+        "editListenerDataDisplay"
+      );
+
+    if (
+      !checkbox ||
+      checkbox.dataset.lbAutosave === "1"
+    ) {
+      return;
+    }
+
+    checkbox.dataset.lbAutosave = "1";
+
+    const note = document.createElement("div");
+    note.style.marginTop = "6px";
+    note.style.fontSize = "10px";
+    note.style.color = "#6de8c5";
+    note.textContent = "This setting saves automatically.";
+
+    const label = checkbox.closest("label");
+    if (label && label.parentElement) {
+      label.parentElement.appendChild(note);
+    }
+
+    checkbox.addEventListener(
+      "change",
+      () => {
+        const saveButton =
+          document.getElementById(
+            "saveClientButton"
+          );
+
+        if (saveButton) {
+          saveButton.click();
+        }
+      }
+    );
+  }
+
+  attachListenerDataAutosave();
+
+  const observer = new MutationObserver(
+    attachListenerDataAutosave
+  );
+
+  observer.observe(
+    document.body,
+    {
+      childList:true,
+      subtree:true
+    }
+  );
+})();
+</script>`,
+            {
+              html:true
+            }
+          );
+        }
+      }
+    )
+    .transform(
+      response
+    );
+}
+
 async function fetchExactAsset(
   request,
   env,
@@ -304,6 +392,15 @@ async function fetchExactAsset(
     "/t/index.html"
   ) {
     return protectListenerPage(
+      response
+    );
+  }
+
+  if(
+    assetPath ===
+    "/admin/index.html"
+  ) {
+    return enhanceAdminPage(
       response
     );
   }
@@ -383,6 +480,15 @@ export default {
         "/t/index.html"
       ) {
         return protectListenerPage(
+          direct
+        );
+      }
+
+      if(
+        path ===
+        "/admin/index.html"
+      ) {
+        return enhanceAdminPage(
           direct
         );
       }
