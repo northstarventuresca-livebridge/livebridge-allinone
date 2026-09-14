@@ -164,6 +164,100 @@ function protectListenerPage(
               html:true
             }
           );
+
+          element.append(
+            `<script>
+(() => {
+  const BACKEND = "https://livebridge.northstarventures-ca.workers.dev";
+
+  function moveDataMeterToTopbar() {
+    const meter = document.getElementById("listenerDataUsage");
+    const meta = document.querySelector(".lb-live-meta");
+
+    if (!meter || !meta) {
+      return;
+    }
+
+    if (meter.parentElement !== meta) {
+      meta.appendChild(meter);
+    }
+
+    meter.classList.add("lb-live-pill");
+    meter.style.marginLeft = "0";
+    meter.style.fontSize = "12px";
+    meter.style.fontWeight = "900";
+    meter.style.color = "#6de8c5";
+  }
+
+  function currentRoom() {
+    try {
+      if (
+        typeof ROOM_ID !== "undefined" &&
+        String(ROOM_ID || "").trim()
+      ) {
+        return String(ROOM_ID).trim().toUpperCase();
+      }
+    } catch {}
+
+    return String(
+      document.getElementById("listenerRoom")?.value || ""
+    ).trim().toUpperCase();
+  }
+
+  async function syncDataMeterSetting() {
+    moveDataMeterToTopbar();
+
+    const room = currentRoom();
+    if (!room) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        BACKEND +
+        "/room-access?room=" +
+        encodeURIComponent(room),
+        { cache: "no-store" }
+      );
+
+      const data = await response.json();
+
+      if (
+        typeof setListenerDataCounterEnabled === "function"
+      ) {
+        setListenerDataCounterEnabled(
+          data?.listenerDataDisplayEnabled === true
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "LiveBridge listener data-meter sync failed:",
+        error
+      );
+    }
+  }
+
+  moveDataMeterToTopbar();
+
+  document.getElementById("joinRoomButton")
+    ?.addEventListener(
+      "click",
+      () => setTimeout(syncDataMeterSetting, 700)
+    );
+
+  document.getElementById("listenerLanguage")
+    ?.addEventListener(
+      "change",
+      () => setTimeout(syncDataMeterSetting, 700)
+    );
+
+  setTimeout(syncDataMeterSetting, 900);
+})();
+</script>`,
+            {
+              html:true
+            }
+          );
         }
       }
     )
