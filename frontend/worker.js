@@ -78,6 +78,105 @@ function preserveQueryRedirect(
   );
 }
 
+function protectListenerPage(
+  response
+) {
+  if(
+    !response ||
+    response.status >= 400
+  ) {
+    return response;
+  }
+
+  const addNoTranslateClass =
+    element => {
+      const existing =
+        String(
+          element.getAttribute(
+            "class"
+          ) || ""
+        )
+        .trim();
+
+      const classes =
+        new Set(
+          existing
+            .split(/\s+/)
+            .filter(Boolean)
+        );
+
+      classes.add(
+        "notranslate"
+      );
+
+      element.setAttribute(
+        "class",
+        [...classes].join(" ")
+      );
+
+      element.setAttribute(
+        "translate",
+        "no"
+      );
+    };
+
+  return new HTMLRewriter()
+    .on(
+      "html",
+      {
+        element(
+          element
+        ) {
+          addNoTranslateClass(
+            element
+          );
+        }
+      }
+    )
+    .on(
+      "head",
+      {
+        element(
+          element
+        ) {
+          element.append(
+            '<meta name="google" content="notranslate">',
+            {
+              html:true
+            }
+          );
+        }
+      }
+    )
+    .on(
+      "body",
+      {
+        element(
+          element
+        ) {
+          addNoTranslateClass(
+            element
+          );
+        }
+      }
+    )
+    .on(
+      "#listenerOutput",
+      {
+        element(
+          element
+        ) {
+          addNoTranslateClass(
+            element
+          );
+        }
+      }
+    )
+    .transform(
+      response
+    );
+}
+
 async function fetchExactAsset(
   request,
   env,
@@ -91,12 +190,24 @@ async function fetchExactAsset(
   assetUrl.pathname =
     assetPath;
 
-  return env.ASSETS.fetch(
-    new Request(
-      assetUrl.toString(),
-      request
-    )
-  );
+  const response =
+    await env.ASSETS.fetch(
+      new Request(
+        assetUrl.toString(),
+        request
+      )
+    );
+
+  if(
+    assetPath ===
+    "/t/index.html"
+  ) {
+    return protectListenerPage(
+      response
+    );
+  }
+
+  return response;
 }
 
 export default {
@@ -166,6 +277,15 @@ export default {
       direct.status !==
       404
     ) {
+      if(
+        path ===
+        "/t/index.html"
+      ) {
+        return protectListenerPage(
+          direct
+        );
+      }
+
       return direct;
     }
 
