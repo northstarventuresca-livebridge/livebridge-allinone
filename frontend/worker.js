@@ -366,6 +366,37 @@ function enhanceAdminPage(
     );
 }
 
+function enhanceBroadcasterPage(
+  response
+) {
+  if(
+    !response ||
+    response.status >= 400
+  ) {
+    return response;
+  }
+
+  return new HTMLRewriter()
+    .on(
+      "body",
+      {
+        element(
+          element
+        ) {
+          element.append(
+            '<script src="/sunday/share-graphic.js"></script>',
+            {
+              html:true
+            }
+          );
+        }
+      }
+    )
+    .transform(
+      response
+    );
+}
+
 async function fetchExactAsset(
   request,
   env,
@@ -401,6 +432,15 @@ async function fetchExactAsset(
     "/admin/index.html"
   ) {
     return enhanceAdminPage(
+      response
+    );
+  }
+
+  if(
+    assetPath ===
+    "/sunday/index.html"
+  ) {
+    return enhanceBroadcasterPage(
       response
     );
   }
@@ -489,6 +529,15 @@ export default {
         "/admin/index.html"
       ) {
         return enhanceAdminPage(
+          direct
+        );
+      }
+
+      if(
+        path ===
+        "/sunday/index.html"
+      ) {
+        return enhanceBroadcasterPage(
           direct
         );
       }
