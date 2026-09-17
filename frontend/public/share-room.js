@@ -490,7 +490,7 @@
     window.refreshListenerShare = function() {
       const url = window.getListenerShareURL();
       const text = document.getElementById("lbListenerShareURL");
-      const qr = document.getElementById("lbListenerShareQR");
+      const qr = document.getElementById("lbListenerQR");
       if (text) text.textContent = url;
       if (qr) {
         qr.src =
