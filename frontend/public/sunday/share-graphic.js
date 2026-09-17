@@ -1,5 +1,63 @@
-/* LiveBridge broadcaster share graphic v2 — visual poster refresh */
+/* LiveBridge broadcaster share graphic v3 — language-gate QR + visual poster refresh */
 (() => {
+  const LISTENER_GATE_BASE_URL = "https://livebridge.ca/t/";
+
+  function buildRoomLanguageGateURL() {
+    const room =
+      document.getElementById("roomName")?.value?.trim().toUpperCase() || "";
+
+    return (
+      LISTENER_GATE_BASE_URL +
+      "?room=" +
+      encodeURIComponent(room)
+    );
+  }
+
+  function installLanguageGateShareLinks() {
+    if (typeof updateBroadcasterSharePanel !== "function") {
+      return;
+    }
+
+    updateBroadcasterSharePanel = function() {
+      const room =
+        document.getElementById("roomName")?.value?.trim().toUpperCase() || "";
+
+      const listenerURL =
+        buildRoomLanguageGateURL();
+
+      window.currentBroadcasterListenerURL =
+        listenerURL;
+
+      const roomName =
+        document.getElementById("shareRoomName");
+
+      const roomURL =
+        document.getElementById("shareRoomURL");
+
+      const roomQR =
+        document.getElementById("shareRoomQR");
+
+      if (roomName) {
+        roomName.textContent = room;
+      }
+
+      if (roomURL) {
+        roomURL.textContent = listenerURL;
+      }
+
+      if (roomQR) {
+        roomQR.src =
+          "https://api.qrserver.com/v1/create-qr-code/" +
+          "?size=300x300" +
+          "&margin=5" +
+          "&data=" +
+          encodeURIComponent(listenerURL);
+      }
+    };
+
+    updateBroadcasterSharePanel();
+  }
+
   function roundedRect(ctx, x, y, width, height, radius) {
     ctx.beginPath();
     ctx.roundRect(x, y, width, height, radius);
@@ -215,18 +273,20 @@
     ctx.fillRect(0, 700, width, height - 700);
   }
 
-  async function liveBridgeMakeShareInviteGraphicV2() {
+  async function liveBridgeMakeShareInviteGraphicV3() {
     const lang = document.getElementById("shareInviteLanguage")?.value || "en";
     const t = shareInviteTranslations[lang] || shareInviteTranslations.en;
     const room = document.getElementById("roomName")?.value?.trim().toUpperCase() || "LIVE";
     const org = document.getElementById("broadcasterOrganization")?.textContent?.trim() || "LiveBridge Organization";
-    const url = window.currentBroadcasterListenerURL;
+    const url = buildRoomLanguageGateURL();
+
+    window.currentBroadcasterListenerURL = url;
 
     const english = lang === "en";
     const headline = english ? "Listen Live" : t.title;
     const subheadline = english ? "In Your Language" : t.subtitle;
     const bodyCopy = english
-      ? "Scan the QR code to hear today’s message in your preferred language."
+      ? "Scan the QR code to choose your language and hear today’s message live."
       : t.message;
 
     const qr = new Image();
@@ -322,7 +382,7 @@
     ctx.textAlign = "center";
     ctx.fillStyle = "#092654";
     ctx.font = "900 24px Arial,Helvetica,sans-serif";
-    ctx.fillText("SCAN TO LISTEN LIVE", qrPanelX + qrPanelW / 2, qrPanelY + 595);
+    ctx.fillText("SCAN TO CHOOSE YOUR LANGUAGE", qrPanelX + qrPanelW / 2, qrPanelY + 595);
 
     ctx.fillStyle = "rgba(23,83,128,.80)";
     ctx.font = "800 18px Arial,Helvetica,sans-serif";
@@ -348,8 +408,6 @@
       canvas,
       blob,
       filename: "LiveBridge-" + room + "-" + lang + ".png",
-      // The text/share message intentionally keeps the clickable URL.
-      // The graphic itself intentionally does not print the URL because the QR code already contains it.
       message:
         t.message +
         "\n\n" +
@@ -363,5 +421,6 @@
     };
   }
 
-  window.makeShareInviteGraphic = liveBridgeMakeShareInviteGraphicV2;
+  installLanguageGateShareLinks();
+  window.makeShareInviteGraphic = liveBridgeMakeShareInviteGraphicV3;
 })();
