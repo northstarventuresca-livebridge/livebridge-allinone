@@ -166,6 +166,13 @@ function protectListenerPage(
           );
 
           element.append(
+            '<script src="/share-room.js"></script>',
+            {
+              html:true
+            }
+          );
+
+          element.append(
             `<script>
 (() => {
   const BACKEND = "https://livebridge.northstarventures-ca.workers.dev";
@@ -397,6 +404,37 @@ function enhanceBroadcasterPage(
     );
 }
 
+function enhanceAccountPage(
+  response
+) {
+  if(
+    !response ||
+    response.status >= 400
+  ) {
+    return response;
+  }
+
+  return new HTMLRewriter()
+    .on(
+      "body",
+      {
+        element(
+          element
+        ) {
+          element.append(
+            '<script src="/share-room.js"></script>',
+            {
+              html:true
+            }
+          );
+        }
+      }
+    )
+    .transform(
+      response
+    );
+}
+
 async function fetchExactAsset(
   request,
   env,
@@ -441,6 +479,15 @@ async function fetchExactAsset(
     "/sunday/index.html"
   ) {
     return enhanceBroadcasterPage(
+      response
+    );
+  }
+
+  if(
+    assetPath ===
+    "/account/index.html"
+  ) {
+    return enhanceAccountPage(
       response
     );
   }
@@ -538,6 +585,15 @@ export default {
         "/sunday/index.html"
       ) {
         return enhanceBroadcasterPage(
+          direct
+        );
+      }
+
+      if(
+        path ===
+        "/account/index.html"
+      ) {
+        return enhanceAccountPage(
           direct
         );
       }
