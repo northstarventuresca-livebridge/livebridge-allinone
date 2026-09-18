@@ -4603,7 +4603,8 @@ function organizationStatsApiCacheRequest(
 
   const cacheUrl =
     new URL(
-      "https://stats-api-cache.livebridge.internal/v1/" +
+      source.origin +
+      "/__livebridge_stats_api_cache/v1/" +
       Number(
         organizationId || 0
       )
