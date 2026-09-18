@@ -139,6 +139,29 @@ async function ensureMarketingCreditsSchema(env) {
       completed_at INTEGER
     )
   `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_generation_refunds (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL UNIQUE,
+      organization_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      campaign_created_at INTEGER NOT NULL,
+      requested_at INTEGER NOT NULL,
+      refunded_at INTEGER NOT NULL,
+      credit_delta INTEGER NOT NULL DEFAULT 1,
+      balance_after INTEGER NOT NULL DEFAULT 0,
+      email_sent INTEGER NOT NULL DEFAULT 0
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_generation_refunds_org
+    ON marketing_generation_refunds (
+      organization_id,
+      requested_at DESC
+    )
+  `).run();
 }
 
 async function marketingCreditBalance(env, organizationId) {
@@ -395,6 +418,155 @@ async function refundMarketingCredit(
   .run();
 
   return balance;
+}
+
+function marketingRefundEscapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function sendMarketingRefundAdminEmail(
+  env,
+  organization,
+  campaign,
+  reason,
+  balanceAfter,
+  requestedAt
+) {
+  if (!env.GMAIL_WEB_APP_URL) {
+    return false;
+  }
+
+  const adminsResult =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT email
+      FROM admin_users
+      WHERE active = 1
+        AND TRIM(COALESCE(email, '')) != ''
+      ORDER BY id ASC
+    `)
+    .all();
+
+  const emails = [
+    ...new Set(
+      (adminsResult.results || [])
+        .map(item =>
+          String(item?.email || "")
+            .trim()
+            .toLowerCase()
+        )
+        .filter(email =>
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+            email
+          )
+        )
+    )
+  ];
+
+  if (!emails.length) {
+    return false;
+  }
+
+  const organizationName =
+    String(
+      organization?.organization_name ||
+      "LiveBridge Organization"
+    ).trim();
+
+  const campaignName =
+    String(
+      campaign?.campaignName ||
+      campaign?.languageName ||
+      "Marketing Campaign"
+    ).trim();
+
+  const languageName =
+    String(
+      campaign?.languageName || ""
+    ).trim();
+
+  const requestedDate =
+    new Date(
+      Number(requestedAt || Date.now())
+    ).toISOString();
+
+  const text =
+    "LIVEBRIDGE MARKETING GENERATION REPORT\n\n" +
+    "A customer reported a marketing generation and requested their credit back.\n" +
+    "The credit was automatically returned under the 24-hour customer guarantee.\n\n" +
+    "Organization: " +
+    organizationName +
+    "\nCampaign: " +
+    campaignName +
+    "\nLanguage: " +
+    languageName +
+    "\nRequested: " +
+    requestedDate +
+    "\nNew credit balance: " +
+    Number(balanceAfter || 0) +
+    "\n\nCustomer reason:\n" +
+    reason;
+
+  const htmlReason =
+    marketingRefundEscapeHtml(reason)
+      .replace(/\n/g, "<br>");
+
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:720px;margin:auto;color:#172033;line-height:1.6;">
+      <h1 style="margin-bottom:4px;">LiveBridge</h1>
+      <h2 style="margin-top:0;">Marketing Generation Report</h2>
+      <p>A customer reported a marketing generation within the 24-hour guarantee window. <strong>1 Marketing Credit was automatically returned.</strong></p>
+      <p><strong>Organization:</strong> ${marketingRefundEscapeHtml(organizationName)}<br>
+      <strong>Campaign:</strong> ${marketingRefundEscapeHtml(campaignName)}<br>
+      <strong>Language:</strong> ${marketingRefundEscapeHtml(languageName)}<br>
+      <strong>Requested:</strong> ${marketingRefundEscapeHtml(requestedDate)}<br>
+      <strong>New credit balance:</strong> ${Number(balanceAfter || 0)}</p>
+      <div style="margin-top:18px;padding:14px;border-radius:10px;background:#f3f6fa;border:1px solid #dce5ef;">
+        <strong>Customer reason</strong><br>
+        ${htmlReason}
+      </div>
+    </div>
+  `;
+
+  let sent = false;
+
+  for (const email of emails) {
+    try {
+      const response =
+        await fetch(
+          env.GMAIL_WEB_APP_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+            body: JSON.stringify({
+              email,
+              subject:
+                "LiveBridge Marketing Credit Refund — " +
+                organizationName,
+              text,
+              html
+            })
+          }
+        );
+
+      if (response.ok) {
+        sent = true;
+      }
+    } catch (error) {
+      console.error(
+        "Marketing refund admin email failed:",
+        error
+      );
+    }
+  }
+
+  return sent;
 }
 
 async function completeMarketingCreditPurchase(env, session) {
@@ -11640,11 +11812,91 @@ if (
       LIMIT 50
     `).bind(Number(organization.id)).all();
 
+    await ensureMarketingCreditsSchema(env);
+
+    const refundsResult =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          campaign_id,
+          requested_at,
+          refunded_at,
+          reason
+        FROM marketing_generation_refunds
+        WHERE organization_id = ?
+      `)
+      .bind(
+        Number(organization.id)
+      )
+      .all();
+
+    const refundsByCampaign =
+      new Map(
+        (refundsResult.results || [])
+          .map(item => [
+            String(
+              item.campaign_id || ""
+            ),
+            item
+          ])
+      );
+
+    const refundWindowMs =
+      24 * 60 * 60 * 1000;
+
+    const now =
+      Date.now();
+
+    const campaigns =
+      (campaignsResult.results || [])
+        .map(row => {
+          const campaign =
+            marketingCampaign(row);
+
+          const refund =
+            refundsByCampaign.get(
+              String(row.id || "")
+            );
+
+          const createdAt =
+            Number(
+              row.created_at ||
+              campaign.createdAt ||
+              0
+            );
+
+          const refundExpiresAt =
+            createdAt +
+            refundWindowMs;
+
+          return {
+            ...campaign,
+            refundRequested:
+              !!refund,
+            refundReason:
+              refund
+                ? String(
+                    refund.reason ||
+                    ""
+                  )
+                : "",
+            refundRequestedAt:
+              Number(
+                refund?.requested_at ||
+                0
+              ),
+            refundExpiresAt,
+            refundEligible:
+              !refund &&
+              createdAt > 0 &&
+              now <= refundExpiresAt
+          };
+        });
+
     return jsonResponse({
       success: true,
       profile: marketingProfile(organization, row),
       supportedLanguages: LIVEBRIDGE_MARKETING_LANGUAGES,
-      campaigns: (campaignsResult.results || []).map(marketingCampaign),
+      campaigns,
       marketingCredits:
         await marketingCreditBalance(
           env,
@@ -12297,6 +12549,300 @@ Clearly communicate that people can listen/follow the live service in their own 
     }, needsCredits ? 402 : 500);
   }
 }
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/refund-request"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    await ensureMarketingSchema(env);
+    await ensureMarketingCreditsSchema(env);
+
+    const body =
+      await request.json();
+
+    const campaignId =
+      String(
+        body.campaignId || ""
+      ).trim();
+
+    const reason =
+      String(
+        body.reason || ""
+      )
+      .trim()
+      .replace(
+        /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,
+        ""
+      )
+      .slice(0, 1500);
+
+    if (!campaignId) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Campaign ID is required."
+        },
+        400
+      );
+    }
+
+    if (reason.length < 10) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Please tell us briefly what went wrong before requesting the credit back."
+        },
+        400
+      );
+    }
+
+    const row =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_campaigns
+        WHERE id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        campaignId,
+        Number(organization.id)
+      )
+      .first();
+
+    if (!row) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Marketing campaign not found."
+        },
+        404
+      );
+    }
+
+    const existingRefund =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_generation_refunds
+        WHERE campaign_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        campaignId
+      )
+      .first();
+
+    if (existingRefund) {
+      return jsonResponse(
+        {
+          success: false,
+          code:
+            "ALREADY_REFUNDED",
+          error:
+            "A credit has already been returned for this generation."
+        },
+        409
+      );
+    }
+
+    const createdAt =
+      Number(
+        row.created_at || 0
+      );
+
+    const now =
+      Date.now();
+
+    const refundExpiresAt =
+      createdAt +
+      (
+        24 *
+        60 *
+        60 *
+        1000
+      );
+
+    if (
+      !createdAt ||
+      now > refundExpiresAt
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          code:
+            "REFUND_WINDOW_EXPIRED",
+          error:
+            "The 24-hour credit-back window for this generation has expired."
+        },
+        410
+      );
+    }
+
+    const refundId =
+      crypto.randomUUID();
+
+    try {
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO marketing_generation_refunds (
+          id,
+          campaign_id,
+          organization_id,
+          reason,
+          campaign_created_at,
+          requested_at,
+          refunded_at,
+          credit_delta,
+          balance_after,
+          email_sent
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, 0)
+      `)
+      .bind(
+        refundId,
+        campaignId,
+        Number(organization.id),
+        reason,
+        createdAt,
+        now,
+        now
+      )
+      .run();
+
+    } catch (insertError) {
+      const message =
+        String(
+          insertError?.message ||
+          ""
+        )
+        .toLowerCase();
+
+      if (
+        message.includes("unique") ||
+        message.includes("constraint")
+      ) {
+        return jsonResponse(
+          {
+            success: false,
+            code:
+              "ALREADY_REFUNDED",
+            error:
+              "A credit has already been returned for this generation."
+          },
+          409
+        );
+      }
+
+      throw insertError;
+    }
+
+    let balanceAfter;
+
+    try {
+      balanceAfter =
+        await addMarketingCredits(
+          env,
+          organization.id,
+          1,
+          {
+            transactionType:
+              "customer_generation_refund",
+            referenceId:
+              campaignId,
+            note:
+              "24-hour customer generation report refund",
+            countAsPurchased:
+              false
+          }
+        );
+
+      await env.TRANSLATIONS_DB.prepare(`
+        UPDATE marketing_generation_refunds
+        SET balance_after = ?
+        WHERE id = ?
+      `)
+      .bind(
+        balanceAfter,
+        refundId
+      )
+      .run();
+
+    } catch (creditError) {
+      await env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM marketing_generation_refunds
+        WHERE id = ?
+      `)
+      .bind(
+        refundId
+      )
+      .run();
+
+      throw creditError;
+    }
+
+    const campaign =
+      marketingCampaign(row);
+
+    const emailSent =
+      await sendMarketingRefundAdminEmail(
+        env,
+        organization,
+        campaign,
+        reason,
+        balanceAfter,
+        now
+      );
+
+    await env.TRANSLATIONS_DB.prepare(`
+      UPDATE marketing_generation_refunds
+      SET email_sent = ?
+      WHERE id = ?
+    `)
+    .bind(
+      emailSent ? 1 : 0,
+      refundId
+    )
+    .run();
+
+    return jsonResponse({
+      success: true,
+      refunded: true,
+      creditReturned: 1,
+      balance:
+        balanceAfter,
+      requestedAt:
+        now,
+      refundExpiresAt,
+      emailSent
+    });
+
+  } catch (error) {
+    console.error(
+      "Marketing generation refund request failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to process the generation report."
+      },
+      500
+    );
+  }
+}
+
 
 if (
   request.method === "POST" &&
