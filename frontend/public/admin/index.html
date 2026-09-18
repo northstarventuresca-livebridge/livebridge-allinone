@@ -1712,6 +1712,31 @@ body{
             </div>
 
 
+            <div
+              style="
+                margin-top:18px;
+                padding:16px;
+                border-radius:14px;
+                border:1px solid rgba(52,212,189,.18);
+                background:rgba(52,212,189,.045);
+              "
+            >
+              <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
+                Marketing Credit Analytics
+              </div>
+
+              <div style="color:#8fa8bf;font-size:11px;line-height:1.5;margin-bottom:12px;">
+                Generation usage, returned credits, languages and creative combinations for this organization.
+              </div>
+
+              <div id="marketingCreditAnalytics">
+                <div class="lb-muted">
+                  Loading marketing analytics...
+                </div>
+              </div>
+            </div>
+
+
             <div class="lb-small-label" style="margin-top:5px;">
               Quick Bonus Time
             </div>
@@ -4055,6 +4080,273 @@ function escapeHtml(value){
 }
 
 
+function marketingAnalyticsLabel(value){
+  return String(value || "Unknown")
+    .replace(/[_-]+/g," ")
+    .replace(/\b\w/g,function(letter){
+      return letter.toUpperCase();
+    });
+}
+
+
+function renderMarketingCreditAnalytics(analytics){
+
+  const root =
+    document.getElementById(
+      "marketingCreditAnalytics"
+    );
+
+  if(!root){
+    return;
+  }
+
+  analytics =
+    analytics || {};
+
+  const periods =
+    analytics.periods || {};
+
+  const periodRows = [
+    ["Last 24 Hours", periods.last24Hours],
+    ["Last 7 Days", periods.last7Days],
+    ["Last 30 Days", periods.last30Days],
+    ["Last 365 Days", periods.last365Days],
+    ["Lifetime", periods.lifetime]
+  ];
+
+  function periodCard(label,row){
+    row = row || {};
+    return (
+      '<div style="padding:11px;border-radius:10px;background:#0b1726;border:1px solid rgba(255,255,255,.08);">' +
+        '<div style="font-size:10px;color:#8299b0;font-weight:900;text-transform:uppercase;letter-spacing:.04em;">' +
+          escapeHtml(label) +
+        '</div>' +
+        '<div style="font-size:24px;font-weight:900;color:white;margin-top:5px;">' +
+          Number(row.generated || 0) +
+        '</div>' +
+        '<div style="font-size:10px;color:#9db0c3;margin-top:2px;">Generated</div>' +
+        '<div style="font-size:10px;color:#72ead4;margin-top:6px;">' +
+          Number(row.creditsReturned || 0) +
+          ' returned · ' +
+          Number(row.netCredits || 0) +
+          ' net used' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function breakdownTable(title,rows,labelBuilder){
+    rows =
+      Array.isArray(rows)
+        ? rows
+        : [];
+
+    if(!rows.length){
+      return (
+        '<div style="padding:12px;border-radius:10px;background:#0b1726;border:1px solid rgba(255,255,255,.08);">' +
+          '<div style="font-weight:900;color:white;font-size:12px;">' +
+            escapeHtml(title) +
+          '</div>' +
+          '<div class="lb-muted" style="margin-top:7px;">No usage yet.</div>' +
+        '</div>'
+      );
+    }
+
+    return (
+      '<div style="padding:12px;border-radius:10px;background:#0b1726;border:1px solid rgba(255,255,255,.08);min-width:0;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">' +
+          escapeHtml(title) +
+        '</div>' +
+        '<div style="display:grid;gap:6px;">' +
+          rows.slice(0,12).map(function(row){
+            const label =
+              labelBuilder
+                ? labelBuilder(row)
+                : (
+                    row.label ||
+                    row.key ||
+                    "Unknown"
+                  );
+
+            return (
+              '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 8px;border-radius:8px;background:#0e1c2d;">' +
+                '<div style="min-width:0;font-size:10px;color:#dce8f4;line-height:1.35;overflow-wrap:anywhere;">' +
+                  escapeHtml(label) +
+                '</div>' +
+                '<div style="text-align:right;font-size:10px;color:#8fa6bf;white-space:nowrap;">' +
+                  '<strong style="color:white;">' +
+                    Number(row.generated || 0) +
+                  '</strong> gen · ' +
+                  Number(row.creditsReturned || 0) +
+                  ' returned' +
+                '</div>' +
+              '</div>'
+            );
+          }).join("") +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  const recent =
+    Array.isArray(
+      analytics.recentActivity
+    )
+      ? analytics.recentActivity
+      : [];
+
+  const recentHtml =
+    recent.length
+      ? recent.slice(0,15).map(function(item){
+          const date =
+            item.at
+              ? new Date(
+                  Number(item.at)
+                ).toLocaleString()
+              : "—";
+
+          const isRefund =
+            item.type === "refund";
+
+          const combo = [
+            item.languageName,
+            marketingAnalyticsLabel(
+              item.visualStyle
+            ),
+            marketingAnalyticsLabel(
+              item.audienceFocus
+            ),
+            marketingAnalyticsLabel(
+              item.imageryTone
+            )
+          ]
+          .filter(Boolean)
+          .join(" · ");
+
+          return (
+            '<div style="padding:9px 10px;border-radius:9px;background:#0b1726;border:1px solid rgba(255,255,255,.07);">' +
+              '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">' +
+                '<div style="font-size:10px;font-weight:900;color:' +
+                  (isRefund ? '#72ead4' : '#78b7ff') +
+                ';">' +
+                  (isRefund ? '↩ Credit returned' : '✨ Campaign generated') +
+                '</div>' +
+                '<div style="font-size:9px;color:#71869b;white-space:nowrap;">' +
+                  escapeHtml(date) +
+                '</div>' +
+              '</div>' +
+              '<div style="font-size:10px;color:#dce8f4;margin-top:4px;line-height:1.4;">' +
+                escapeHtml(
+                  item.campaignName ||
+                  combo ||
+                  "Marketing campaign"
+                ) +
+              '</div>' +
+              (combo
+                ? '<div style="font-size:9px;color:#8198af;margin-top:3px;">' +
+                    escapeHtml(combo) +
+                  '</div>'
+                : '') +
+              (isRefund && item.reason
+                ? '<div style="font-size:9px;color:#9fb2c5;margin-top:5px;line-height:1.4;">Reason: ' +
+                    escapeHtml(item.reason) +
+                  '</div>'
+                : '') +
+            '</div>'
+          );
+        }).join("")
+      : '<div class="lb-muted">No Marketing Credit activity yet.</div>';
+
+  root.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;">' +
+      periodRows.map(function(item){
+        return periodCard(
+          item[0],
+          item[1]
+        );
+      }).join("") +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px;">' +
+      '<div style="padding:10px 11px;border-radius:9px;background:#0b1726;border:1px solid rgba(255,255,255,.08);"><div class="lb-muted">Current Balance</div><div style="font-size:20px;font-weight:900;color:white;margin-top:3px;">' +
+        Number(analytics.balance || 0) +
+      '</div></div>' +
+      '<div style="padding:10px 11px;border-radius:9px;background:#0b1726;border:1px solid rgba(255,255,255,.08);"><div class="lb-muted">Lifetime Purchased</div><div style="font-size:20px;font-weight:900;color:white;margin-top:3px;">' +
+        Number(analytics.lifetimePurchased || 0) +
+      '</div></div>' +
+      '<div style="padding:10px 11px;border-radius:9px;background:#0b1726;border:1px solid rgba(255,255,255,.08);"><div class="lb-muted">Lifetime Net Used</div><div style="font-size:20px;font-weight:900;color:white;margin-top:3px;">' +
+        Number(analytics.lifetimeNetUsed || 0) +
+      '</div></div>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:12px;">' +
+      breakdownTable(
+        "Languages",
+        analytics.languages
+      ) +
+      breakdownTable(
+        "Top Combinations",
+        analytics.combinations,
+        function(row){
+          return [
+            row.languageName,
+            marketingAnalyticsLabel(
+              row.visualStyle
+            ),
+            marketingAnalyticsLabel(
+              row.audienceFocus
+            ),
+            marketingAnalyticsLabel(
+              row.imageryTone
+            )
+          ]
+          .filter(Boolean)
+          .join(" · ");
+        }
+      ) +
+      breakdownTable(
+        "Graphic Styles",
+        analytics.visualStyles,
+        function(row){
+          return marketingAnalyticsLabel(
+            row.label ||
+            row.key
+          );
+        }
+      ) +
+      breakdownTable(
+        "Audience Focus",
+        analytics.audienceFocus,
+        function(row){
+          return marketingAnalyticsLabel(
+            row.label ||
+            row.key
+          );
+        }
+      ) +
+      breakdownTable(
+        "Imagery Tones",
+        analytics.imageryTones,
+        function(row){
+          return marketingAnalyticsLabel(
+            row.label ||
+            row.key
+          );
+        }
+      ) +
+    '</div>' +
+
+    '<div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);">' +
+      '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Recent Marketing Credit Activity</div>' +
+      '<div style="display:grid;gap:6px;">' +
+        recentHtml +
+      '</div>' +
+    '</div>' +
+
+    '<div style="font-size:9px;color:#667d93;margin-top:8px;line-height:1.4;">Usage windows are rolling periods: 24 hours, 7 days, 30 days and 365 days. Analytics count only campaigns that actually consumed a Marketing Credit.</div>';
+}
+
+
 async function openOrganization(id){
 
   document.getElementById(
@@ -4241,6 +4533,10 @@ async function openOrganization(id){
         0
       )
     );
+
+  renderMarketingCreditAnalytics(
+    data.marketingAnalytics || {}
+  );
 
   document.getElementById(
     "editViewerLimit"
