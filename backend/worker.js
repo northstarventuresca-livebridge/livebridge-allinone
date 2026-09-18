@@ -4310,6 +4310,430 @@ function parseStatsApiTime(
     : fallback;
 }
 
+async function buildMarketingStatsApiAnalytics(
+  env,
+  organizationId
+) {
+  await ensureMarketingSchema(env);
+  await ensureMarketingCreditsSchema(env);
+
+  const id =
+    Number(
+      organizationId || 0
+    );
+
+  const now =
+    Date.now();
+
+  const [
+    campaignsResult,
+    refundsResult,
+    creditAccount
+  ] =
+    await Promise.all([
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          language_code,
+          language_name,
+          campaign_json,
+          created_at
+        FROM marketing_campaigns
+        WHERE organization_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5000
+      `)
+      .bind(id)
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          campaign_id,
+          requested_at
+        FROM marketing_generation_refunds
+        WHERE organization_id = ?
+        ORDER BY requested_at DESC
+        LIMIT 5000
+      `)
+      .bind(id)
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          balance,
+          lifetime_purchased,
+          lifetime_used
+        FROM marketing_credit_accounts
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(id)
+      .first()
+    ]);
+
+  const refunds =
+    refundsResult.results || [];
+
+  const refundedCampaignIds =
+    new Set(
+      refunds.map(item =>
+        String(
+          item.campaign_id || ""
+        )
+      )
+    );
+
+  const campaigns =
+    (campaignsResult.results || [])
+      .map(row => {
+        const campaign =
+          safeJson(
+            row.campaign_json,
+            {}
+          ) || {};
+
+        return {
+          id:
+            String(
+              row.id || ""
+            ),
+          createdAt:
+            Number(
+              row.created_at ||
+              campaign.createdAt ||
+              0
+            ),
+          languageCode:
+            String(
+              row.language_code ||
+              campaign.languageCode ||
+              ""
+            ),
+          languageName:
+            String(
+              row.language_name ||
+              campaign.languageName ||
+              LIVEBRIDGE_MARKETING_LANGUAGES[
+                row.language_code ||
+                campaign.languageCode
+              ] ||
+              "Unknown"
+            ),
+          visualStyle:
+            String(
+              campaign.visualStyle ||
+              "unknown"
+            ),
+          audienceFocus:
+            String(
+              campaign.audienceFocus ||
+              "unknown"
+            ),
+          imageryTone:
+            String(
+              campaign.imageryTone ||
+              "unknown"
+            ),
+          includeTearOff:
+            campaign.includeTearOff !== false,
+          includeQr:
+            campaign.includeQr !== false,
+          creditCharged:
+            campaign.creditCharged === true
+        };
+      })
+      .filter(item =>
+        item.creditCharged === true
+      );
+
+  function periodStats(
+    startTimestamp
+  ) {
+    const generated =
+      campaigns.filter(item =>
+        item.createdAt >=
+        startTimestamp
+      ).length;
+
+    const creditsReturned =
+      refunds.filter(item =>
+        Number(
+          item.requested_at ||
+          0
+        ) >= startTimestamp
+      ).length;
+
+    return {
+      generated,
+      creditsReturned,
+      netCredits:
+        Math.max(
+          0,
+          generated -
+          creditsReturned
+        )
+    };
+  }
+
+  function breakdownBy(
+    key,
+    labelKey = key
+  ) {
+    const map =
+      new Map();
+
+    for (
+      const item of
+        campaigns
+    ) {
+      const value =
+        String(
+          item[key] ||
+          "unknown"
+        );
+
+      if (
+        !map.has(value)
+      ) {
+        map.set(
+          value,
+          {
+            key:
+              value,
+            label:
+              String(
+                item[labelKey] ||
+                value
+              ),
+            generated:
+              0,
+            creditsReturned:
+              0
+          }
+        );
+      }
+
+      const row =
+        map.get(value);
+
+      row.generated += 1;
+
+      if (
+        refundedCampaignIds.has(
+          item.id
+        )
+      ) {
+        row.creditsReturned +=
+          1;
+      }
+    }
+
+    return Array.from(
+      map.values()
+    )
+    .map(item => ({
+      ...item,
+      netCredits:
+        Math.max(
+          0,
+          item.generated -
+          item.creditsReturned
+        )
+    }))
+    .sort(
+      (a, b) =>
+        b.generated -
+        a.generated ||
+        String(a.label)
+          .localeCompare(
+            String(b.label)
+          )
+    );
+  }
+
+  const combinationsMap =
+    new Map();
+
+  for (
+    const item of
+      campaigns
+  ) {
+    const key = [
+      item.languageCode ||
+        item.languageName,
+      item.visualStyle,
+      item.audienceFocus,
+      item.imageryTone
+    ].join("|");
+
+    if (
+      !combinationsMap.has(
+        key
+      )
+    ) {
+      combinationsMap.set(
+        key,
+        {
+          languageCode:
+            item.languageCode,
+          languageName:
+            item.languageName,
+          visualStyle:
+            item.visualStyle,
+          audienceFocus:
+            item.audienceFocus,
+          imageryTone:
+            item.imageryTone,
+          generated:
+            0,
+          creditsReturned:
+            0
+        }
+      );
+    }
+
+    const combo =
+      combinationsMap.get(
+        key
+      );
+
+    combo.generated += 1;
+
+    if (
+      refundedCampaignIds.has(
+        item.id
+      )
+    ) {
+      combo.creditsReturned +=
+        1;
+    }
+  }
+
+  const combinations =
+    Array.from(
+      combinationsMap.values()
+    )
+    .map(item => ({
+      ...item,
+      netCredits:
+        Math.max(
+          0,
+          item.generated -
+          item.creditsReturned
+        )
+    }))
+    .sort(
+      (a, b) =>
+        b.generated -
+        a.generated
+    )
+    .slice(
+      0,
+      50
+    );
+
+  const recentGenerations =
+    campaigns
+      .slice(0, 50)
+      .map(item => ({
+        campaignId:
+          item.id,
+        createdAt:
+          item.createdAt,
+        languageCode:
+          item.languageCode,
+        languageName:
+          item.languageName,
+        visualStyle:
+          item.visualStyle,
+        audienceFocus:
+          item.audienceFocus,
+        imageryTone:
+          item.imageryTone,
+        includeTearOff:
+          item.includeTearOff,
+        includeQr:
+          item.includeQr,
+        creditReturned:
+          refundedCampaignIds.has(
+            item.id
+          )
+      }));
+
+  return {
+    currentCreditBalance:
+      Math.max(
+        0,
+        Number(
+          creditAccount?.balance ||
+          0
+        )
+      ),
+    lifetimeCreditsPurchased:
+      Math.max(
+        0,
+        Number(
+          creditAccount
+            ?.lifetime_purchased ||
+          0
+        )
+      ),
+    lifetimeNetCreditsUsed:
+      Math.max(
+        0,
+        Number(
+          creditAccount
+            ?.lifetime_used ||
+          0
+        )
+      ),
+    periods: {
+      last24Hours:
+        periodStats(
+          now -
+          24 * 60 * 60 * 1000
+        ),
+      last7Days:
+        periodStats(
+          now -
+          7 * 24 * 60 * 60 * 1000
+        ),
+      last30Days:
+        periodStats(
+          now -
+          30 * 24 * 60 * 60 * 1000
+        ),
+      last365Days:
+        periodStats(
+          now -
+          365 * 24 * 60 * 60 * 1000
+        ),
+      lifetime:
+        periodStats(0)
+    },
+    languages:
+      breakdownBy(
+        "languageCode",
+        "languageName"
+      ),
+    visualStyles:
+      breakdownBy(
+        "visualStyle"
+      ),
+    audienceFocus:
+      breakdownBy(
+        "audienceFocus"
+      ),
+    imageryTones:
+      breakdownBy(
+        "imageryTone"
+      ),
+    combinations,
+    recentGenerations
+  };
+}
+
+
 async function buildOrganizationStatsApiPayload(
   env,
   organization,
@@ -5240,7 +5664,7 @@ async function buildOrganizationStatsApiPayload(
 
   if (include("marketing")) {
     data.marketing =
-      await buildMarketingAdminAnalytics(
+      await buildMarketingStatsApiAnalytics(
         env,
         organization.id
       );
