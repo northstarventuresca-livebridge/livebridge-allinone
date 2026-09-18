@@ -1654,6 +1654,11 @@ body{
                   <input type="checkbox" id="overrideMarketingCampaigns">
                   <span><strong>Marketing Campaign Generator</strong><small>Enables local language research, outreach strategy, AI graphics and printable campaign tools for this organization.</small></span>
                 </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideOrganizationStatsApi">
+                  <span><strong>Organization Stats API</strong><small>Allows this organization to create a private API key and export selected LiveBridge analytics into its own systems.</small></span>
+                </label>
               </div>
 
               <div
@@ -4597,6 +4602,9 @@ async function openOrganization(id){
   document.getElementById("overrideMarketingCampaigns").checked =
     !!featureOverrides.marketingCampaigns;
 
+  document.getElementById("overrideOrganizationStatsApi").checked =
+    !!featureOverrides.organizationStatsApi;
+
   renderFeatureOverrideSummary();
 
   document.getElementById(
@@ -5008,7 +5016,10 @@ function collectFeatureOverrides(){
       document.getElementById("overrideCustomOnboarding")?.checked === true,
 
     marketingCampaigns:
-      document.getElementById("overrideMarketingCampaigns")?.checked === true
+      document.getElementById("overrideMarketingCampaigns")?.checked === true,
+
+    organizationStatsApi:
+      document.getElementById("overrideOrganizationStatsApi")?.checked === true
   };
 }
 
@@ -5037,7 +5048,8 @@ function renderFeatureOverrideSummary(){
     scriptureDetection:"Scripture Detection",
     prioritySupport:"Priority Support",
     customOnboarding:"Custom Onboarding",
-    marketingCampaigns:"Marketing Campaign Generator"
+    marketingCampaigns:"Marketing Campaign Generator",
+    organizationStatsApi:"Organization Stats API"
   };
 
   const enabled =
