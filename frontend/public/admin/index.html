@@ -1657,7 +1657,7 @@ body{
 
                 <label class="lb-feature-override-item">
                   <input type="checkbox" id="overrideOrganizationStatsApi">
-                  <span><strong>Organization Stats API</strong><small>Allows this organization to create a private API key and export selected LiveBridge analytics into its own systems.</small></span>
+                  <span><strong>Organization Stats API</strong><small>Growth/Pro include API access by plan. This switch is the final admin control and can also grant Starter access or disable API access for any organization.</small></span>
                 </label>
               </div>
 
@@ -4603,7 +4603,7 @@ async function openOrganization(id){
     !!featureOverrides.marketingCampaigns;
 
   document.getElementById("overrideOrganizationStatsApi").checked =
-    !!featureOverrides.organizationStatsApi;
+    account.entitlements?.organizationStatsApi === true;
 
   renderFeatureOverrideSummary();
 
@@ -5019,7 +5019,20 @@ function collectFeatureOverrides(){
       document.getElementById("overrideMarketingCampaigns")?.checked === true,
 
     organizationStatsApi:
-      document.getElementById("overrideOrganizationStatsApi")?.checked === true
+      (
+        document.getElementById("overrideOrganizationStatsApi")?.checked === true &&
+        String(
+          document.getElementById("editPlan")?.value || ""
+        ).trim().toLowerCase() === "starter"
+      ),
+
+    organizationStatsApiDisabled:
+      (
+        document.getElementById("overrideOrganizationStatsApi")?.checked !== true &&
+        String(
+          document.getElementById("editPlan")?.value || ""
+        ).trim().toLowerCase() !== "starter"
+      )
   };
 }
 
@@ -5054,7 +5067,11 @@ function renderFeatureOverrideSummary(){
 
   const enabled =
     Object.keys(overrides)
-      .filter(key => overrides[key])
+      .filter(
+        key =>
+          overrides[key] &&
+          labels[key]
+      )
       .map(key => labels[key]);
 
   box.innerHTML =
