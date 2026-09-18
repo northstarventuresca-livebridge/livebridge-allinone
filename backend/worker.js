@@ -15854,12 +15854,21 @@ if (
         )
       );
 
-    const payload =
-      await buildOrganizationStatsApiPayload(
+    const policy =
+      organizationStatsApiPolicy(
+        organization
+      );
+
+    const {
+      payload,
+      cacheStatus
+    } =
+      await organizationStatsApiPayloadWithCache(
         env,
         organization,
         scopes,
-        url
+        url,
+        policy.cacheSeconds
       );
 
     return jsonResponse(
@@ -15867,7 +15876,9 @@ if (
       200,
       {
         "Cache-Control":
-          "no-store"
+          "no-store",
+        "X-LiveBridge-Stats-Cache":
+          cacheStatus
       }
     );
 
@@ -15966,9 +15977,26 @@ if (
       )
       .first();
 
+    const policy =
+      organizationStatsApiPolicy(
+        organization
+      );
+
     return jsonResponse({
       success: true,
       enabled: true,
+      policy: {
+        planCode:
+          policy.planCode,
+        accessSource:
+          policy.accessSource,
+        minIntervalSeconds:
+          policy.minIntervalSeconds,
+        cacheSeconds:
+          policy.cacheSeconds,
+        hardLimitPerMinute:
+          policy.hardLimitPerMinute
+      },
       hasKey:
         !!String(
           access?.api_key_hash ||
@@ -16295,19 +16323,31 @@ if (
   try {
     const {
       organization,
-      scopes
+      scopes,
+      policy
     } =
       await authenticateOrganizationStatsApi(
         request,
         env
       );
 
-    const payload =
-      await buildOrganizationStatsApiPayload(
+    const rate =
+      await enforceOrganizationStatsApiRateLimit(
+        env,
+        organization.id,
+        policy
+      );
+
+    const {
+      payload,
+      cacheStatus
+    } =
+      await organizationStatsApiPayloadWithCache(
         env,
         organization,
         scopes,
-        url
+        url,
+        policy.cacheSeconds
       );
 
     return jsonResponse(
@@ -16315,7 +16355,15 @@ if (
       200,
       {
         "Cache-Control":
-          "no-store"
+          "no-store",
+        "X-LiveBridge-Stats-Cache":
+          cacheStatus,
+        "X-LiveBridge-Stats-Rate-Limit":
+          String(
+            rate.limitPerMinute
+          ),
+        "X-LiveBridge-Stats-Rate-Remaining":
+          "0"
       }
     );
 
@@ -16332,30 +16380,66 @@ if (
       ].includes(code)
         ? 401
         : (
-            [
-              "STATS_API_DISABLED",
-              "SCOPE_DISABLED"
-            ].includes(code)
-              ? 403
+            code ===
+            "STATS_API_RATE_LIMITED"
+              ? 429
               : (
-                  code ===
-                  "UNKNOWN_SCOPE"
-                    ? 400
-                    : 500
+                  [
+                    "STATS_API_DISABLED",
+                    "SCOPE_DISABLED"
+                  ].includes(code)
+                    ? 403
+                    : (
+                        code ===
+                        "UNKNOWN_SCOPE"
+                          ? 400
+                          : 500
+                      )
                 )
           );
+
+    const retryAfter =
+      Math.max(
+        0,
+        Number(
+          error?.retryAfterSeconds ||
+          0
+        )
+      );
 
     return jsonResponse(
       {
         success: false,
+        code:
+          code || undefined,
         error:
           error.message ||
-          "Unable to load organization statistics."
+          "Unable to load organization statistics.",
+        retryAfterSeconds:
+          retryAfter || undefined
       },
       status,
       {
         "Cache-Control":
-          "no-store"
+          "no-store",
+        ...(retryAfter
+          ? {
+              "Retry-After":
+                String(
+                  retryAfter
+                )
+            }
+          : {}),
+        ...(error?.rateLimit
+          ? {
+              "X-LiveBridge-Stats-Rate-Limit":
+                String(
+                  error.rateLimit
+                ),
+              "X-LiveBridge-Stats-Rate-Remaining":
+                "0"
+            }
+          : {})
       }
     );
   }
