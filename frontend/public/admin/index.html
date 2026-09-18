@@ -2014,8 +2014,20 @@ body{
 
 <script>
 
+const ADMIN_HOST =
+  String(
+    window.location.hostname || ""
+  ).toLowerCase();
+
+const ADMIN_PREVIEW =
+  ADMIN_HOST.includes("dev-v1-3-0") ||
+  ADMIN_HOST.includes("livebridge-allinone-frontend-test") ||
+  ADMIN_HOST.includes("livebridge-promoter-frontend-test");
+
 const ADMIN_WORKER =
-  "https://livebridge.northstarventures-ca.workers.dev";
+  ADMIN_PREVIEW
+    ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+    : "https://livebridge.northstarventures-ca.workers.dev";
 
 let adminOrganizations = [];
 let selectedOrganization = null;
