@@ -485,10 +485,13 @@
     });
   }
 
-  function listenerURL(campaign){
-    var room=String(campaign.roomName||"").trim().toUpperCase();
-    var lang=String(campaign.languageCode||"").trim().toLowerCase();
-    return "https://livebridge.ca/t/?room="+encodeURIComponent(room)+"&lang="+encodeURIComponent(lang);
+  function organizationWebsiteURL(campaign){
+    var raw=String(campaign.websiteUrl||"").trim();
+    if(!raw) return "";
+    if(!/^https?:\/\//i.test(raw)){
+      raw="https://"+raw;
+    }
+    return raw;
   }
 
   function drawImageCover(ctx,img,x,y,width,height){
@@ -632,8 +635,9 @@
     ctx.fillText(block.cta||"Join us",ctaX+(ctaWidth/2),y+(print ? 17 : 12));
 
     var qr=null;
-    if(campaign.includeQr!==false){
-      var qrUrl="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data="+encodeURIComponent(listenerURL(campaign));
+    var websiteQrTarget=organizationWebsiteURL(campaign);
+    if(campaign.includeQr!==false&&websiteQrTarget){
+      var qrUrl="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data="+encodeURIComponent(websiteQrTarget);
       qr=await loadImage(qrUrl);
     }
     var footerY=height-(print ? 300 : 210);
@@ -668,10 +672,6 @@
       infoY+=8;
       drawWrapped(ctx,campaign.phoneNumber,infoX,infoY,width-infoX-pad,print ? 31 : 26,1);
     }
-
-    ctx.fillStyle=primary;
-    ctx.font=(print ? "800 20px" : "800 16px")+" Arial";
-    ctx.fillText("Scan to follow the live message in "+String(campaign.languageName||"your language"),infoX,height-pad);
 
     return canvas;
   }
@@ -743,20 +743,17 @@
     ctx.font="500 28px Arial";
     y=drawWrapped(ctx,block.body||"",pad,y,width-(pad*2),40,5);
 
-    y+=36;
-    ctx.fillStyle=primary;
-    ctx.beginPath();
-    if(ctx.roundRect){ctx.roundRect(pad,y-36,660,82,18);}else{ctx.rect(pad,y-36,660,82);}
-    ctx.fill();
-    ctx.fillStyle="#fff";
-    ctx.textAlign="center";
-    ctx.font="900 27px Arial";
-    ctx.fillText(block.cta||"Join us",pad+330,y+14);
-    ctx.textAlign="left";
+    if(block.cta){
+      y+=34;
+      ctx.fillStyle=primary;
+      ctx.font="900 29px Arial";
+      y=drawWrapped(ctx,block.cta,pad,y,width-(pad*2),38,2);
+    }
 
     var qr=null;
-    if(campaign.includeQr!==false){
-      qr=await loadImage("https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data="+encodeURIComponent(listenerURL(campaign)));
+    var tearWebsiteTarget=organizationWebsiteURL(campaign);
+    if(campaign.includeQr!==false&&tearWebsiteTarget){
+      qr=await loadImage("https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data="+encodeURIComponent(tearWebsiteTarget));
     }
 
     var footerY=mainHeight-225;
@@ -865,15 +862,36 @@
       if(campaign.includePhone&&campaign.phoneNumber){
         ctx.fillStyle="#42566a";
         ctx.font="700 "+(tabs>=10?9:10)+"px Arial";
-        ctx.fillText(String(campaign.phoneNumber).slice(0,22),x+tabW/2,tabY+228);
+        ctx.fillText(String(campaign.phoneNumber).slice(0,22),x+tabW/2,tabY+224);
+      }
+
+      if(qr){
+        var tabQrSize=tabs>=10?48:56;
+        var tabQrX=x+(tabW-tabQrSize)/2;
+        var tabQrY=tabY+240;
+
+        ctx.fillStyle="#ffffff";
+        ctx.fillRect(
+          tabQrX-4,
+          tabQrY-4,
+          tabQrSize+8,
+          tabQrSize+8
+        );
+        ctx.drawImage(
+          qr,
+          tabQrX,
+          tabQrY,
+          tabQrSize,
+          tabQrSize
+        );
       }
 
       ctx.fillStyle=primary;
       ctx.font="900 "+(tabs>=10?9:10)+"px Arial";
-      var callout=String(campaign.tearOff?.tabCallout||"Live translation").trim();
+      var callout=String(campaign.tearOff?.tabCallout||"Live translation available").trim();
       var callLines=wrapLines(ctx,callout,tabW-16).slice(0,2);
       callLines.forEach(function(line,index){
-        ctx.fillText(line,x+tabW/2,tabY+270+(index*13));
+        ctx.fillText(line,x+tabW/2,tabY+320+(index*13));
       });
 
       ctx.textAlign="left";
