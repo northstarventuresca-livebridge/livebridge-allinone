@@ -1670,6 +1670,48 @@ body{
             </div>
 
 
+            <div
+              style="
+                margin-top:18px;
+                padding:16px;
+                border-radius:14px;
+                border:1px solid rgba(111,67,223,.24);
+                background:rgba(111,67,223,.07);
+              "
+            >
+              <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
+                Marketing Generation Credits
+              </div>
+
+              <div style="color:#8fa8bf;font-size:11px;line-height:1.5;margin-bottom:12px;">
+                1 credit = 1 complete new 4-graphic marketing campaign. Set the exact balance here or use the quick-add buttons below.
+              </div>
+
+              <div class="lb-field">
+                <label>Current Credit Balance</label>
+                <input
+                  id="editMarketingCredits"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value="0"
+                >
+              </div>
+
+              <div class="lb-quick-buttons" style="margin-top:10px;">
+                <button class="lb-button secondary marketing-credit-btn" type="button" data-credits="1">+1</button>
+                <button class="lb-button secondary marketing-credit-btn" type="button" data-credits="5">+5</button>
+                <button class="lb-button secondary marketing-credit-btn" type="button" data-credits="10">+10</button>
+                <button class="lb-button secondary marketing-credit-btn" type="button" data-credits="25">+25</button>
+                <button class="lb-button secondary" type="button" id="clearMarketingCredits">Set 0</button>
+              </div>
+
+              <div style="color:#71869b;font-size:10px;line-height:1.45;margin-top:9px;">
+                Admin overrides do not charge the organization and do not expire.
+              </div>
+            </div>
+
+
             <div class="lb-small-label" style="margin-top:5px;">
               Quick Bonus Time
             </div>
@@ -4190,6 +4232,17 @@ async function openOrganization(id){
     account.bonusMinutes;
 
   document.getElementById(
+    "editMarketingCredits"
+  ).value =
+    Math.max(
+      0,
+      Number(
+        account.marketingCredits ||
+        0
+      )
+    );
+
+  document.getElementById(
     "editViewerLimit"
   ).value =
     account.viewerLimit;
@@ -5044,6 +5097,18 @@ async function saveOrganization(){
                 ).value
               ),
 
+            marketingCredits:
+              Math.max(
+                0,
+                Math.floor(
+                  Number(
+                    document.getElementById(
+                      "editMarketingCredits"
+                    ).value || 0
+                  )
+                )
+              ),
+
             viewerLimit:
               Number(
                 document.getElementById(
@@ -5589,6 +5654,52 @@ document.getElementById(
     renderOrganizations(
       filtered
     );
+  }
+);
+
+
+document.querySelectorAll(
+  ".marketing-credit-btn"
+).forEach(button => {
+  button.addEventListener(
+    "click",
+    function(){
+      const add =
+        Math.max(
+          0,
+          Number(
+            this.dataset.credits ||
+            0
+          )
+        );
+
+      const input =
+        document.getElementById(
+          "editMarketingCredits"
+        );
+
+      input.value =
+        Math.max(
+          0,
+          Math.floor(
+            Number(
+              input.value ||
+              0
+            ) + add
+          )
+        );
+    }
+  );
+});
+
+document.getElementById(
+  "clearMarketingCredits"
+)?.addEventListener(
+  "click",
+  function(){
+    document.getElementById(
+      "editMarketingCredits"
+    ).value = 0;
   }
 );
 
