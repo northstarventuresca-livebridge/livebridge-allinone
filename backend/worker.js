@@ -4,6 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // src/index.js
 var OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 var OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+var OPENAI_IMAGE_URL = "https://api.openai.com/v1/images/generations";
 var OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions";
 var AZURE_TTS_INFLIGHT = /* @__PURE__ */ new Map();
 var CORS_HEADERS = {
@@ -11130,6 +11131,294 @@ Clearly communicate that people can listen/follow the live service in their own 
     }, 500);
   }
 }
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/marketing/background"
+) {
+  try {
+    const organization = await marketingOrganization(request, env);
+
+    if (!env.OPENAI_API_KEY) {
+      return jsonResponse({
+        success: false,
+        error: "OpenAI is not configured."
+      }, 503);
+    }
+
+    if (!env.AZURE_TTS_CACHE) {
+      return jsonResponse({
+        success: false,
+        error: "Marketing image storage is not configured."
+      }, 503);
+    }
+
+    await ensureMarketingSchema(env);
+
+    const campaignId =
+      String(
+        url.searchParams.get("campaignId") || ""
+      ).trim();
+
+    const kind =
+      String(
+        url.searchParams.get("kind") || ""
+      ).trim();
+
+    const allowedKinds =
+      new Set([
+        "print",
+        "socialEnglish",
+        "socialTarget"
+      ]);
+
+    if (
+      !campaignId ||
+      !allowedKinds.has(kind)
+    ) {
+      return jsonResponse({
+        success: false,
+        error: "campaignId and a valid graphic kind are required."
+      }, 400);
+    }
+
+    const row =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_campaigns
+        WHERE id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `).bind(
+        campaignId,
+        Number(organization.id)
+      ).first();
+
+    if (!row) {
+      return jsonResponse({
+        success: false,
+        error: "Marketing campaign not found."
+      }, 404);
+    }
+
+    const campaign =
+      marketingCampaign(row);
+
+    const objectKey =
+      "marketing-assets/" +
+      Number(organization.id) +
+      "/" +
+      campaignId +
+      "/" +
+      kind +
+      ".png";
+
+    const cached =
+      await env.AZURE_TTS_CACHE.get(
+        objectKey
+      );
+
+    if (cached) {
+      return new Response(
+        cached.body,
+        {
+          status: 200,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type":
+              cached.httpMetadata?.contentType ||
+              "image/png",
+            "Cache-Control":
+              "private, max-age=31536000",
+            "X-LiveBridge-Marketing-Image":
+              "HIT"
+          }
+        }
+      );
+    }
+
+    const isPrint =
+      kind === "print";
+
+    const targetLanguage =
+      String(
+        campaign.languageName ||
+        "the selected language"
+      );
+
+    const graphicPurpose =
+      kind === "print"
+        ? "a portrait community poster background"
+        : kind === "socialEnglish"
+          ? "a square social-media background for an English invitation"
+          : "a square social-media background for an invitation in " +
+            targetLanguage;
+
+    const prompt = `
+Create ${graphicPurpose} for a modern live translation service used by a church or community organization.
+
+Visual direction:
+- warm, welcoming, hopeful, contemporary and professional
+- communicate community, connection, listening and accessibility
+- subtle visual cues of live translation such as phones, headphones, conversation, captions, sound or connection
+- use the organization brand colours ${campaign.primaryColor || "#2588ff"} and ${campaign.secondaryColor || "#6f43df"} as tasteful accents
+- premium advertising photography / polished campaign artwork
+- leave generous clean negative space through the upper and middle area for LiveBridge to overlay headline and body copy
+- leave usable lower space for a QR code, organization details and call-to-action
+- strong contrast so white overlaid text remains readable
+- no written words, letters, numbers, logos, QR codes, signage or watermarks
+- no national flags
+- no cultural stereotypes or assumptions about ethnicity based on language
+- inclusive mix of people only if people are shown
+- do not create fake church branding
+- avoid clutter
+
+The final image will receive exact text, logo, address, website and QR code afterward, so the artwork itself must contain NO TEXT.
+`.trim();
+
+    async function requestImage(model) {
+      const imageResponse =
+        await fetch(
+          OPENAI_IMAGE_URL,
+          {
+            method: "POST",
+            headers: {
+              "Authorization":
+                `Bearer ${env.OPENAI_API_KEY}`,
+              "Content-Type":
+                "application/json"
+            },
+            body: JSON.stringify({
+              model,
+              prompt,
+              size:
+                isPrint
+                  ? "1024x1536"
+                  : "1024x1024",
+              quality: "low",
+              output_format: "png",
+              background: "opaque"
+            })
+          }
+        );
+
+      const data =
+        await imageResponse.json();
+
+      if (!imageResponse.ok) {
+        const error =
+          new Error(
+            data?.error?.message ||
+            "AI artwork generation failed."
+          );
+        error.status =
+          imageResponse.status;
+        throw error;
+      }
+
+      return data;
+    }
+
+    let imageData;
+
+    try {
+      imageData =
+        await requestImage(
+          "gpt-image-2.5-flare"
+        );
+    } catch (firstError) {
+      console.warn(
+        "GPT Image 2.5 Flare unavailable, retrying GPT Image 2:",
+        firstError?.message || firstError
+      );
+
+      imageData =
+        await requestImage(
+          "gpt-image-2"
+        );
+    }
+
+    const base64 =
+      String(
+        imageData?.data?.[0]?.b64_json ||
+        ""
+      );
+
+    if (!base64) {
+      throw new Error(
+        "AI artwork generation returned no image."
+      );
+    }
+
+    const binary =
+      atob(base64);
+
+    const bytes =
+      new Uint8Array(
+        binary.length
+      );
+
+    for (
+      let index = 0;
+      index < binary.length;
+      index += 1
+    ) {
+      bytes[index] =
+        binary.charCodeAt(index);
+    }
+
+    await env.AZURE_TTS_CACHE.put(
+      objectKey,
+      bytes,
+      {
+        httpMetadata: {
+          contentType: "image/png"
+        },
+        customMetadata: {
+          purpose:
+            "livebridge-marketing",
+          campaignId,
+          kind,
+          model:
+            String(
+              imageData?.model ||
+              ""
+            )
+        }
+      }
+    );
+
+    return new Response(
+      bytes,
+      {
+        status: 200,
+        headers: {
+          ...CORS_HEADERS,
+          "Content-Type":
+            "image/png",
+          "Cache-Control":
+            "private, max-age=31536000",
+          "X-LiveBridge-Marketing-Image":
+            "MISS"
+        }
+      }
+    );
+
+  } catch (error) {
+    console.error(
+      "Marketing background generation failed:",
+      error
+    );
+
+    return jsonResponse({
+      success: false,
+      error:
+        error.message ||
+        "Unable to generate marketing artwork."
+    }, Number(error.status || 500));
+  }
+}
+
 
 if (
   request.method === "GET" &&
