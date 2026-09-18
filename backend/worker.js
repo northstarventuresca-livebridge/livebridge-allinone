@@ -115,6 +115,38 @@ function openAIResponseText(payload) {
   return parts.join("\n").trim();
 }
 
+function openAISearchSources(payload) {
+  const found = [];
+  const seen = new Set();
+
+  function add(title, url) {
+    const cleanUrl = String(url || "").trim();
+    if (!/^https?:\/\//i.test(cleanUrl) || seen.has(cleanUrl)) return;
+    seen.add(cleanUrl);
+    found.push({
+      title: String(title || "Source").trim().slice(0, 180),
+      url: cleanUrl.slice(0, 800)
+    });
+  }
+
+  for (const item of payload?.output || []) {
+    for (const source of item?.action?.sources || []) {
+      add(source?.title, source?.url);
+    }
+
+    for (const content of item?.content || []) {
+      for (const annotation of content?.annotations || []) {
+        add(
+          annotation?.title || annotation?.url_citation?.title,
+          annotation?.url || annotation?.url_citation?.url
+        );
+      }
+    }
+  }
+
+  return found.slice(0, 20);
+}
+
 function parseAIJson(text) {
   const raw = String(text || "")
     .trim()
@@ -10885,6 +10917,9 @@ Requirements:
         openAIResponseText(aiData)
       )
     );
+
+    analysis.sources =
+      openAISearchSources(aiData);
 
     if (!analysis.languages.length) {
       throw new Error("No usable local language data was found.");
