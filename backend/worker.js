@@ -221,25 +221,47 @@ function marketingCampaign(row) {
 
 function normalizeMarketingAnalysis(value) {
   const rawLanguages = Array.isArray(value?.languages) ? value.languages : [];
+
+  function numericCount(value) {
+    const match = String(value || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+
+  const languages = rawLanguages.map(item => {
+    const code = String(item?.code || "").trim().toLowerCase();
+    const sources = Array.isArray(item?.sources) ? item.sources : [];
+    return {
+      language: String(item?.language || LIVEBRIDGE_MARKETING_LANGUAGES[code] || "").trim().slice(0, 100),
+      code,
+      estimatedShare: String(item?.estimatedShare || "").trim().slice(0, 100),
+      estimatedPeople: String(item?.estimatedPeople || "").trim().slice(0, 100),
+      why: String(item?.why || "").trim().slice(0, 700),
+      supportedByLiveBridge: Object.prototype.hasOwnProperty.call(LIVEBRIDGE_MARKETING_LANGUAGES, code),
+      sources: sources.slice(0, 4).map(source => ({
+        title: String(source?.title || "").trim().slice(0, 180),
+        url: String(source?.url || "").trim().slice(0, 800)
+      })).filter(source => /^https?:\/\//i.test(source.url))
+    };
+  }).filter(item => item.language);
+
+  languages.sort((a, b) => {
+    const aCount = numericCount(a.estimatedPeople);
+    const bCount = numericCount(b.estimatedPeople);
+
+    if (aCount !== null && bCount !== null && aCount !== bCount) {
+      return bCount - aCount;
+    }
+
+    if (aCount !== null && bCount === null) return -1;
+    if (aCount === null && bCount !== null) return 1;
+
+    return 0;
+  });
+
   return {
     areaSummary: String(value?.areaSummary || "").trim().slice(0, 1500),
     methodology: String(value?.methodology || "").trim().slice(0, 1200),
-    languages: rawLanguages.slice(0, 8).map(item => {
-      const code = String(item?.code || "").trim().toLowerCase();
-      const sources = Array.isArray(item?.sources) ? item.sources : [];
-      return {
-        language: String(item?.language || LIVEBRIDGE_MARKETING_LANGUAGES[code] || "").trim().slice(0, 100),
-        code,
-        estimatedShare: String(item?.estimatedShare || "").trim().slice(0, 100),
-        estimatedPeople: String(item?.estimatedPeople || "").trim().slice(0, 100),
-        why: String(item?.why || "").trim().slice(0, 700),
-        supportedByLiveBridge: Object.prototype.hasOwnProperty.call(LIVEBRIDGE_MARKETING_LANGUAGES, code),
-        sources: sources.slice(0, 4).map(source => ({
-          title: String(source?.title || "").trim().slice(0, 180),
-          url: String(source?.url || "").trim().slice(0, 800)
-        })).filter(source => /^https?:\/\//i.test(source.url))
-      };
-    }).filter(item => item.language)
+    languages: languages.slice(0, 8)
   };
 }
 
