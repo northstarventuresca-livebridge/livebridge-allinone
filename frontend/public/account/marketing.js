@@ -144,8 +144,18 @@
     if(opts.body && !opts.headers["Content-Type"]){
       opts.headers["Content-Type"]="application/json";
     }
+    var host=String(window.location.hostname||"").toLowerCase();
+    var previewHost=
+      host.includes("dev-v1-3-0") ||
+      host.includes("livebridge-allinone-frontend-test") ||
+      host.includes("livebridge-promoter-frontend-test");
+    var workerBase=
+      previewHost
+        ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+        : (window.LB_WORKER || "https://livebridge.northstarventures-ca.workers.dev");
+
     var response=await fetch(
-      (window.LB_WORKER || "https://livebridge.northstarventures-ca.workers.dev")+path,
+      workerBase+path,
       opts
     );
     var data=await response.json();
