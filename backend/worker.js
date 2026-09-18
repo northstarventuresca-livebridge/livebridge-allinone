@@ -11,7 +11,7 @@ var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Expose-Headers": "X-LiveBridge-TTS-Cache"
+  "Access-Control-Expose-Headers": "X-LiveBridge-TTS-Cache, Retry-After, X-LiveBridge-Stats-Cache, X-LiveBridge-Stats-Rate-Limit, X-LiveBridge-Stats-Rate-Remaining"
 };
 function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -3012,7 +3012,8 @@ const LIVEBRIDGE_FEATURE_OVERRIDE_KEYS = [
   "customOnboarding",
   "listenerDataDisplay",
   "marketingCampaigns",
-  "organizationStatsApi"
+  "organizationStatsApi",
+  "organizationStatsApiDisabled"
 ];
 
 
@@ -3101,6 +3102,16 @@ function buildEffectivePlanEntitlements(
     effective.transcriptRetentionDays = 30;
   }
 
+  if (
+    overrides.organizationStatsApiDisabled === true
+  ) {
+    effective.organizationStatsApi = false;
+  } else if (
+    overrides.organizationStatsApi === true
+  ) {
+    effective.organizationStatsApi = true;
+  }
+
   return effective;
 }
 
@@ -3123,7 +3134,8 @@ function buildPlanEntitlements(
     scriptureDetection: false,
     reportExport: false,
     prioritySupport: false,
-    customOnboarding: false
+    customOnboarding: false,
+    organizationStatsApi: false
   };
 
   const growth = {
@@ -3135,7 +3147,8 @@ function buildPlanEntitlements(
     scriptureDetection: true,
     reportExport: false,
     prioritySupport: true,
-    customOnboarding: false
+    customOnboarding: false,
+    organizationStatsApi: true
   };
 
   const pro = {
@@ -3147,7 +3160,8 @@ function buildPlanEntitlements(
     scriptureDetection: true,
     reportExport: true,
     prioritySupport: true,
-    customOnboarding: true
+    customOnboarding: true,
+    organizationStatsApi: true
   };
 
   if (code === "starter") {
@@ -4079,6 +4093,16 @@ async function ensureOrganizationStatsApiSchema(env) {
     ON organization_stats_api_access (api_key_hash)
     WHERE api_key_hash != ''
   `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_stats_api_rate_state (
+      organization_id INTEGER PRIMARY KEY,
+      window_started_at INTEGER NOT NULL DEFAULT 0,
+      window_count INTEGER NOT NULL DEFAULT 0,
+      last_request_at INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
+    )
+  `).run();
 }
 
 function generateOrganizationStatsApiKey() {
@@ -4097,6 +4121,73 @@ function generateOrganizationStatsApiKey() {
 
   return "lb_org_" + secret;
 }
+
+function organizationStatsApiPolicy(
+  organization
+) {
+  const planCode =
+    normalizePlanCode(
+      organization?.plan_code ||
+      organization?.planCode ||
+      ""
+    );
+
+  const overrides =
+    parseFeatureOverrides(
+      organization?.feature_overrides_json ??
+      organization?.featureOverrides
+    );
+
+  const planAllows =
+    buildPlanEntitlements(
+      planCode || "legacy"
+    ).organizationStatsApi === true;
+
+  let enabled =
+    planAllows;
+
+  let accessSource =
+    planAllows
+      ? "plan"
+      : "not_in_plan";
+
+  if (
+    overrides.organizationStatsApiDisabled === true
+  ) {
+    enabled = false;
+    accessSource = "admin_disabled";
+  } else if (
+    overrides.organizationStatsApi === true
+  ) {
+    enabled = true;
+    accessSource = "admin_enabled";
+  }
+
+  const proStyle =
+    (
+      planCode === "pro" ||
+      (
+        planCode !== "starter" &&
+        planCode !== "growth"
+      )
+    );
+
+  const minIntervalSeconds =
+    proStyle
+      ? 15
+      : 60;
+
+  return {
+    enabled,
+    accessSource,
+    planCode:
+      planCode || "legacy",
+    minIntervalSeconds,
+    cacheSeconds: 60,
+    hardLimitPerMinute: 60
+  };
+}
+
 
 async function organizationForStatsApiAccount(
   request,
@@ -4125,12 +4216,12 @@ async function organizationForStatsApiAccount(
     );
   }
 
-  const enabled =
-    parseFeatureOverrides(
-      organization.feature_overrides_json
-    ).organizationStatsApi === true;
+  const policy =
+    organizationStatsApiPolicy(
+      organization
+    );
 
-  if (!enabled) {
+  if (!policy.enabled) {
     const error =
       new Error(
         "Organization Stats API is not enabled for this account."
@@ -4233,12 +4324,12 @@ async function authenticateOrganizationStatsApi(
     );
   }
 
-  const featureEnabled =
-    parseFeatureOverrides(
-      organization.feature_overrides_json
-    ).organizationStatsApi === true;
+  const policy =
+    organizationStatsApiPolicy(
+      organization
+    );
 
-  if (!featureEnabled) {
+  if (!policy.enabled) {
     const error =
       new Error(
         "Organization Stats API access is disabled."
@@ -4267,6 +4358,7 @@ async function authenticateOrganizationStatsApi(
   return {
     organization,
     access,
+    policy,
     scopes:
       normalizeOrganizationStatsApiScopes(
         safeJson(
@@ -4276,6 +4368,383 @@ async function authenticateOrganizationStatsApi(
       )
   };
 }
+
+async function enforceOrganizationStatsApiRateLimit(
+  env,
+  organizationId,
+  policy
+) {
+  await ensureOrganizationStatsApiSchema(
+    env
+  );
+
+  const id =
+    Number(
+      organizationId || 0
+    );
+
+  const now =
+    Date.now();
+
+  const minIntervalMs =
+    Math.max(
+      1,
+      Number(
+        policy?.minIntervalSeconds ||
+        60
+      )
+    ) * 1000;
+
+  const hardLimit =
+    Math.max(
+      1,
+      Number(
+        policy?.hardLimitPerMinute ||
+        60
+      )
+    );
+
+  const row =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM organization_stats_api_rate_state
+      WHERE organization_id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first();
+
+  const lastRequestAt =
+    Number(
+      row?.last_request_at ||
+      0
+    );
+
+  if (
+    lastRequestAt > 0 &&
+    now - lastRequestAt <
+      minIntervalMs
+  ) {
+    const retryAfterSeconds =
+      Math.max(
+        1,
+        Math.ceil(
+          (
+            minIntervalMs -
+            (
+              now -
+              lastRequestAt
+            )
+          ) / 1000
+        )
+      );
+
+    const error =
+      new Error(
+        "Stats API rate limit reached. Try again in " +
+        retryAfterSeconds +
+        " seconds."
+      );
+
+    error.code =
+      "STATS_API_RATE_LIMITED";
+
+    error.retryAfterSeconds =
+      retryAfterSeconds;
+
+    error.rateLimit =
+      Math.max(
+        1,
+        Math.floor(
+          60 /
+          Number(
+            policy?.minIntervalSeconds ||
+            60
+          )
+        )
+      );
+
+    throw error;
+  }
+
+  let windowStartedAt =
+    Number(
+      row?.window_started_at ||
+      0
+    );
+
+  let windowCount =
+    Number(
+      row?.window_count ||
+      0
+    );
+
+  if (
+    !windowStartedAt ||
+    now -
+      windowStartedAt >=
+      60000
+  ) {
+    windowStartedAt = now;
+    windowCount = 0;
+  }
+
+  if (
+    windowCount >=
+    hardLimit
+  ) {
+    const retryAfterSeconds =
+      Math.max(
+        1,
+        Math.ceil(
+          (
+            60000 -
+            (
+              now -
+              windowStartedAt
+            )
+          ) / 1000
+        )
+      );
+
+    const error =
+      new Error(
+        "Stats API safety limit reached. Try again in " +
+        retryAfterSeconds +
+        " seconds."
+      );
+
+    error.code =
+      "STATS_API_RATE_LIMITED";
+
+    error.retryAfterSeconds =
+      retryAfterSeconds;
+
+    error.rateLimit =
+      hardLimit;
+
+    throw error;
+  }
+
+  const nextCount =
+    windowCount + 1;
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO organization_stats_api_rate_state (
+      organization_id,
+      window_started_at,
+      window_count,
+      last_request_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(organization_id)
+    DO UPDATE SET
+      window_started_at =
+        excluded.window_started_at,
+      window_count =
+        excluded.window_count,
+      last_request_at =
+        excluded.last_request_at,
+      updated_at =
+        excluded.updated_at
+  `)
+  .bind(
+    id,
+    windowStartedAt,
+    nextCount,
+    now,
+    now
+  )
+  .run();
+
+  return {
+    limitPerMinute:
+      Math.max(
+        1,
+        Math.floor(
+          60 /
+          Number(
+            policy?.minIntervalSeconds ||
+            60
+          )
+        )
+      ),
+    hardLimitPerMinute:
+      hardLimit,
+    remaining:
+      Math.max(
+        0,
+        hardLimit -
+        nextCount
+      )
+  };
+}
+
+
+function organizationStatsApiCacheRequest(
+  organizationId,
+  scopes,
+  url
+) {
+  const enabledScopeKey =
+    Object.keys(
+      scopes || {}
+    )
+    .filter(
+      key =>
+        scopes[key] === true
+    )
+    .sort()
+    .join(",");
+
+  const source =
+    new URL(url.toString());
+
+  const cacheUrl =
+    new URL(
+      "https://stats-api-cache.livebridge.internal/v1/" +
+      Number(
+        organizationId || 0
+      )
+    );
+
+  const params =
+    new URLSearchParams(
+      source.search
+    );
+
+  const sortedKeys =
+    Array.from(
+      new Set(
+        Array.from(
+          params.keys()
+        )
+      )
+    ).sort();
+
+  for (
+    const key of
+      sortedKeys
+  ) {
+    const values =
+      params.getAll(key)
+        .sort();
+
+    for (
+      const value of
+        values
+    ) {
+      cacheUrl.searchParams.append(
+        key,
+        value
+      );
+    }
+  }
+
+  cacheUrl.searchParams.set(
+    "_scopes",
+    enabledScopeKey
+  );
+
+  return new Request(
+    cacheUrl.toString(),
+    {
+      method: "GET"
+    }
+  );
+}
+
+
+async function organizationStatsApiPayloadWithCache(
+  env,
+  organization,
+  scopes,
+  url,
+  cacheSeconds = 60
+) {
+  const ttl =
+    Math.max(
+      0,
+      Math.floor(
+        Number(
+          cacheSeconds || 0
+        )
+      )
+    );
+
+  const cacheRequest =
+    organizationStatsApiCacheRequest(
+      organization.id,
+      scopes,
+      url
+    );
+
+  if (
+    ttl > 0 &&
+    typeof caches !== "undefined" &&
+    caches.default
+  ) {
+    const cached =
+      await caches.default.match(
+        cacheRequest
+      );
+
+    if (cached) {
+      try {
+        return {
+          payload:
+            await cached.json(),
+          cacheStatus:
+            "HIT"
+        };
+      } catch {
+        // Ignore a malformed cache entry.
+      }
+    }
+  }
+
+  const payload =
+    await buildOrganizationStatsApiPayload(
+      env,
+      organization,
+      scopes,
+      url
+    );
+
+  if (
+    ttl > 0 &&
+    typeof caches !== "undefined" &&
+    caches.default
+  ) {
+    const cacheResponse =
+      new Response(
+        JSON.stringify(payload),
+        {
+          status: 200,
+          headers: {
+            "Content-Type":
+              "application/json",
+            "Cache-Control":
+              "public, max-age=" +
+              ttl
+          }
+        }
+      );
+
+    await caches.default.put(
+      cacheRequest,
+      cacheResponse
+    );
+  }
+
+  return {
+    payload,
+    cacheStatus:
+      "MISS"
+  };
+}
+
 
 function parseStatsApiTime(
   value,
