@@ -821,7 +821,7 @@ body{
       📊 Usage & Stats
     </button>
 
-    <button class="lb-nav-button" data-panel="marketing">
+    <button class="lb-nav-button" data-panel="marketing" style="display:none;" disabled>
       📣 Marketing
     </button>
 
@@ -3579,6 +3579,25 @@ async function renderDashboard(
     isAdmin
       ? "block"
       : "none";
+
+  const marketingNav =
+    document.querySelector(
+      '.lb-nav-button[data-panel="marketing"]'
+    );
+
+  const marketingEnabled =
+    serverAccount?.featureOverrides
+      ?.marketingCampaigns === true;
+
+  if(marketingNav){
+    marketingNav.style.display =
+      marketingEnabled
+        ? "block"
+        : "none";
+
+    marketingNav.disabled =
+      !marketingEnabled;
+  }
 
   document.getElementById(
     "sidebarOrganization"
