@@ -979,11 +979,6 @@
       ctx.fillRect(0,0,width,mainHeight);
     }
 
-    ctx.fillStyle=secondary+"22";
-    ctx.beginPath();
-    ctx.arc(width*.86,mainHeight*.15,width*.32,0,Math.PI*2);
-    ctx.fill();
-
     var logo=await loadImage(campaign.logoUrl);
     if(logo){
       var logoScale=Math.min(250/logo.width,105/logo.height,1);
