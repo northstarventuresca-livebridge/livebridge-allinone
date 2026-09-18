@@ -821,6 +821,10 @@ body{
       📊 Usage & Stats
     </button>
 
+    <button class="lb-nav-button" data-panel="marketing">
+      📣 Marketing
+    </button>
+
     <button class="lb-nav-button" data-panel="history">
       🕘 Broadcast History
     </button>
@@ -1444,6 +1448,15 @@ body{
 
   </div>
 
+</section>
+
+<section id="panel-marketing" class="lb-panel">
+  <div id="lbMarketingRoot">
+    <div class="lb-card">
+      <div class="lb-card-title">Marketing</div>
+      <div class="lb-muted">Open this section to load your LiveBridge marketing tools.</div>
+    </div>
+  </div>
 </section>
 
 <section id="panel-security" class="lb-panel">
@@ -4469,6 +4482,11 @@ function setupNavigation(){
                 "Review your completed LiveBridge broadcasts."
               ],
 
+              marketing:[
+                "Marketing",
+                "Research local language communities and create reusable outreach campaigns."
+              ],
+
               billing:[
                 "Billing",
                 "Your plan and billing information."
@@ -5615,6 +5633,8 @@ window.addEventListener(
 
 })();
 </script>
+
+<script src="/account/marketing.js"></script>
 
 </body>
 </html>
