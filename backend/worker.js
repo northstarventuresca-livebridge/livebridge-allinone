@@ -12766,6 +12766,22 @@ if (
         );
 
       await env.TRANSLATIONS_DB.prepare(`
+        UPDATE marketing_credit_accounts
+        SET
+          lifetime_used = CASE
+            WHEN lifetime_used > 0 THEN lifetime_used - 1
+            ELSE 0
+          END,
+          updated_at = ?
+        WHERE organization_id = ?
+      `)
+      .bind(
+        now,
+        Number(organization.id)
+      )
+      .run();
+
+      await env.TRANSLATIONS_DB.prepare(`
         UPDATE marketing_generation_refunds
         SET balance_after = ?
         WHERE id = ?
