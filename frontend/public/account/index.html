@@ -1412,6 +1412,134 @@ body{
         This Stats API intentionally excludes transcript text, chat messages, listener names, emails and other private content.
       </div>
     </div>
+
+    <div
+      style="
+        margin-top:14px;
+        padding:13px;
+        border-radius:11px;
+        background:#0b1929;
+        border:1px solid rgba(52,212,189,.16);
+      "
+    >
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:900;color:white;font-size:13px;">
+            👀 View / Test API Data
+          </div>
+
+          <div
+            class="lb-muted"
+            style="font-size:10px;line-height:1.5;margin-top:4px;"
+          >
+            Preview the same statistics your external API can return, without needing PowerShell or another app.
+          </div>
+        </div>
+      </div>
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+          gap:9px;
+          margin-top:12px;
+        "
+      >
+        <label>
+          <span class="lb-small-label">Data</span>
+          <select
+            id="organizationStatsApiPreviewScope"
+            style="
+              width:100%;
+              margin-top:5px;
+              background:#071321;
+              color:white;
+              border:1px solid rgba(255,255,255,.12);
+              border-radius:9px;
+              padding:9px 10px;
+            "
+          >
+            <option value="all">All Enabled Data</option>
+          </select>
+        </label>
+
+        <label>
+          <span class="lb-small-label">Date Range</span>
+          <select
+            id="organizationStatsApiPreviewRange"
+            style="
+              width:100%;
+              margin-top:5px;
+              background:#071321;
+              color:white;
+              border:1px solid rgba(255,255,255,.12);
+              border-radius:9px;
+              padding:9px 10px;
+            "
+          >
+            <option value="30">Last 30 Days</option>
+            <option value="7">Last 7 Days</option>
+            <option value="365">Last 365 Days</option>
+            <option value="all">All Time</option>
+          </select>
+        </label>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          gap:8px;
+          flex-wrap:wrap;
+          align-items:center;
+          margin-top:11px;
+        "
+      >
+        <button
+          type="button"
+          class="lb-button primary"
+          id="viewOrganizationStatsApiData"
+        >
+          View API Data
+        </button>
+
+        <button
+          type="button"
+          class="lb-button secondary"
+          id="toggleOrganizationStatsApiRaw"
+          style="display:none;"
+        >
+          Show Raw JSON
+        </button>
+
+        <div
+          id="organizationStatsApiPreviewStatus"
+          class="lb-muted"
+          style="font-size:10px;"
+        ></div>
+      </div>
+
+      <div
+        id="organizationStatsApiPreview"
+        style="display:none;margin-top:13px;"
+      ></div>
+
+      <pre
+        id="organizationStatsApiRawPreview"
+        style="
+          display:none;
+          white-space:pre-wrap;
+          overflow-wrap:anywhere;
+          margin:12px 0 0;
+          padding:11px;
+          max-height:520px;
+          border-radius:9px;
+          background:#050e18;
+          color:#bcd2e8;
+          font:10px/1.55 monospace;
+          overflow:auto;
+        "
+      ></pre>
+    </div>
   </details>
 
 </section>
@@ -4220,6 +4348,46 @@ function renderOrganizationStatsApiConfig(
   const scopes =
     data.scopes || {};
 
+  const previewScope =
+    document.getElementById(
+      "organizationStatsApiPreviewScope"
+    );
+
+  if(previewScope){
+    const current =
+      previewScope.value ||
+      "all";
+
+    previewScope.innerHTML =
+      '<option value="all">All Enabled Data</option>' +
+      Object.keys(labels)
+        .filter(
+          key =>
+            scopes[key] !== false
+        )
+        .map(
+          key =>
+            '<option value="' +
+            key +
+            '">' +
+            labels[key] +
+            '</option>'
+        )
+        .join("");
+
+    if(
+      Array.from(
+        previewScope.options
+      ).some(
+        option =>
+          option.value === current
+      )
+    ){
+      previewScope.value =
+        current;
+    }
+  }
+
   scopesBox.innerHTML =
     Object.keys(labels)
       .map(
@@ -4345,6 +4513,521 @@ function renderOrganizationStatsApiConfig(
 
   card.dataset.apiEndpoint =
     endpoint;
+}
+
+
+function organizationStatsApiPrettyDuration(ms){
+  const totalSeconds =
+    Math.max(
+      0,
+      Math.round(
+        Number(ms || 0) / 1000
+      )
+    );
+
+  if(totalSeconds < 60){
+    return totalSeconds + " sec";
+  }
+
+  const minutes =
+    Math.floor(
+      totalSeconds / 60
+    );
+
+  if(minutes < 60){
+    return minutes + " min";
+  }
+
+  const hours =
+    Math.floor(
+      minutes / 60
+    );
+
+  const remainingMinutes =
+    minutes % 60;
+
+  return (
+    hours +
+    "h " +
+    remainingMinutes +
+    "m"
+  );
+}
+
+
+function organizationStatsApiMetricCard(
+  label,
+  value,
+  note = ""
+){
+  return (
+    '<div style="padding:11px 12px;border-radius:10px;background:#0e1d2d;border:1px solid rgba(255,255,255,.07);">' +
+      '<div style="font-size:9px;color:#7f95ab;font-weight:900;text-transform:uppercase;letter-spacing:.04em;">' +
+        label +
+      '</div>' +
+      '<div style="font-size:22px;font-weight:900;color:white;margin-top:4px;">' +
+        value +
+      '</div>' +
+      (
+        note
+          ? '<div style="font-size:9px;color:#8298ad;margin-top:3px;">' +
+              note +
+            '</div>'
+          : ''
+      ) +
+    '</div>'
+  );
+}
+
+
+function renderOrganizationStatsApiPreview(payload){
+  const root =
+    document.getElementById(
+      "organizationStatsApiPreview"
+    );
+
+  const raw =
+    document.getElementById(
+      "organizationStatsApiRawPreview"
+    );
+
+  const toggle =
+    document.getElementById(
+      "toggleOrganizationStatsApiRaw"
+    );
+
+  if(
+    !root ||
+    !raw ||
+    !toggle
+  ){
+    return;
+  }
+
+  raw.textContent =
+    JSON.stringify(
+      payload,
+      null,
+      2
+    );
+
+  raw.style.display =
+    "none";
+
+  toggle.style.display =
+    "inline-flex";
+
+  toggle.textContent =
+    "Show Raw JSON";
+
+  const data =
+    payload?.data || {};
+
+  const sections = [];
+
+  if(data.overview){
+    const item =
+      data.overview;
+
+    sections.push(
+      '<div style="margin-top:4px;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Overview</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;">' +
+          organizationStatsApiMetricCard(
+            "Broadcasts",
+            Number(
+              item.broadcasts || 0
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Listener Sessions",
+            Number(
+              item.totalListenerSessions || 0
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Peak Audience",
+            Number(
+              item.highestPeakAudience || 0
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Avg Session",
+            organizationStatsApiPrettyDuration(
+              item.averageListenerSessionMs
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Languages",
+            Number(
+              item.uniqueLanguages || 0
+            )
+          ) +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  if(data.languages){
+    const languages =
+      Array.isArray(
+        data.languages.totals
+      )
+        ? data.languages.totals
+        : [];
+
+    sections.push(
+      '<div style="margin-top:15px;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Languages</div>' +
+        (
+          languages.length
+            ? '<div style="display:grid;gap:6px;">' +
+                languages
+                  .slice(0,20)
+                  .map(function(item){
+                    return (
+                      '<div style="display:grid;grid-template-columns:minmax(80px,1fr) auto auto;gap:10px;align-items:center;padding:8px 9px;border-radius:8px;background:#0d1b2b;border:1px solid rgba(255,255,255,.06);">' +
+                        '<div style="font-size:10px;color:#dce8f4;font-weight:900;">' +
+                          String(
+                            item.language || "—"
+                          ).toUpperCase() +
+                        '</div>' +
+                        '<div style="font-size:10px;color:#a8bbcd;">' +
+                          Number(
+                            item.listeners || 0
+                          ) +
+                          ' listeners' +
+                        '</div>' +
+                        '<div style="font-size:10px;color:#72ead4;text-align:right;">' +
+                          organizationStatsApiPrettyDuration(
+                            item.totalListeningMs
+                          ) +
+                        '</div>' +
+                      '</div>'
+                    );
+                  })
+                  .join("") +
+              '</div>'
+            : '<div class="lb-muted">No language data in this range.</div>'
+        ) +
+      '</div>'
+    );
+  }
+
+  if(data.listeners){
+    const item =
+      data.listeners;
+
+    sections.push(
+      '<div style="margin-top:15px;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Listener Analytics</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">' +
+          organizationStatsApiMetricCard(
+            "Sessions",
+            Number(
+              item.totalSessions || 0
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Total Listening",
+            organizationStatsApiPrettyDuration(
+              item.totalListeningMs
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Avg Session",
+            organizationStatsApiPrettyDuration(
+              item.averageSessionMs
+            )
+          ) +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  if(Array.isArray(data.broadcasts)){
+    const broadcasts =
+      data.broadcasts;
+
+    sections.push(
+      '<div style="margin-top:15px;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Recent Broadcasts</div>' +
+        (
+          broadcasts.length
+            ? '<div style="display:grid;gap:6px;">' +
+                broadcasts
+                  .slice(0,20)
+                  .map(function(item){
+                    const started =
+                      item.startedAt
+                        ? new Date(
+                            Number(
+                              item.startedAt
+                            )
+                          ).toLocaleString()
+                        : "—";
+
+                    return (
+                      '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:8px 9px;border-radius:8px;background:#0d1b2b;border:1px solid rgba(255,255,255,.06);">' +
+                        '<div style="min-width:0;">' +
+                          '<div style="font-size:10px;color:#dce8f4;font-weight:800;">' +
+                            started +
+                          '</div>' +
+                          '<div style="font-size:9px;color:#71869b;margin-top:2px;overflow-wrap:anywhere;">' +
+                            String(
+                              item.broadcastId || ""
+                            ) +
+                          '</div>' +
+                        '</div>' +
+                        '<div style="font-size:10px;color:#8fb3d5;text-align:right;white-space:nowrap;">' +
+                          organizationStatsApiPrettyDuration(
+                            item.durationMs
+                          ) +
+                        '</div>' +
+                      '</div>'
+                    );
+                  })
+                  .join("") +
+              '</div>'
+            : '<div class="lb-muted">No broadcasts in this range.</div>'
+        ) +
+      '</div>'
+    );
+  }
+
+  if(data.returnVisitors){
+    const item =
+      data.returnVisitors;
+
+    sections.push(
+      '<div style="margin-top:15px;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Return Visitors</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">' +
+          organizationStatsApiMetricCard(
+            "Unique Visitors",
+            Number(
+              item.uniqueVisitors || 0
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Returning Visitors",
+            Number(
+              item.returningVisitors || 0
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Total Visit Days",
+            Number(
+              item.totalVisitDays || 0
+            )
+          ) +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  if(data.technicalUsage){
+    const item =
+      data.technicalUsage.totals || {};
+
+    sections.push(
+      '<div style="margin-top:15px;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Technical Usage</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">' +
+          organizationStatsApiMetricCard(
+            "Worker Requests",
+            Number(
+              item.totalWorkerRequests || 0
+            ).toLocaleString()
+          ) +
+          organizationStatsApiMetricCard(
+            "Audio Chunks",
+            Number(
+              item.audioChunks || 0
+            ).toLocaleString()
+          ) +
+          organizationStatsApiMetricCard(
+            "TTS Requests",
+            Number(
+              item.ttsRequests || 0
+            ).toLocaleString()
+          ) +
+          organizationStatsApiMetricCard(
+            "Listener Heartbeats",
+            Number(
+              item.listenerHeartbeats || 0
+            ).toLocaleString()
+          ) +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  if(data.marketing){
+    const item =
+      data.marketing;
+
+    const topLanguage =
+      Array.isArray(
+        item.languages
+      ) &&
+      item.languages.length
+        ? (
+            item.languages[0].label ||
+            item.languages[0].key ||
+            "—"
+          )
+        : "—";
+
+    sections.push(
+      '<div style="margin-top:15px;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Marketing Analytics</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">' +
+          organizationStatsApiMetricCard(
+            "Credit Balance",
+            Number(
+              item.currentCreditBalance || 0
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Lifetime Used",
+            Number(
+              item.lifetimeNetCreditsUsed || 0
+            )
+          ) +
+          organizationStatsApiMetricCard(
+            "Top Language",
+            topLanguage
+          ) +
+          organizationStatsApiMetricCard(
+            "Campaigns",
+            Number(
+              item.periods
+                ?.lifetime
+                ?.generated ||
+              0
+            )
+          ) +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  root.innerHTML =
+    sections.length
+      ? sections.join("")
+      : '<div class="lb-muted">No data returned for this selection.</div>';
+
+  root.style.display =
+    "block";
+}
+
+
+async function viewOrganizationStatsApiData(){
+  const button =
+    document.getElementById(
+      "viewOrganizationStatsApiData"
+    );
+
+  const status =
+    document.getElementById(
+      "organizationStatsApiPreviewStatus"
+    );
+
+  const scope =
+    String(
+      document.getElementById(
+        "organizationStatsApiPreviewScope"
+      )?.value ||
+      "all"
+    );
+
+  const range =
+    String(
+      document.getElementById(
+        "organizationStatsApiPreviewRange"
+      )?.value ||
+      "30"
+    );
+
+  const params =
+    new URLSearchParams();
+
+  params.set(
+    "scope",
+    scope
+  );
+
+  params.set(
+    "limit",
+    "50"
+  );
+
+  if(range !== "all"){
+    const days =
+      Math.max(
+        1,
+        Number(range || 30)
+      );
+
+    params.set(
+      "from",
+      String(
+        Date.now() -
+        (
+          days *
+          24 *
+          60 *
+          60 *
+          1000
+        )
+      )
+    );
+  }
+
+  button.disabled =
+    true;
+
+  button.textContent =
+    "Loading...";
+
+  status.textContent =
+    "Loading API data...";
+
+  try{
+    const data =
+      await liveBridgeAccountApi(
+        "/account/stats-api/test?" +
+        params.toString(),
+        {
+          method:"GET"
+        }
+      );
+
+    renderOrganizationStatsApiPreview(
+      data
+    );
+
+    status.textContent =
+      "✓ Live API data loaded.";
+
+    status.style.color =
+      "#63e7a1";
+
+  }catch(error){
+    status.textContent =
+      error.message;
+
+    status.style.color =
+      "#ff8c8c";
+
+  }finally{
+    button.disabled =
+      false;
+
+    button.textContent =
+      "View API Data";
+  }
 }
 
 
@@ -6068,6 +6751,40 @@ document.getElementById(
       ).textContent,
       this
     );
+  }
+);
+
+
+document.getElementById(
+  "viewOrganizationStatsApiData"
+)?.addEventListener(
+  "click",
+  viewOrganizationStatsApiData
+);
+
+document.getElementById(
+  "toggleOrganizationStatsApiRaw"
+)?.addEventListener(
+  "click",
+  function(){
+    const raw =
+      document.getElementById(
+        "organizationStatsApiRawPreview"
+      );
+
+    const showing =
+      raw.style.display !==
+      "none";
+
+    raw.style.display =
+      showing
+        ? "none"
+        : "block";
+
+    this.textContent =
+      showing
+        ? "Show Raw JSON"
+        : "Hide Raw JSON";
   }
 );
 
