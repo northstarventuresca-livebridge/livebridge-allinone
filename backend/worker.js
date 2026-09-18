@@ -160,6 +160,7 @@ function marketingProfile(organization, row) {
   return {
     organizationId: Number(organization.id),
     organizationName: String(organization.organization_name || ""),
+    roomName: String(organization.room_name || "").trim().toUpperCase(),
     websiteUrl: String(row?.website_url || ""),
     address: String(row?.address || ""),
     city: String(row?.city || ""),
@@ -11041,6 +11042,7 @@ Clearly communicate that people can listen/follow the live service in their own 
     const campaign = {
       campaignName: String(generated?.campaignName || (languageName + " Outreach")).trim().slice(0, 140),
       organizationName: String(organization.organization_name || ""),
+      roomName: String(organization.room_name || "").trim().toUpperCase(),
       languageCode,
       languageName,
       websiteUrl: profile.websiteUrl,
