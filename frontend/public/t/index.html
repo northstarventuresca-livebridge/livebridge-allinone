@@ -727,6 +727,10 @@
                   id="listenerChatButton"
                   aria-label="Open listener chat"
                 >💬 Chat</button>
+                <span
+                  id="listenerDataUsage"
+                  class="lb-listener-data lb-live-pill"
+                >📶 Data: 0 KB</span>
               </div>
             </div>
 
@@ -830,10 +834,6 @@
               </div>
               <div>
                 🎧 Translated Audio &nbsp; • &nbsp; 💬 Live Captions
-                <span
-                  id="listenerDataUsage"
-                  class="lb-listener-data"
-                >Data this visit: 0 KB</span>
               </div>
             </div>
           </div>
@@ -959,7 +959,7 @@
 
     if (listenerDataCounterEnabled) {
       element.textContent =
-        "Data this visit: " +
+        "📶 Data: " +
         formatListenerDataBytes(
           listenerDataBytes
         );
