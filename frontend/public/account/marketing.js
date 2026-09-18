@@ -190,16 +190,21 @@
     el.className="lbm-status"+(type ? " "+type : "");
   }
 
+  async function persistProfile(){
+    var data=await api("/marketing/profile",{
+      method:"POST",
+      body:JSON.stringify(profilePayload())
+    });
+    fillProfile(data.profile);
+    return data.profile;
+  }
+
   async function saveProfile(){
     var button=document.getElementById("lbmSaveProfile");
     button.disabled=true;
     setStatus("lbmProfileStatus","Saving...","");
     try{
-      var data=await api("/marketing/profile",{
-        method:"POST",
-        body:JSON.stringify(profilePayload())
-      });
-      fillProfile(data.profile);
+      await persistProfile();
       setStatus("lbmProfileStatus","✓ Saved","good");
     }catch(error){
       setStatus("lbmProfileStatus",error.message,"bad");
@@ -279,7 +284,7 @@
     button.disabled=true;
     setStatus("lbmAnalyzeStatus","Researching current local language data...","");
     try{
-      await saveProfile();
+      await persistProfile();
       var data=await api("/marketing/analyze",{method:"POST",body:"{}"});
       state.analysis=data.analysis;
       if(state.profile) state.profile.analysis=data.analysis;
@@ -324,7 +329,7 @@
     button.disabled=true;
     setStatus("lbmGenerateStatus","Creating campaign copy and graphics...","");
     try{
-      await saveProfile();
+      await persistProfile();
       var data=await api("/marketing/generate",{
         method:"POST",
         body:JSON.stringify({languageCode:language})
