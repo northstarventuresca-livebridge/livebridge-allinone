@@ -9,7 +9,8 @@
     campaigns:[],
     analysis:null,
     currentCampaign:null,
-    graphics:[]
+    graphics:[],
+    marketingCredits:0
   };
 
   function esc(value){
@@ -45,6 +46,10 @@
       ".lbm-status{font-size:12px;color:#8fa6bf}",
       ".lbm-status.good{color:#63e7a1}",
       ".lbm-status.bad{color:#ff8c8c}",
+      ".lbm-credit-bar{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(111,67,223,.08);border:1px solid rgba(111,67,223,.24)}",
+      ".lbm-credit-count{font-size:20px;font-weight:900;color:#fff}",
+      ".lbm-credit-note{font-size:10px;color:#8fa6bf;margin-top:2px}",
+      ".lbm-credit-link{color:#a98cff;font-size:11px;font-weight:900;text-decoration:none}",
       ".lbm-language-list{display:grid;gap:9px;margin-top:14px}",
       ".lbm-language{display:grid;grid-template-columns:42px 1fr auto;gap:12px;align-items:center;padding:12px;border-radius:12px;background:#0b1726;border:1px solid rgba(255,255,255,.08)}",
       ".lbm-rank{width:36px;height:36px;border-radius:999px;background:rgba(45,151,255,.12);display:grid;place-items:center;font-weight:900;color:#78b7ff}",
@@ -127,6 +132,7 @@
         '<div class="lb-card">',
           '<div class="lb-card-title">Generate Marketing Campaign</div>',
           '<div class="lb-muted" style="margin-top:6px;line-height:1.5">Create a people-focused community poster, an English social graphic, a translated social graphic, and a printable tear-off flyer — all branded for your organization.</div>',
+          '<div class="lbm-credit-bar"><div><div class="lbm-credit-count"><span id="lbmCreditBalance">0</span> Marketing Credits</div><div class="lbm-credit-note">1 credit = 1 complete new 4-graphic campaign. Reopening saved campaigns is free.</div></div><a class="lbm-credit-link" href="/account/?panel=billing">Buy Credits →</a></div>',
           '<div class="lbm-grid" style="margin-top:15px">',
             '<div class="lbm-field"><label>Campaign Language</label><select id="lbmLanguage"></select></div>',
             '<div class="lbm-field"><label>Graphic Style</label><select id="lbmVisualStyle"><option value="people">People-focused</option><option value="balanced">Balanced</option><option value="clean">Clean / minimal</option></select></div>',
@@ -134,7 +140,7 @@
             '<div class="lbm-field"><label>Imagery Tone</label><select id="lbmTone"><option value="warm">Warm / relational</option><option value="modern">Modern</option><option value="community">Community-centered</option><option value="church">Church invitation</option></select></div>',
             '<div class="lbm-field full"><div class="lbm-check-row"><input id="lbmIncludeTearOff" type="checkbox" checked><div class="lbm-check-copy"><div class="lbm-check-title">Include tear-off flyer</div><div class="lbm-check-note">Adds a print-ready flyer with cut tabs people can take home.</div></div></div></div>',
             '<div class="lbm-field" id="lbmTabsField"><label>Tear-Off Tabs</label><select id="lbmTearTabs"><option value="6">6 tabs</option><option value="8" selected>8 tabs</option><option value="10">10 tabs</option></select></div>',
-            '<div class="lbm-field"><div class="lbm-check-row"><input id="lbmIncludeQr" type="checkbox" checked><div class="lbm-check-copy"><div class="lbm-check-title">Include QR code</div><div class="lbm-check-note">Links directly to the LiveBridge listener room in this language.</div></div></div></div>',
+            '<div class="lbm-field"><div class="lbm-check-row"><input id="lbmIncludeQr" type="checkbox" checked><div class="lbm-check-copy"><div class="lbm-check-title">Include QR code</div><div class="lbm-check-note">Links to your organization website.</div></div></div></div>',
             '<div class="lbm-field"><div class="lbm-check-row"><input id="lbmIncludePhone" type="checkbox"><div class="lbm-check-copy"><div class="lbm-check-title">Include phone number</div><div class="lbm-check-note">Adds a contact number to the poster and tear-off tabs.</div></div></div></div>',
             '<div class="lbm-field lbm-option-hidden" id="lbmPhoneField"><label>Phone Number</label><input id="lbmPhone" type="text" placeholder="780-555-1234"></div>',
           '</div>',
@@ -246,6 +252,23 @@
     el.className="lbm-status"+(type ? " "+type : "");
   }
 
+  function renderMarketingCredits(){
+    var balance=Math.max(0,Number(state.marketingCredits||0));
+    var el=document.getElementById("lbmCreditBalance");
+    var button=document.getElementById("lbmGenerate");
+
+    if(el){
+      el.textContent=String(balance);
+    }
+
+    if(button){
+      button.disabled=balance<1;
+      button.title=balance<1
+        ? "Purchase or ask an administrator to add Marketing Credits."
+        : "";
+    }
+  }
+
   async function persistProfile(){
     var data=await api("/marketing/profile",{
       method:"POST",
@@ -266,6 +289,7 @@
       setStatus("lbmProfileStatus",error.message,"bad");
     }finally{
       button.disabled=false;
+      renderMarketingCredits();
     }
   }
 
@@ -465,6 +489,17 @@
     var button=document.getElementById("lbmGenerate");
     var language=document.getElementById("lbmLanguage").value;
     if(!language) return;
+
+    if(Number(state.marketingCredits||0)<1){
+      setStatus(
+        "lbmGenerateStatus",
+        "You need a Marketing Credit. Buy credits in Billing or ask your administrator.",
+        "bad"
+      );
+      renderMarketingCredits();
+      return;
+    }
+
     button.disabled=true;
     setStatus("lbmGenerateStatus","Creating campaign copy and graphics...","");
     try{
@@ -485,6 +520,14 @@
       });
       state.currentCampaign=data.campaign;
       state.campaigns.unshift(data.campaign);
+      state.marketingCredits=Math.max(
+        0,
+        Number(
+          data.marketingCreditsRemaining ??
+          (Number(state.marketingCredits||0)-1)
+        )
+      );
+      renderMarketingCredits();
       renderSaved();
       await showCampaign(data.campaign);
       setStatus("lbmGenerateStatus","✓ Campaign generated and saved","good");
@@ -1041,10 +1084,12 @@
       var data=await api("/marketing/profile",{method:"GET"});
       state.supportedLanguages=data.supportedLanguages||{};
       state.campaigns=Array.isArray(data.campaigns)?data.campaigns:[];
+      state.marketingCredits=Math.max(0,Number(data.marketingCredits||0));
       fillProfile(data.profile||{});
       renderLanguageSelect();
       renderAnalysis();
       renderSaved();
+      renderMarketingCredits();
       setStatus("lbmProfileStatus","","");
     }catch(error){
       state.loaded=false;
