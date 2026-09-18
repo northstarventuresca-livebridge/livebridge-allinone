@@ -77,8 +77,13 @@
       ".lbm-graphic-card img{width:100%;height:auto;display:block;border-radius:9px;background:#06101c}",
       ".lbm-download{width:100%;margin-top:9px}",
       ".lbm-saved{display:grid;gap:8px;margin-top:12px}",
-      ".lbm-saved-item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;background:#0b1726;border:1px solid rgba(255,255,255,.08);border-radius:10px;cursor:pointer}",
+      ".lbm-saved-item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;background:#0b1726;border:1px solid rgba(255,255,255,.08);border-radius:10px}",
       ".lbm-saved-item:hover{border-color:rgba(45,151,255,.35)}",
+      ".lbm-saved-actions{display:flex;gap:8px;align-items:center}",
+      ".lbm-open-saved,.lbm-delete-saved{border:0;border-radius:8px;padding:8px 10px;font:inherit;font-size:11px;font-weight:900;cursor:pointer}",
+      ".lbm-open-saved{background:#16283d;color:#78b7ff;border:1px solid rgba(45,151,255,.18)}",
+      ".lbm-delete-saved{background:rgba(255,94,94,.08);color:#ff9b9b;border:1px solid rgba(255,94,94,.18)}",
+      ".lbm-delete-saved:disabled{opacity:.55;cursor:default}",
       ".lbm-saved-name{font-weight:900;font-size:12px}",
       ".lbm-saved-meta{font-size:10px;color:#8399af;margin-top:3px}",
       "@media(max-width:900px){.lbm-campaign-grid{grid-template-columns:1fr}.lbm-grid{grid-template-columns:1fr}.lbm-field.full{grid-column:auto}.lbm-strategy-grid{grid-template-columns:1fr}}"
@@ -386,20 +391,72 @@
       box.innerHTML='<div class="lb-muted">No saved campaigns yet.</div>';
       return;
     }
+
     box.innerHTML=state.campaigns.map(function(campaign,index){
       var date=campaign.createdAt ? new Date(campaign.createdAt).toLocaleDateString() : "";
       return [
         '<div class="lbm-saved-item" data-index="'+index+'">',
           '<div><div class="lbm-saved-name">'+esc(campaign.campaignName||campaign.languageName+" Campaign")+'</div>',
           '<div class="lbm-saved-meta">'+esc(campaign.languageName||"")+(date ? " · "+esc(date) : "")+'</div></div>',
-          '<div style="color:#78b7ff;font-weight:900">Open →</div>',
+          '<div class="lbm-saved-actions">',
+            '<button class="lbm-open-saved" type="button" data-open-saved="'+index+'">Open →</button>',
+            '<button class="lbm-delete-saved" type="button" data-delete-saved="'+index+'" title="Delete campaign">🗑 Delete</button>',
+          '</div>',
         '</div>'
       ].join("");
     }).join("");
-    box.querySelectorAll(".lbm-saved-item").forEach(function(item){
-      item.addEventListener("click",function(){
-        var campaign=state.campaigns[Number(item.dataset.index)];
+
+    box.querySelectorAll("[data-open-saved]").forEach(function(button){
+      button.addEventListener("click",function(){
+        var campaign=state.campaigns[Number(button.dataset.openSaved)];
         if(campaign) showCampaign(campaign);
+      });
+    });
+
+    box.querySelectorAll("[data-delete-saved]").forEach(function(button){
+      button.addEventListener("click",async function(){
+        var index=Number(button.dataset.deleteSaved);
+        var campaign=state.campaigns[index];
+        if(!campaign) return;
+
+        var name=campaign.campaignName||campaign.languageName+" Campaign";
+        var confirmed=window.confirm(
+          'Delete "'+name+'"?\n\nThis permanently removes the saved campaign and its cached AI artwork.'
+        );
+
+        if(!confirmed) return;
+
+        button.disabled=true;
+        button.textContent="Deleting...";
+
+        try{
+          await api("/marketing/delete",{
+            method:"POST",
+            body:JSON.stringify({
+              campaignId:campaign.id
+            })
+          });
+
+          state.campaigns.splice(index,1);
+
+          if(
+            state.currentCampaign &&
+            state.currentCampaign.id===campaign.id
+          ){
+            state.currentCampaign=null;
+            state.graphics=[];
+            var campaignBox=document.getElementById("lbmCampaign");
+            if(campaignBox){
+              campaignBox.innerHTML='<div class="lbm-summary">✓ Campaign deleted.</div>';
+            }
+          }
+
+          renderSaved();
+        }catch(error){
+          button.disabled=false;
+          button.textContent="🗑 Delete";
+          window.alert(error.message||"Unable to delete campaign.");
+        }
       });
     });
   }
