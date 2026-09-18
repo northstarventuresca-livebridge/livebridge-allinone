@@ -176,6 +176,18 @@ async function marketingOrganization(request, env) {
   if (!organization) {
     throw new Error("LiveBridge account not found.");
   }
+
+  const marketingEnabled =
+    parseFeatureOverrides(
+      organization.feature_overrides_json
+    ).marketingCampaigns === true;
+
+  if (!marketingEnabled) {
+    throw new Error(
+      "Marketing campaigns are not enabled for this organization."
+    );
+  }
+
   return organization;
 }
 
@@ -2378,7 +2390,8 @@ const LIVEBRIDGE_FEATURE_OVERRIDE_KEYS = [
   "scriptureDetection",
   "prioritySupport",
   "customOnboarding",
-  "listenerDataDisplay"
+  "listenerDataDisplay",
+  "marketingCampaigns"
 ];
 
 
