@@ -1159,6 +1159,13 @@ body{
     </div>
 
     <div
+      class="lb-muted"
+      style="margin-top:6px;font-size:10px;line-height:1.5;"
+    >
+      Growth accounts may make 1 external API request per minute. Pro and legacy/custom accounts may make 1 every 15 seconds. LiveBridge also keeps a short 60-second server cache to reduce repeated database work.
+    </div>
+
+    <div
       style="
         margin-top:14px;
         padding:12px 13px;
@@ -4480,6 +4487,46 @@ function renderOrganizationStatsApiConfig(
 
   const meta = [];
 
+  const policy =
+    data.policy || null;
+
+  if(policy){
+    const planLabel =
+      String(
+        policy.planCode || ""
+      )
+      .trim()
+      .toUpperCase();
+
+    const interval =
+      Number(
+        policy.minIntervalSeconds ||
+        0
+      );
+
+    const cacheSeconds =
+      Number(
+        policy.cacheSeconds ||
+        0
+      );
+
+    if(planLabel && interval){
+      meta.push(
+        planLabel +
+        " API limit: 1 request every " +
+        interval +
+        " sec"
+      );
+    }
+
+    if(cacheSeconds){
+      meta.push(
+        cacheSeconds +
+        "-sec server cache"
+      );
+    }
+  }
+
   if(rotated){
     meta.push(
       "Created/rotated: " +
@@ -5043,7 +5090,7 @@ async function loadOrganizationStatsApi(){
 
   const enabled =
     window.liveBridgeServerAccount
-      ?.featureOverrides
+      ?.entitlements
       ?.organizationStatsApi === true;
 
   card.style.display =
