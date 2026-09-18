@@ -3011,7 +3011,8 @@ const LIVEBRIDGE_FEATURE_OVERRIDE_KEYS = [
   "prioritySupport",
   "customOnboarding",
   "listenerDataDisplay",
-  "marketingCampaigns"
+  "marketingCampaigns",
+  "organizationStatsApi"
 ];
 
 
@@ -4017,6 +4018,762 @@ async function buildBroadcastSummary(env, broadcastId) {
   };
 }
 __name(buildBroadcastSummary, "buildBroadcastSummary");
+
+const LIVEBRIDGE_STATS_API_SCOPES = {
+  overview: "Overview totals",
+  broadcasts: "Broadcast history",
+  listeners: "Listener analytics",
+  languages: "Language analytics",
+  technicalUsage: "Technical / usage metrics",
+  returnVisitors: "Return visitor analytics",
+  marketing: "Marketing analytics"
+};
+
+function defaultOrganizationStatsApiScopes() {
+  return Object.fromEntries(
+    Object.keys(
+      LIVEBRIDGE_STATS_API_SCOPES
+    ).map(key => [key, true])
+  );
+}
+
+function normalizeOrganizationStatsApiScopes(value) {
+  const source =
+    value &&
+    typeof value === "object"
+      ? value
+      : {};
+
+  const normalized = {};
+
+  for (
+    const key of
+      Object.keys(
+        LIVEBRIDGE_STATS_API_SCOPES
+      )
+  ) {
+    normalized[key] =
+      source[key] !== false;
+  }
+
+  return normalized;
+}
+
+async function ensureOrganizationStatsApiSchema(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_stats_api_access (
+      organization_id INTEGER PRIMARY KEY,
+      api_key_hash TEXT NOT NULL DEFAULT '',
+      key_prefix TEXT NOT NULL DEFAULT '',
+      scopes_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      rotated_at INTEGER,
+      revoked_at INTEGER,
+      last_used_at INTEGER
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_stats_api_hash
+    ON organization_stats_api_access (api_key_hash)
+    WHERE api_key_hash != ''
+  `).run();
+}
+
+function generateOrganizationStatsApiKey() {
+  const bytes =
+    crypto.getRandomValues(
+      new Uint8Array(32)
+    );
+
+  const secret =
+    Array.from(bytes)
+      .map(byte =>
+        byte.toString(16)
+          .padStart(2, "0")
+      )
+      .join("");
+
+  return "lb_org_" + secret;
+}
+
+async function organizationForStatsApiAccount(
+  request,
+  env
+) {
+  const auth =
+    await verifyClerkRequest(
+      request
+    );
+
+  const organization =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM organizations
+      WHERE clerk_user_id = ?
+      LIMIT 1
+    `)
+    .bind(
+      auth.clerkUserId
+    )
+    .first();
+
+  if (!organization) {
+    throw new Error(
+      "LiveBridge account not found."
+    );
+  }
+
+  const enabled =
+    parseFeatureOverrides(
+      organization.feature_overrides_json
+    ).organizationStatsApi === true;
+
+  if (!enabled) {
+    const error =
+      new Error(
+        "Organization Stats API is not enabled for this account."
+      );
+
+    error.code =
+      "STATS_API_DISABLED";
+
+    throw error;
+  }
+
+  return organization;
+}
+
+async function authenticateOrganizationStatsApi(
+  request,
+  env
+) {
+  await ensureOrganizationStatsApiSchema(
+    env
+  );
+
+  const authorization =
+    String(
+      request.headers.get(
+        "Authorization"
+      ) || ""
+    ).trim();
+
+  const apiKey =
+    authorization
+      .replace(
+        /^Bearer\s+/i,
+        ""
+      )
+      .trim();
+
+  if (
+    !apiKey ||
+    !apiKey.startsWith(
+      "lb_org_"
+    )
+  ) {
+    const error =
+      new Error(
+        "A valid LiveBridge organization API key is required."
+      );
+
+    error.code =
+      "API_KEY_REQUIRED";
+
+    throw error;
+  }
+
+  const keyHash =
+    await sha256(apiKey);
+
+  const access =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM organization_stats_api_access
+      WHERE api_key_hash = ?
+        AND api_key_hash != ''
+      LIMIT 1
+    `)
+    .bind(
+      keyHash
+    )
+    .first();
+
+  if (!access) {
+    const error =
+      new Error(
+        "The LiveBridge organization API key is invalid or revoked."
+      );
+
+    error.code =
+      "API_KEY_INVALID";
+
+    throw error;
+  }
+
+  const organization =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM organizations
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(
+      Number(
+        access.organization_id
+      )
+    )
+    .first();
+
+  if (!organization) {
+    throw new Error(
+      "LiveBridge organization not found."
+    );
+  }
+
+  const featureEnabled =
+    parseFeatureOverrides(
+      organization.feature_overrides_json
+    ).organizationStatsApi === true;
+
+  if (!featureEnabled) {
+    const error =
+      new Error(
+        "Organization Stats API access is disabled."
+      );
+
+    error.code =
+      "STATS_API_DISABLED";
+
+    throw error;
+  }
+
+  await env.TRANSLATIONS_DB.prepare(`
+    UPDATE organization_stats_api_access
+    SET last_used_at = ?, updated_at = ?
+    WHERE organization_id = ?
+  `)
+  .bind(
+    Date.now(),
+    Date.now(),
+    Number(
+      organization.id
+    )
+  )
+  .run();
+
+  return {
+    organization,
+    access,
+    scopes:
+      normalizeOrganizationStatsApiScopes(
+        safeJson(
+          access.scopes_json,
+          {}
+        )
+      )
+  };
+}
+
+function parseStatsApiTime(
+  value,
+  fallback
+) {
+  const raw =
+    String(
+      value == null
+        ? ""
+        : value
+    ).trim();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  const numeric =
+    Number(raw);
+
+  if (
+    Number.isFinite(numeric) &&
+    numeric > 0
+  ) {
+    return Math.floor(numeric);
+  }
+
+  const parsed =
+    Date.parse(raw);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : fallback;
+}
+
+async function buildOrganizationStatsApiPayload(
+  env,
+  organization,
+  scopes,
+  url
+) {
+  await ensureAnalyticsTables(env);
+
+  const now =
+    Date.now();
+
+  const from =
+    parseStatsApiTime(
+      url.searchParams.get("from"),
+      0
+    );
+
+  const to =
+    parseStatsApiTime(
+      url.searchParams.get("to"),
+      now
+    );
+
+  const limit =
+    Math.min(
+      500,
+      Math.max(
+        1,
+        Math.floor(
+          Number(
+            url.searchParams.get(
+              "limit"
+            ) || 100
+          )
+        )
+      )
+    );
+
+  const requestedScope =
+    String(
+      url.searchParams.get(
+        "scope"
+      ) || "all"
+    ).trim();
+
+  const allowedScopeKeys =
+    Object.keys(
+      LIVEBRIDGE_STATS_API_SCOPES
+    );
+
+  if (
+    requestedScope !== "all" &&
+    !allowedScopeKeys.includes(
+      requestedScope
+    )
+  ) {
+    const error =
+      new Error(
+        "Unknown Stats API scope."
+      );
+
+    error.code =
+      "UNKNOWN_SCOPE";
+
+    throw error;
+  }
+
+  if (
+    requestedScope !== "all" &&
+    scopes[requestedScope] !== true
+  ) {
+    const error =
+      new Error(
+        "That Stats API category is disabled by the organization."
+      );
+
+    error.code =
+      "SCOPE_DISABLED";
+
+    throw error;
+  }
+
+  const include =
+    key =>
+      scopes[key] === true &&
+      (
+        requestedScope === "all" ||
+        requestedScope === key
+      );
+
+  const baseRoom =
+    normalizeRoom(
+      organization.room_name
+    );
+
+  const historyResult =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT id
+      FROM broadcast_sessions
+      WHERE
+        (
+          room = ?
+          OR room LIKE ?
+        )
+        AND started_at >= ?
+        AND started_at <= ?
+      ORDER BY started_at DESC
+      LIMIT ?
+    `)
+    .bind(
+      baseRoom,
+      baseRoom + "-%",
+      Math.max(0, from),
+      Math.max(
+        Math.max(0, from),
+        to
+      ),
+      limit
+    )
+    .all();
+
+  const summaries = [];
+
+  for (
+    const row of
+      historyResult.results || []
+  ) {
+    const summary =
+      await buildBroadcastSummary(
+        env,
+        row.id
+      );
+
+    if (summary) {
+      summaries.push(summary);
+    }
+  }
+
+  const totalListeners =
+    summaries.reduce(
+      (sum, item) =>
+        sum +
+        Number(
+          item.totalListeners || 0
+        ),
+      0
+    );
+
+  const totalListeningMs =
+    summaries.reduce(
+      (sum, item) =>
+        sum +
+        Number(
+          item.totalListeningMs || 0
+        ),
+      0
+    );
+
+  const languageMap =
+    new Map();
+
+  const technicalTotals = {
+    heartbeatRequests: 0,
+    statusPolls: 0,
+    analyticsRequests: 0,
+    audioChunks: 0,
+    sourceFinalRequests: 0,
+    listenerHeartbeats: 0,
+    ttsRequests: 0,
+    totalWorkerRequests: 0
+  };
+
+  for (const summary of summaries) {
+    for (
+      const language of
+        summary.languages || []
+    ) {
+      const code =
+        String(
+          language.language ||
+          "unknown"
+        );
+
+      if (!languageMap.has(code)) {
+        languageMap.set(
+          code,
+          {
+            language:
+              code,
+            listeners:
+              0,
+            totalListeningMs:
+              0
+          }
+        );
+      }
+
+      const aggregate =
+        languageMap.get(code);
+
+      aggregate.listeners +=
+        Number(
+          language.listeners || 0
+        );
+
+      aggregate.totalListeningMs +=
+        Number(
+          language.totalListeningMs ||
+          0
+        );
+    }
+
+    const metrics =
+      summary.requestMetrics || {};
+
+    for (
+      const key of
+        Object.keys(
+          technicalTotals
+        )
+    ) {
+      technicalTotals[key] +=
+        Number(
+          metrics[key] || 0
+        );
+    }
+  }
+
+  const languages =
+    Array.from(
+      languageMap.values()
+    )
+    .map(item => ({
+      ...item,
+      averageListeningMs:
+        item.listeners > 0
+          ? Math.round(
+              item.totalListeningMs /
+              item.listeners
+            )
+          : 0
+    }))
+    .sort(
+      (a, b) =>
+        b.listeners -
+        a.listeners ||
+        String(a.language)
+          .localeCompare(
+            String(b.language)
+          )
+    );
+
+  const data = {};
+
+  if (include("overview")) {
+    data.overview = {
+      broadcasts:
+        summaries.length,
+      totalListenerSessions:
+        totalListeners,
+      highestPeakAudience:
+        summaries.reduce(
+          (max, item) =>
+            Math.max(
+              max,
+              Number(
+                item.peakListeners ||
+                0
+              )
+            ),
+          0
+        ),
+      totalListeningMs,
+      averageListenerSessionMs:
+        totalListeners > 0
+          ? Math.round(
+              totalListeningMs /
+              totalListeners
+            )
+          : 0,
+      uniqueLanguages:
+        languages.length
+    };
+  }
+
+  if (include("broadcasts")) {
+    data.broadcasts =
+      summaries.map(item => ({
+        broadcastId:
+          item.broadcastId,
+        room:
+          item.room,
+        startedAt:
+          item.startedAt,
+        endedAt:
+          item.endedAt,
+        durationMs:
+          item.durationMs,
+        autoEndReason:
+          item.autoEndReason || ""
+      }));
+  }
+
+  if (include("listeners")) {
+    data.listeners = {
+      totalSessions:
+        totalListeners,
+      totalListeningMs,
+      averageSessionMs:
+        totalListeners > 0
+          ? Math.round(
+              totalListeningMs /
+              totalListeners
+            )
+          : 0,
+      broadcasts:
+        summaries.map(item => ({
+          broadcastId:
+            item.broadcastId,
+          startedAt:
+            item.startedAt,
+          totalListeners:
+            item.totalListeners,
+          peakListeners:
+            item.peakListeners,
+          totalListeningMs:
+            item.totalListeningMs,
+          averageListeningMs:
+            item.averageListeningMs
+        }))
+    };
+  }
+
+  if (include("languages")) {
+    data.languages = {
+      uniqueLanguages:
+        languages.length,
+      totals:
+        languages,
+      broadcasts:
+        summaries.map(item => ({
+          broadcastId:
+            item.broadcastId,
+          startedAt:
+            item.startedAt,
+          languages:
+            item.languages || []
+        }))
+    };
+  }
+
+  if (include("technicalUsage")) {
+    data.technicalUsage = {
+      totals:
+        technicalTotals,
+      broadcasts:
+        summaries.map(item => ({
+          broadcastId:
+            item.broadcastId,
+          startedAt:
+            item.startedAt,
+          requestMetrics:
+            item.requestMetrics || {}
+        }))
+    };
+  }
+
+  if (include("returnVisitors")) {
+    await ensureReturnVisitorSchema(env);
+
+    const visitorStats =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS unique_visitors,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN visit_days > 1
+                THEN 1
+                ELSE 0
+              END
+            ),
+            0
+          ) AS returning_visitors,
+          COALESCE(
+            SUM(visit_days),
+            0
+          ) AS total_visit_days
+        FROM organization_visitors
+        WHERE organization_id = ?
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    data.returnVisitors = {
+      uniqueVisitors:
+        Number(
+          visitorStats
+            ?.unique_visitors ||
+          0
+        ),
+      returningVisitors:
+        Number(
+          visitorStats
+            ?.returning_visitors ||
+          0
+        ),
+      totalVisitDays:
+        Number(
+          visitorStats
+            ?.total_visit_days ||
+          0
+        )
+    };
+  }
+
+  if (include("marketing")) {
+    data.marketing =
+      await buildMarketingAdminAnalytics(
+        env,
+        organization.id
+      );
+  }
+
+  return {
+    success: true,
+    apiVersion:
+      "v1",
+    generatedAt:
+      now,
+    organization: {
+      id:
+        Number(
+          organization.id
+        ),
+      name:
+        String(
+          organization.organization_name ||
+          ""
+        ),
+      room:
+        baseRoom
+    },
+    query: {
+      scope:
+        requestedScope,
+      from:
+        Math.max(0, from),
+      to:
+        Math.max(
+          Math.max(0, from),
+          to
+        ),
+      limit
+    },
+    enabledScopes:
+      scopes,
+    data
+  };
+}
 
 /*
   v1.0.9
