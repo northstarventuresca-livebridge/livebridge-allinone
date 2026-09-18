@@ -3,6 +3,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // src/index.js
 var OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+var OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 var OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions";
 var AZURE_TTS_INFLIGHT = /* @__PURE__ */ new Map();
 var CORS_HEADERS = {
@@ -32,6 +33,183 @@ function normalizeRoom(room) {
   return String(room || "").trim().toUpperCase();
 }
 __name(normalizeRoom, "normalizeRoom");
+
+const LIVEBRIDGE_MARKETING_LANGUAGES = {
+  fr: "French",
+  es: "Spanish",
+  de: "German",
+  pt: "Portuguese",
+  it: "Italian",
+  pl: "Polish",
+  ru: "Russian",
+  uk: "Ukrainian",
+  nl: "Dutch",
+  cs: "Czech",
+  fil: "Filipino (Tagalog)",
+  he: "Hebrew",
+  yo: "Yoruba",
+  ig: "Igbo",
+  ha: "Hausa",
+  zh: "Mandarin Chinese",
+  yue: "Cantonese"
+};
+
+async function ensureMarketingSchema(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_profiles (
+      organization_id INTEGER PRIMARY KEY,
+      website_url TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      region TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT 'Canada',
+      logo_url TEXT NOT NULL DEFAULT '',
+      primary_color TEXT NOT NULL DEFAULT '#2588ff',
+      secondary_color TEXT NOT NULL DEFAULT '#6f43df',
+      service_details TEXT NOT NULL DEFAULT '',
+      last_analysis_json TEXT NOT NULL DEFAULT '',
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_campaigns (
+      id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      language_code TEXT NOT NULL,
+      language_name TEXT NOT NULL,
+      campaign_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_campaigns_org
+    ON marketing_campaigns (organization_id, created_at DESC)
+  `).run();
+}
+
+function marketingColor(value, fallback) {
+  const cleaned = String(value || "").trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(cleaned) ? cleaned : fallback;
+}
+
+function safeJson(value, fallback = null) {
+  if (!value) return fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+function openAIResponseText(payload) {
+  if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
+    return payload.output_text.trim();
+  }
+  const parts = [];
+  for (const item of payload?.output || []) {
+    for (const content of item?.content || []) {
+      if (typeof content?.text === "string" && content.text.trim()) {
+        parts.push(content.text.trim());
+      }
+    }
+  }
+  return parts.join("\n").trim();
+}
+
+function parseAIJson(text) {
+  const raw = String(text || "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+
+  try { return JSON.parse(raw); } catch {}
+
+  const first = raw.indexOf("{");
+  const last = raw.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    return JSON.parse(raw.slice(first, last + 1));
+  }
+  throw new Error("AI response could not be parsed.");
+}
+
+async function marketingOrganization(request, env) {
+  const auth = await verifyClerkRequest(request);
+  const organization = await env.TRANSLATIONS_DB.prepare(`
+    SELECT *
+    FROM organizations
+    WHERE clerk_user_id = ?
+    LIMIT 1
+  `).bind(auth.clerkUserId).first();
+
+  if (!organization) {
+    throw new Error("LiveBridge account not found.");
+  }
+  return organization;
+}
+
+async function marketingProfileRow(env, organizationId) {
+  await ensureMarketingSchema(env);
+  return env.TRANSLATIONS_DB.prepare(`
+    SELECT *
+    FROM marketing_profiles
+    WHERE organization_id = ?
+    LIMIT 1
+  `).bind(Number(organizationId)).first();
+}
+
+function marketingProfile(organization, row) {
+  return {
+    organizationId: Number(organization.id),
+    organizationName: String(organization.organization_name || ""),
+    websiteUrl: String(row?.website_url || ""),
+    address: String(row?.address || ""),
+    city: String(row?.city || ""),
+    region: String(row?.region || ""),
+    country: String(row?.country || "Canada"),
+    logoUrl: String(row?.logo_url || ""),
+    primaryColor: marketingColor(row?.primary_color, "#2588ff"),
+    secondaryColor: marketingColor(row?.secondary_color, "#6f43df"),
+    serviceDetails: String(row?.service_details || ""),
+    analysis: safeJson(row?.last_analysis_json, null),
+    updatedAt: Number(row?.updated_at || 0)
+  };
+}
+
+function marketingCampaign(row) {
+  const data = safeJson(row?.campaign_json, {}) || {};
+  return {
+    id: String(row?.id || ""),
+    languageCode: String(row?.language_code || ""),
+    languageName: String(row?.language_name || ""),
+    ...data,
+    createdAt: Number(row?.created_at || data.createdAt || 0),
+    updatedAt: Number(row?.updated_at || data.updatedAt || 0)
+  };
+}
+
+function normalizeMarketingAnalysis(value) {
+  const rawLanguages = Array.isArray(value?.languages) ? value.languages : [];
+  return {
+    areaSummary: String(value?.areaSummary || "").trim().slice(0, 1500),
+    methodology: String(value?.methodology || "").trim().slice(0, 1200),
+    languages: rawLanguages.slice(0, 8).map(item => {
+      const code = String(item?.code || "").trim().toLowerCase();
+      const sources = Array.isArray(item?.sources) ? item.sources : [];
+      return {
+        language: String(item?.language || LIVEBRIDGE_MARKETING_LANGUAGES[code] || "").trim().slice(0, 100),
+        code,
+        estimatedShare: String(item?.estimatedShare || "").trim().slice(0, 100),
+        estimatedPeople: String(item?.estimatedPeople || "").trim().slice(0, 100),
+        why: String(item?.why || "").trim().slice(0, 700),
+        supportedByLiveBridge: Object.prototype.hasOwnProperty.call(LIVEBRIDGE_MARKETING_LANGUAGES, code),
+        sources: sources.slice(0, 4).map(source => ({
+          title: String(source?.title || "").trim().slice(0, 180),
+          url: String(source?.url || "").trim().slice(0, 800)
+        })).filter(source => /^https?:\/\//i.test(source.url))
+      };
+    }).filter(item => item.language)
+  };
+}
+
 
 /*
 =======================================================
