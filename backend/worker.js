@@ -4405,193 +4405,706 @@ async function buildOrganizationStatsApiPayload(
       organization.room_name
     );
 
-  const historyResult =
-    await env.TRANSLATIONS_DB.prepare(`
-      SELECT id
-      FROM broadcast_sessions
-      WHERE
-        (
-          room = ?
-          OR room LIKE ?
-        )
-        AND started_at >= ?
-        AND started_at <= ?
-      ORDER BY started_at DESC
-      LIMIT ?
-    `)
-    .bind(
-      baseRoom,
-      baseRoom + "-%",
-      Math.max(0, from),
-      Math.max(
-        Math.max(0, from),
-        to
-      ),
-      limit
-    )
-    .all();
+  const rangeFrom =
+    Math.max(0, from);
 
-  const summaries = [];
+  const rangeTo =
+    Math.max(
+      rangeFrom,
+      to
+    );
+
+  const roomPattern =
+    baseRoom + "-%";
+
+  const [
+    broadcastAggregate,
+    listenerAggregate,
+    languageTotalsResult,
+    detailBroadcastResult,
+    detailListenerResult,
+    detailLanguageResult
+  ] =
+    await Promise.all([
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS broadcasts,
+          COALESCE(
+            MAX(peak_listeners),
+            0
+          ) AS highest_peak_audience,
+          COALESCE(
+            SUM(heartbeat_requests),
+            0
+          ) AS heartbeat_requests,
+          COALESCE(
+            SUM(status_polls),
+            0
+          ) AS status_polls,
+          COALESCE(
+            SUM(analytics_requests),
+            0
+          ) AS analytics_requests,
+          COALESCE(
+            SUM(audio_chunks),
+            0
+          ) AS audio_chunks,
+          COALESCE(
+            SUM(source_final_requests),
+            0
+          ) AS source_final_requests,
+          COALESCE(
+            SUM(listener_heartbeats),
+            0
+          ) AS listener_heartbeats,
+          COALESCE(
+            SUM(tts_requests),
+            0
+          ) AS tts_requests
+        FROM broadcast_sessions
+        WHERE
+          (
+            room = ?
+            OR room LIKE ?
+          )
+          AND started_at >= ?
+          AND started_at <= ?
+      `)
+      .bind(
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo
+      )
+      .first(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS total_listeners,
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms,
+          COALESCE(
+            AVG(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS average_listening_ms,
+          COUNT(
+            DISTINCT ls.language
+          ) AS unique_languages
+        FROM listener_sessions ls
+        INNER JOIN broadcast_sessions bs
+          ON bs.id = ls.broadcast_id
+        WHERE
+          (
+            bs.room = ?
+            OR bs.room LIKE ?
+          )
+          AND bs.started_at >= ?
+          AND bs.started_at <= ?
+      `)
+      .bind(
+        now,
+        now,
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo
+      )
+      .first(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          ls.language AS language,
+          COUNT(*) AS listeners,
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms,
+          COALESCE(
+            AVG(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS average_listening_ms
+        FROM listener_sessions ls
+        INNER JOIN broadcast_sessions bs
+          ON bs.id = ls.broadcast_id
+        WHERE
+          (
+            bs.room = ?
+            OR bs.room LIKE ?
+          )
+          AND bs.started_at >= ?
+          AND bs.started_at <= ?
+        GROUP BY ls.language
+        ORDER BY listeners DESC, language ASC
+      `)
+      .bind(
+        now,
+        now,
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo
+      )
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          room,
+          started_at,
+          ended_at,
+          peak_listeners,
+          heartbeat_requests,
+          status_polls,
+          analytics_requests,
+          audio_chunks,
+          source_final_requests,
+          listener_heartbeats,
+          tts_requests,
+          auto_end_reason
+        FROM broadcast_sessions
+        WHERE
+          (
+            room = ?
+            OR room LIKE ?
+          )
+          AND started_at >= ?
+          AND started_at <= ?
+        ORDER BY started_at DESC
+        LIMIT ?
+      `)
+      .bind(
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo,
+        limit
+      )
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        WITH selected AS (
+          SELECT id
+          FROM broadcast_sessions
+          WHERE
+            (
+              room = ?
+              OR room LIKE ?
+            )
+            AND started_at >= ?
+            AND started_at <= ?
+          ORDER BY started_at DESC
+          LIMIT ?
+        )
+        SELECT
+          ls.broadcast_id AS broadcast_id,
+          COUNT(*) AS total_listeners,
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms,
+          COALESCE(
+            AVG(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS average_listening_ms
+        FROM listener_sessions ls
+        INNER JOIN selected s
+          ON s.id = ls.broadcast_id
+        INNER JOIN broadcast_sessions bs
+          ON bs.id = ls.broadcast_id
+        GROUP BY ls.broadcast_id
+      `)
+      .bind(
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo,
+        limit,
+        now,
+        now
+      )
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        WITH selected AS (
+          SELECT id
+          FROM broadcast_sessions
+          WHERE
+            (
+              room = ?
+              OR room LIKE ?
+            )
+            AND started_at >= ?
+            AND started_at <= ?
+          ORDER BY started_at DESC
+          LIMIT ?
+        )
+        SELECT
+          ls.broadcast_id AS broadcast_id,
+          ls.language AS language,
+          COUNT(*) AS listeners,
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms,
+          COALESCE(
+            AVG(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS average_listening_ms
+        FROM listener_sessions ls
+        INNER JOIN selected s
+          ON s.id = ls.broadcast_id
+        INNER JOIN broadcast_sessions bs
+          ON bs.id = ls.broadcast_id
+        GROUP BY
+          ls.broadcast_id,
+          ls.language
+        ORDER BY
+          ls.broadcast_id,
+          listeners DESC,
+          language ASC
+      `)
+      .bind(
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo,
+        limit,
+        now,
+        now
+      )
+      .all()
+    ]);
+
+  const listenerByBroadcast =
+    new Map(
+      (detailListenerResult.results || [])
+        .map(row => [
+          String(
+            row.broadcast_id || ""
+          ),
+          row
+        ])
+    );
+
+  const languagesByBroadcast =
+    new Map();
 
   for (
     const row of
-      historyResult.results || []
+      detailLanguageResult.results || []
   ) {
-    const summary =
-      await buildBroadcastSummary(
-        env,
-        row.id
+    const broadcastId =
+      String(
+        row.broadcast_id || ""
       );
 
-    if (summary) {
-      summaries.push(summary);
+    if (
+      !languagesByBroadcast.has(
+        broadcastId
+      )
+    ) {
+      languagesByBroadcast.set(
+        broadcastId,
+        []
+      );
     }
+
+    languagesByBroadcast
+      .get(broadcastId)
+      .push({
+        language:
+          String(
+            row.language || ""
+          ),
+        listeners:
+          Number(
+            row.listeners || 0
+          ),
+        totalListeningMs:
+          Number(
+            row.total_listening_ms ||
+            0
+          ),
+        averageListeningMs:
+          Math.round(
+            Number(
+              row.average_listening_ms ||
+              0
+            )
+          )
+      });
   }
 
+  const summaries =
+    (detailBroadcastResult.results || [])
+      .map(broadcast => {
+        const broadcastId =
+          String(
+            broadcast.id || ""
+          );
+
+        const listener =
+          listenerByBroadcast.get(
+            broadcastId
+          ) || {};
+
+        const effectiveEnd =
+          Number(
+            broadcast.ended_at ||
+            now
+          );
+
+        return {
+          success: true,
+          broadcastId,
+          room:
+            String(
+              broadcast.room || ""
+            ),
+          startedAt:
+            Number(
+              broadcast.started_at ||
+              0
+            ),
+          endedAt:
+            broadcast.ended_at
+              ? Number(
+                  broadcast.ended_at
+                )
+              : null,
+          durationMs:
+            Math.max(
+              0,
+              effectiveEnd -
+              Number(
+                broadcast.started_at ||
+                0
+              )
+            ),
+          totalListeners:
+            Number(
+              listener.total_listeners ||
+              0
+            ),
+          peakListeners:
+            Number(
+              broadcast.peak_listeners ||
+              0
+            ),
+          totalListeningMs:
+            Number(
+              listener.total_listening_ms ||
+              0
+            ),
+          averageListeningMs:
+            Math.round(
+              Number(
+                listener.average_listening_ms ||
+                0
+              )
+            ),
+          requestMetrics: {
+            heartbeatRequests:
+              Number(
+                broadcast.heartbeat_requests ||
+                0
+              ),
+            statusPolls:
+              Number(
+                broadcast.status_polls ||
+                0
+              ),
+            analyticsRequests:
+              Number(
+                broadcast.analytics_requests ||
+                0
+              ),
+            audioChunks:
+              Number(
+                broadcast.audio_chunks ||
+                0
+              ),
+            sourceFinalRequests:
+              Number(
+                broadcast.source_final_requests ||
+                0
+              ),
+            listenerHeartbeats:
+              Number(
+                broadcast.listener_heartbeats ||
+                0
+              ),
+            ttsRequests:
+              Number(
+                broadcast.tts_requests ||
+                0
+              ),
+            totalWorkerRequests:
+              Number(
+                broadcast.heartbeat_requests ||
+                0
+              ) +
+              Number(
+                broadcast.status_polls ||
+                0
+              ) +
+              Number(
+                broadcast.analytics_requests ||
+                0
+              ) +
+              Number(
+                broadcast.audio_chunks ||
+                0
+              ) +
+              Number(
+                broadcast.source_final_requests ||
+                0
+              ) +
+              Number(
+                broadcast.listener_heartbeats ||
+                0
+              ) +
+              Number(
+                broadcast.tts_requests ||
+                0
+              )
+          },
+          autoEndReason:
+            String(
+              broadcast.auto_end_reason ||
+              ""
+            ),
+          languages:
+            languagesByBroadcast.get(
+              broadcastId
+            ) || []
+        };
+      });
+
+  const aggregateBroadcasts =
+    Number(
+      broadcastAggregate?.broadcasts ||
+      0
+    );
+
+  const aggregatePeakAudience =
+    Number(
+      broadcastAggregate
+        ?.highest_peak_audience ||
+      0
+    );
+
   const totalListeners =
-    summaries.reduce(
-      (sum, item) =>
-        sum +
-        Number(
-          item.totalListeners || 0
-        ),
+    Number(
+      listenerAggregate
+        ?.total_listeners ||
       0
     );
 
   const totalListeningMs =
-    summaries.reduce(
-      (sum, item) =>
-        sum +
-        Number(
-          item.totalListeningMs || 0
-        ),
+    Number(
+      listenerAggregate
+        ?.total_listening_ms ||
       0
     );
 
-  const languageMap =
-    new Map();
-
-  const technicalTotals = {
-    heartbeatRequests: 0,
-    statusPolls: 0,
-    analyticsRequests: 0,
-    audioChunks: 0,
-    sourceFinalRequests: 0,
-    listenerHeartbeats: 0,
-    ttsRequests: 0,
-    totalWorkerRequests: 0
-  };
-
-  for (const summary of summaries) {
-    for (
-      const language of
-        summary.languages || []
-    ) {
-      const code =
-        String(
-          language.language ||
-          "unknown"
-        );
-
-      if (!languageMap.has(code)) {
-        languageMap.set(
-          code,
-          {
-            language:
-              code,
-            listeners:
-              0,
-            totalListeningMs:
-              0
-          }
-        );
-      }
-
-      const aggregate =
-        languageMap.get(code);
-
-      aggregate.listeners +=
-        Number(
-          language.listeners || 0
-        );
-
-      aggregate.totalListeningMs +=
-        Number(
-          language.totalListeningMs ||
-          0
-        );
-    }
-
-    const metrics =
-      summary.requestMetrics || {};
-
-    for (
-      const key of
-        Object.keys(
-          technicalTotals
-        )
-    ) {
-      technicalTotals[key] +=
-        Number(
-          metrics[key] || 0
-        );
-    }
-  }
+  const aggregateAverageListeningMs =
+    Math.round(
+      Number(
+        listenerAggregate
+          ?.average_listening_ms ||
+        0
+      )
+    );
 
   const languages =
-    Array.from(
-      languageMap.values()
-    )
-    .map(item => ({
-      ...item,
-      averageListeningMs:
-        item.listeners > 0
-          ? Math.round(
-              item.totalListeningMs /
-              item.listeners
+    (languageTotalsResult.results || [])
+      .map(row => ({
+        language:
+          String(
+            row.language || ""
+          ),
+        listeners:
+          Number(
+            row.listeners || 0
+          ),
+        totalListeningMs:
+          Number(
+            row.total_listening_ms ||
+            0
+          ),
+        averageListeningMs:
+          Math.round(
+            Number(
+              row.average_listening_ms ||
+              0
             )
-          : 0
-    }))
-    .sort(
-      (a, b) =>
-        b.listeners -
-        a.listeners ||
-        String(a.language)
-          .localeCompare(
-            String(b.language)
           )
-    );
+      }));
+
+  const technicalTotals = {
+    heartbeatRequests:
+      Number(
+        broadcastAggregate
+          ?.heartbeat_requests ||
+        0
+      ),
+    statusPolls:
+      Number(
+        broadcastAggregate
+          ?.status_polls ||
+        0
+      ),
+    analyticsRequests:
+      Number(
+        broadcastAggregate
+          ?.analytics_requests ||
+        0
+      ),
+    audioChunks:
+      Number(
+        broadcastAggregate
+          ?.audio_chunks ||
+        0
+      ),
+    sourceFinalRequests:
+      Number(
+        broadcastAggregate
+          ?.source_final_requests ||
+        0
+      ),
+    listenerHeartbeats:
+      Number(
+        broadcastAggregate
+          ?.listener_heartbeats ||
+        0
+      ),
+    ttsRequests:
+      Number(
+        broadcastAggregate
+          ?.tts_requests ||
+        0
+      )
+  };
+
+  technicalTotals.totalWorkerRequests =
+    technicalTotals.heartbeatRequests +
+    technicalTotals.statusPolls +
+    technicalTotals.analyticsRequests +
+    technicalTotals.audioChunks +
+    technicalTotals.sourceFinalRequests +
+    technicalTotals.listenerHeartbeats +
+    technicalTotals.ttsRequests;
 
   const data = {};
 
   if (include("overview")) {
     data.overview = {
       broadcasts:
-        summaries.length,
+        aggregateBroadcasts,
       totalListenerSessions:
         totalListeners,
       highestPeakAudience:
-        summaries.reduce(
-          (max, item) =>
-            Math.max(
-              max,
-              Number(
-                item.peakListeners ||
-                0
-              )
-            ),
-          0
-        ),
+        aggregatePeakAudience,
       totalListeningMs,
       averageListenerSessionMs:
-        totalListeners > 0
-          ? Math.round(
-              totalListeningMs /
-              totalListeners
-            )
-          : 0,
+        aggregateAverageListeningMs,
       uniqueLanguages:
-        languages.length
+        Number(
+          listenerAggregate
+            ?.unique_languages ||
+          languages.length
+        )
     };
   }
 
@@ -4619,12 +5132,7 @@ async function buildOrganizationStatsApiPayload(
         totalListeners,
       totalListeningMs,
       averageSessionMs:
-        totalListeners > 0
-          ? Math.round(
-              totalListeningMs /
-              totalListeners
-            )
-          : 0,
+        aggregateAverageListeningMs,
       broadcasts:
         summaries.map(item => ({
           broadcastId:
