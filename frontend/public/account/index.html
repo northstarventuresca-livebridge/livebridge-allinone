@@ -1524,8 +1524,20 @@ type="text/javascript">
 const LB_PENDING_KEY =
   "livebridge_pending_signup";
 
+const LB_ACCOUNT_HOST =
+  String(
+    window.location.hostname || ""
+  ).toLowerCase();
+
+const LB_ACCOUNT_PREVIEW =
+  LB_ACCOUNT_HOST.includes("dev-v1-3-0") ||
+  LB_ACCOUNT_HOST.includes("livebridge-allinone-frontend-test") ||
+  LB_ACCOUNT_HOST.includes("livebridge-promoter-frontend-test");
+
 const LB_WORKER =
-  "https://livebridge.northstarventures-ca.workers.dev";
+  LB_ACCOUNT_PREVIEW
+    ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+    : "https://livebridge.northstarventures-ca.workers.dev";
 
 const LB_LISTENER_BASE =
   "https://livebridge.ca/t/";
