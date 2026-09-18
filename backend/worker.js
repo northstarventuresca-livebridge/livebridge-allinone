@@ -4,6 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 // src/index.js
 var OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 var OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+var OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations";
 var OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions";
 var AZURE_TTS_INFLIGHT = /* @__PURE__ */ new Map();
 var CORS_HEADERS = {
@@ -263,6 +264,97 @@ function normalizeMarketingAnalysis(value) {
     methodology: String(value?.methodology || "").trim().slice(0, 1200),
     languages: languages.slice(0, 8)
   };
+}
+
+function cleanMarketingChoice(value, allowed, fallback) {
+  const clean = String(value || "").trim().toLowerCase();
+  return allowed.includes(clean) ? clean : fallback;
+}
+
+function marketingArtworkPrompt(campaign, kind) {
+  const portrait = kind === "portrait";
+  const style = String(campaign?.visualStyle || "people").trim();
+  const audience = String(campaign?.audienceFocus || "general").trim();
+  const tone = String(campaign?.imageryTone || "warm").trim();
+  const languageName = String(campaign?.languageName || "the selected language").trim();
+
+  const styleText =
+    style === "balanced"
+      ? "People should be clearly present but balanced with a polished modern community setting."
+      : "People should be the emotional focus of the image, candid, relational, welcoming and natural.";
+
+  return `Create a professional photorealistic background image for a community outreach invitation.
+
+Audience language/community: ${languageName}-speaking community.
+Audience focus: ${audience}.
+Creative tone: ${tone}.
+${styleText}
+
+Representation:
+Show a natural contemporary group of people who would feel familiar and welcoming to people from communities where ${languageName} is commonly spoken. Use everyday modern clothing and authentic, warm human interaction. Avoid stereotypes, costumes, flags, caricatures, exaggerated cultural symbols, tokenism, or making assumptions about religion. The scene should feel like genuine neighbours, friends and families being welcomed into a community gathering.
+
+Setting:
+A warm, modern community or church gathering environment in Canada. Friendly, hopeful, relational, inclusive and suitable for a real printed community-centre poster.
+
+Composition:
+${portrait
+  ? "Portrait composition. Keep the people mainly on the right and/or lower half, with generous clean darker negative space on the upper-left and left-centre for headline and invitation copy."
+  : "Square composition. Keep the people mainly on the right side and centre-right, with useful clean darker negative space on the left for headline and invitation copy."}
+
+Critical:
+Do NOT render any words, letters, numbers, logos, QR codes, signs, watermarks or readable text. LiveBridge will overlay all exact typography, branding and QR information afterward.`;
+}
+
+async function generateMarketingArtworkBase64(env, campaign, kind) {
+  const size = kind === "portrait" ? "1024x1536" : "1024x1024";
+  const prompt = marketingArtworkPrompt(campaign, kind);
+  const models = [
+    "gpt-image-2.5-sunburst",
+    "gpt-image-1.5",
+    "gpt-image-1"
+  ];
+
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      const response = await fetch(
+        OPENAI_IMAGES_URL,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model,
+            prompt,
+            size,
+            quality: "medium",
+            n: 1
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (
+        response.ok &&
+        data?.data?.[0]?.b64_json
+      ) {
+        return String(data.data[0].b64_json);
+      }
+
+      lastError = new Error(
+        data?.error?.message ||
+        ("Artwork generation failed with " + model + ".")
+      );
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Unable to generate campaign artwork.");
 }
 
 
@@ -10947,6 +11039,121 @@ Requirements:
       throw new Error("No usable local language data was found.");
     }
 
+    const strategyLanguage = analysis.languages[0];
+
+    try {
+      const strategyPrompt = `Create a VERY SHORT practical outreach plan for a local organization using LiveBridge to welcome a ${strategyLanguage.language}-speaking community.
+
+Organization: ${organization.organization_name || ""}
+Location: ${locationText}
+Target language: ${strategyLanguage.language}
+Website: ${profile.websiteUrl || "not supplied"}
+
+Use current web search to identify practical local places where a small printed invitation could reasonably be shared or posted. Prefer real currently operating community centres, libraries, settlement/newcomer services, multicultural organizations, language/cultural associations, grocery stores, restaurants, cafes, or other public-facing places that are genuinely relevant. Nearby regional options are okay if the immediate city has few choices.
+
+Do NOT claim that a specific business's customers or staff speak this language unless reliable public evidence supports it. Phrase uncertain opportunities as places worth asking. Always remind the organization to ask permission before posting.
+
+Return ONLY valid JSON:
+{
+  "language": "${strategyLanguage.language}",
+  "tips": [
+    "very short actionable tip",
+    "very short actionable tip",
+    "very short actionable tip"
+  ],
+  "placements": [
+    {
+      "name": "real local place or business",
+      "type": "very short category",
+      "why": "very short reason to consider asking here",
+      "url": "https://verified-public-source..."
+    }
+  ]
+}
+
+Requirements:
+- Exactly 3 tips, each preferably under 12 words.
+- Up to 5 placement ideas.
+- Do not fabricate businesses, addresses, or URLs.
+- Keep this useful and extremely concise.`;
+
+      const strategyResponse = await fetch(
+        OPENAI_RESPONSES_URL,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "gpt-5.6-luna",
+            tools: [{
+              type: "web_search",
+              search_context_size: "low",
+              user_location: userLocation
+            }],
+            include: ["web_search_call.action.sources"],
+            input: strategyPrompt
+          })
+        }
+      );
+
+      const strategyData = await strategyResponse.json();
+
+      if (strategyResponse.ok) {
+        const rawStrategy = parseAIJson(
+          openAIResponseText(strategyData)
+        );
+
+        analysis.outreachStrategy = {
+          language: String(
+            rawStrategy?.language ||
+            strategyLanguage.language ||
+            ""
+          ).trim().slice(0, 100),
+
+          tips: (
+            Array.isArray(rawStrategy?.tips)
+              ? rawStrategy.tips
+              : []
+          )
+            .slice(0, 3)
+            .map(item =>
+              String(item || "")
+                .trim()
+                .slice(0, 180)
+            )
+            .filter(Boolean),
+
+          placements: (
+            Array.isArray(rawStrategy?.placements)
+              ? rawStrategy.placements
+              : []
+          )
+            .slice(0, 5)
+            .map(item => ({
+              name: String(item?.name || "").trim().slice(0, 160),
+              type: String(item?.type || "").trim().slice(0, 100),
+              why: String(item?.why || "").trim().slice(0, 240),
+              url: String(item?.url || "").trim().slice(0, 800)
+            }))
+            .filter(item =>
+              item.name &&
+              /^https?:\/\//i.test(item.url)
+            ),
+
+          sources:
+            openAISearchSources(strategyData)
+              .slice(0, 10)
+        };
+      }
+    } catch (strategyError) {
+      console.error(
+        "Marketing outreach strategy failed:",
+        strategyError
+      );
+    }
+
     const now = Date.now();
 
     await env.TRANSLATIONS_DB.prepare(`
@@ -10998,6 +11205,49 @@ if (
     const body = await request.json();
     const languageCode = String(body.languageCode || "").trim().toLowerCase();
 
+    const visualStyle = cleanMarketingChoice(
+      body.visualStyle,
+      ["people", "balanced", "clean"],
+      "people"
+    );
+
+    const audienceFocus = cleanMarketingChoice(
+      body.audienceFocus,
+      ["general", "families", "adults", "youth", "seniors"],
+      "general"
+    );
+
+    const imageryTone = cleanMarketingChoice(
+      body.imageryTone,
+      ["warm", "modern", "community", "church"],
+      "warm"
+    );
+
+    const includeTearOff =
+      body.includeTearOff !== false;
+
+    const requestedTabs =
+      Number(body.tearOffTabs || 8);
+
+    const tearOffTabs =
+      [6, 8, 10].includes(requestedTabs)
+        ? requestedTabs
+        : 8;
+
+    const includeQr =
+      body.includeQr !== false;
+
+    const includePhone =
+      body.includePhone === true;
+
+    const phoneNumber =
+      includePhone
+        ? String(body.phoneNumber || "")
+            .trim()
+            .replace(/[\r\n\t]+/g, " ")
+            .slice(0, 80)
+        : "";
+
     if (!Object.prototype.hasOwnProperty.call(LIVEBRIDGE_MARKETING_LANGUAGES, languageCode)) {
       return jsonResponse({
         success: false,
@@ -11028,6 +11278,9 @@ Location: ${location || "not supplied"}
 Address: ${profile.address || "not supplied"}
 Website: ${profile.websiteUrl || "not supplied"}
 Service/event details: ${profile.serviceDetails || "not supplied"}
+Visual style: ${visualStyle}
+Audience focus: ${audienceFocus}
+Imagery tone: ${imageryTone}
 
 LiveBridge lets people attend the organization's live service/event and follow the message with live translated captions and translated audio in their selected language.
 
@@ -11056,10 +11309,18 @@ Return ONLY valid JSON:
     "subheadline": "subheadline in ${languageName}",
     "body": "1-2 short sentences in ${languageName}",
     "cta": "short call to action in ${languageName}"
+  },
+  "tearOff": {
+    "headline": "short welcoming headline in ${languageName}",
+    "subheadline": "short invitation in ${languageName}",
+    "body": "1-2 very short sentences in ${languageName}",
+    "cta": "short call to action in ${languageName}",
+    "tabCallout": "2-5 word phrase in ${languageName} meaning live translation available",
+    "tabServiceLine": "very short service/event time line using ONLY the supplied service details; preserve all times exactly"
   }
 }
 
-Clearly communicate that people can listen/follow the live service in their own language using LiveBridge. Keep every field concise enough for a poster/social graphic.`;
+Clearly communicate that people can listen/follow the live service in their own language using LiveBridge. Keep every field concise enough for a poster/social graphic. For tabServiceLine, never invent a day or time that was not supplied.`;
 
     const aiResponse = await fetch(
       OPENAI_RESPONSES_URL,
@@ -11109,9 +11370,22 @@ Clearly communicate that people can listen/follow the live service in their own 
       primaryColor: profile.primaryColor,
       secondaryColor: profile.secondaryColor,
       serviceDetails: profile.serviceDetails,
+      visualStyle,
+      audienceFocus,
+      imageryTone,
+      includeTearOff,
+      tearOffTabs,
+      includeQr,
+      includePhone,
+      phoneNumber,
       printTarget: cleanBlock(generated?.printTarget),
       socialEnglish: cleanBlock(generated?.socialEnglish),
       socialTarget: cleanBlock(generated?.socialTarget),
+      tearOff: {
+        ...cleanBlock(generated?.tearOff),
+        tabCallout: String(generated?.tearOff?.tabCallout || "").trim().slice(0, 120),
+        tabServiceLine: String(generated?.tearOff?.tabServiceLine || profile.serviceDetails || "").trim().slice(0, 180)
+      },
       createdAt: now,
       updatedAt: now
     };
@@ -11152,6 +11426,161 @@ Clearly communicate that people can listen/follow the live service in their own 
     }, 500);
   }
 }
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/artwork"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    if (!env.OPENAI_API_KEY) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "OpenAI is not configured."
+        },
+        503
+      );
+    }
+
+    const body = await request.json();
+
+    const campaignId =
+      String(body.campaignId || "")
+        .trim();
+
+    const kind =
+      String(body.kind || "")
+        .trim()
+        .toLowerCase();
+
+    if (
+      !campaignId ||
+      !["portrait", "square"].includes(kind)
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Campaign artwork request is invalid."
+        },
+        400
+      );
+    }
+
+    await ensureMarketingSchema(env);
+
+    const row =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_campaigns
+        WHERE id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        campaignId,
+        Number(organization.id)
+      )
+      .first();
+
+    if (!row) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Marketing campaign not found."
+        },
+        404
+      );
+    }
+
+    const campaign =
+      marketingCampaign(row);
+
+    if (
+      String(campaign.visualStyle || "people") ===
+      "clean"
+    ) {
+      return jsonResponse({
+        success: true,
+        skipped: true
+      });
+    }
+
+    const cacheKey =
+      "marketing-artwork/v2/" +
+      Number(organization.id) +
+      "/" +
+      campaignId +
+      "/" +
+      kind +
+      ".b64";
+
+    if (env.AZURE_TTS_CACHE) {
+      const cached =
+        await env.AZURE_TTS_CACHE.get(
+          cacheKey
+        );
+
+      if (cached) {
+        return jsonResponse({
+          success: true,
+          cached: true,
+          mimeType: "image/png",
+          imageBase64:
+            await cached.text()
+        });
+      }
+    }
+
+    const imageBase64 =
+      await generateMarketingArtworkBase64(
+        env,
+        campaign,
+        kind
+      );
+
+    if (env.AZURE_TTS_CACHE) {
+      await env.AZURE_TTS_CACHE.put(
+        cacheKey,
+        imageBase64,
+        {
+          httpMetadata: {
+            contentType: "text/plain; charset=utf-8"
+          }
+        }
+      );
+    }
+
+    return jsonResponse({
+      success: true,
+      cached: false,
+      mimeType: "image/png",
+      imageBase64
+    });
+
+  } catch (error) {
+    console.error(
+      "Marketing artwork generation failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to generate campaign artwork."
+      },
+      500
+    );
+  }
+}
+
 
 if (
   request.method === "GET" &&
