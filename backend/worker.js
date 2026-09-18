@@ -11886,6 +11886,7 @@ if (
               ),
             refundExpiresAt,
             refundEligible:
+              campaign.creditCharged === true &&
               !refund &&
               createdAt > 0 &&
               now <= refundExpiresAt
@@ -12451,7 +12452,8 @@ Clearly communicate that people can listen/follow the live service in their own 
     });
 
     const now = Date.now();
-    const campaignId = crypto.randomUUID();
+    const campaignId =
+      marketingGenerationReference;
 
     const campaign = {
       campaignName: String(generated?.campaignName || (languageName + " Outreach")).trim().slice(0, 140),
@@ -12474,6 +12476,7 @@ Clearly communicate that people can listen/follow the live service in their own 
       includeQr,
       includePhone,
       phoneNumber,
+      creditCharged: true,
       printTarget: cleanBlock(generated?.printTarget),
       socialEnglish: cleanBlock(generated?.socialEnglish),
       socialTarget: cleanBlock(generated?.socialTarget),
@@ -12627,6 +12630,50 @@ if (
             "Marketing campaign not found."
         },
         404
+      );
+    }
+
+    const campaign =
+      marketingCampaign(row);
+
+    if (campaign.creditCharged !== true) {
+      return jsonResponse(
+        {
+          success: false,
+          code:
+            "REFUND_NOT_ELIGIBLE",
+          error:
+            "This campaign was not generated using a Marketing Credit."
+        },
+        409
+      );
+    }
+
+    const generationTransaction =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM marketing_credit_transactions
+        WHERE organization_id = ?
+          AND reference_id = ?
+          AND transaction_type = 'generation'
+        LIMIT 1
+      `)
+      .bind(
+        Number(organization.id),
+        campaignId
+      )
+      .first();
+
+    if (!generationTransaction) {
+      return jsonResponse(
+        {
+          success: false,
+          code:
+            "REFUND_NOT_ELIGIBLE",
+          error:
+            "No Marketing Credit charge was found for this generation."
+        },
+        409
       );
     }
 
@@ -12804,9 +12851,6 @@ if (
 
       throw creditError;
     }
-
-    const campaign =
-      marketingCampaign(row);
 
     const emailSent =
       await sendMarketingRefundAdminEmail(
