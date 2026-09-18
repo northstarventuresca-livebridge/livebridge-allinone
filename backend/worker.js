@@ -11442,6 +11442,114 @@ Clearly communicate that people can listen/follow the live service in their own 
 
 if (
   request.method === "POST" &&
+  url.pathname === "/marketing/delete"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    const body =
+      await request.json();
+
+    const campaignId =
+      String(
+        body.campaignId || ""
+      ).trim();
+
+    if (!campaignId) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Campaign ID is required."
+        },
+        400
+      );
+    }
+
+    await ensureMarketingSchema(env);
+
+    const existing =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM marketing_campaigns
+        WHERE id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        campaignId,
+        Number(organization.id)
+      )
+      .first();
+
+    if (!existing) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Marketing campaign not found."
+        },
+        404
+      );
+    }
+
+    await env.TRANSLATIONS_DB.prepare(`
+      DELETE FROM marketing_campaigns
+      WHERE id = ?
+        AND organization_id = ?
+    `)
+    .bind(
+      campaignId,
+      Number(organization.id)
+    )
+    .run();
+
+    if (env.AZURE_TTS_CACHE) {
+      const cachePrefix =
+        "marketing-artwork/v2/" +
+        Number(organization.id) +
+        "/" +
+        campaignId +
+        "/";
+
+      await Promise.allSettled([
+        env.AZURE_TTS_CACHE.delete(
+          cachePrefix + "portrait.b64"
+        ),
+        env.AZURE_TTS_CACHE.delete(
+          cachePrefix + "square.b64"
+        )
+      ]);
+    }
+
+    return jsonResponse({
+      success: true,
+      campaignId
+    });
+
+  } catch (error) {
+    console.error(
+      "Marketing campaign delete failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to delete marketing campaign."
+      },
+      500
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
   url.pathname === "/marketing/artwork"
 ) {
   try {
