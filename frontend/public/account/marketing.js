@@ -85,10 +85,20 @@
       ".lbm-saved-item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 12px;background:#0b1726;border:1px solid rgba(255,255,255,.08);border-radius:10px}",
       ".lbm-saved-item:hover{border-color:rgba(45,151,255,.35)}",
       ".lbm-saved-actions{display:flex;gap:8px;align-items:center}",
-      ".lbm-open-saved,.lbm-delete-saved{border:0;border-radius:8px;padding:8px 10px;font:inherit;font-size:11px;font-weight:900;cursor:pointer}",
+      ".lbm-open-saved,.lbm-delete-saved,.lbm-refund-saved{border:0;border-radius:8px;padding:8px 10px;font:inherit;font-size:11px;font-weight:900;cursor:pointer}",
       ".lbm-open-saved{background:#16283d;color:#78b7ff;border:1px solid rgba(45,151,255,.18)}",
       ".lbm-delete-saved{background:rgba(255,94,94,.08);color:#ff9b9b;border:1px solid rgba(255,94,94,.18)}",
-      ".lbm-delete-saved:disabled{opacity:.55;cursor:default}",
+      ".lbm-refund-saved{background:rgba(52,212,189,.08);color:#72ead4;border:1px solid rgba(52,212,189,.22)}",
+      ".lbm-delete-saved:disabled,.lbm-refund-saved:disabled{opacity:.55;cursor:default}",
+      ".lbm-refund-state{font-size:10px;font-weight:900;color:#72ead4;padding:6px 8px;border-radius:999px;background:rgba(52,212,189,.08);border:1px solid rgba(52,212,189,.18)}",
+      ".lbm-refund-overlay{position:fixed;inset:0;z-index:999999;display:grid;place-items:center;padding:18px;background:rgba(2,8,18,.84);backdrop-filter:blur(5px)}",
+      ".lbm-refund-modal{width:min(560px,100%);background:#0b1726;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.45)}",
+      ".lbm-refund-modal h3{margin:0;color:#fff;font-size:18px}",
+      ".lbm-refund-modal p{margin:8px 0 0;color:#9bb0c5;font-size:12px;line-height:1.55}",
+      ".lbm-refund-modal textarea{width:100%;box-sizing:border-box;min-height:130px;margin-top:14px;background:#071321;color:#fff;border:1px solid rgba(255,255,255,.13);border-radius:10px;padding:12px;font:inherit;resize:vertical;outline:none}",
+      ".lbm-refund-modal textarea:focus{border-color:rgba(52,212,189,.55);box-shadow:0 0 0 3px rgba(52,212,189,.08)}",
+      ".lbm-refund-modal-actions{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}",
+      ".lbm-refund-error{min-height:18px;margin-top:8px;color:#ff8c8c;font-size:11px}",
       ".lbm-saved-name{font-weight:900;font-size:12px}",
       ".lbm-saved-meta{font-size:10px;color:#8399af;margin-top:3px}",
       "@media(max-width:900px){.lbm-campaign-grid{grid-template-columns:1fr}.lbm-grid{grid-template-columns:1fr}.lbm-field.full{grid-column:auto}.lbm-strategy-grid{grid-template-columns:1fr}}"
@@ -408,21 +418,116 @@
     }
   }
 
-  function renderSaved(){
+  function campaignRefundEligible(campaign){
+    if(!campaign||campaign.refundRequested) return false;
+
+    var expiresAt=Number(
+      campaign.refundExpiresAt ||
+      (
+        Number(campaign.createdAt||0) +
+        (24*60*60*1000)
+      )
+    );
+
+    return (
+      Number(campaign.createdAt||0)>0 &&
+      Date.now()<=expiresAt
+    );
+  }
+
+  function requestGenerationRefund(campaign){
+    return new Promise(function(resolve){
+      var overlay=document.createElement("div");
+      overlay.className="lbm-refund-overlay";
+
+      var name=esc(
+        campaign.campaignName ||
+        campaign.languageName +
+        " Campaign"
+      );
+
+      overlay.innerHTML=[
+        '<div class="lbm-refund-modal" role="dialog" aria-modal="true">',
+          '<h3>Report this generation & request credit back</h3>',
+          '<p>We want to honor our customers. If this generation did not work for you, tell us what happened. If it is within 24 hours, LiveBridge will immediately return 1 Marketing Credit and send your report to our admin team for review.</p>',
+          '<p><strong style="color:#dce9f5">'+name+'</strong></p>',
+          '<textarea id="lbmRefundReason" maxlength="1500" placeholder="Please tell us what went wrong or why this generation was not usable..."></textarea>',
+          '<div class="lbm-refund-error" id="lbmRefundError"></div>',
+          '<div class="lbm-refund-modal-actions">',
+            '<button type="button" class="lbm-secondary" id="lbmRefundCancel">Cancel</button>',
+            '<button type="button" class="lbm-primary" id="lbmRefundSubmit">Submit report & return 1 credit</button>',
+          '</div>',
+        '</div>'
+      ].join("");
+
+      document.body.appendChild(overlay);
+
+      var textarea=overlay.querySelector("#lbmRefundReason");
+      var errorBox=overlay.querySelector("#lbmRefundError");
+      var submit=overlay.querySelector("#lbmRefundSubmit");
+      var cancel=overlay.querySelector("#lbmRefundCancel");
+
+      setTimeout(function(){
+        textarea.focus();
+      },20);
+
+      function close(value){
+        overlay.remove();
+        resolve(value);
+      }
+
+      cancel.addEventListener("click",function(){
+        close(null);
+      });
+
+      overlay.addEventListener("click",function(event){
+        if(event.target===overlay){
+          close(null);
+        }
+      });
+
+      submit.addEventListener("click",function(){
+        var reason=String(textarea.value||"").trim();
+
+        if(reason.length<10){
+          errorBox.textContent="Please give us a little more detail about what went wrong.";
+          textarea.focus();
+          return;
+        }
+
+        close(reason);
+      });
+    });
+  }
+
+    function renderSaved(){
     var box=document.getElementById("lbmSaved");
     if(!box) return;
+
     if(!state.campaigns.length){
       box.innerHTML='<div class="lb-muted">No saved campaigns yet.</div>';
       return;
     }
 
     box.innerHTML=state.campaigns.map(function(campaign,index){
-      var date=campaign.createdAt ? new Date(campaign.createdAt).toLocaleDateString() : "";
+      var date=campaign.createdAt
+        ? new Date(campaign.createdAt).toLocaleDateString()
+        : "";
+
+      var refundControl="";
+
+      if(campaign.refundRequested){
+        refundControl='<span class="lbm-refund-state">✓ Credit returned</span>';
+      }else if(campaignRefundEligible(campaign)){
+        refundControl='<button class="lbm-refund-saved" type="button" data-refund-saved="'+index+'">Report & request credit back</button>';
+      }
+
       return [
         '<div class="lbm-saved-item" data-index="'+index+'">',
           '<div><div class="lbm-saved-name">'+esc(campaign.campaignName||campaign.languageName+" Campaign")+'</div>',
           '<div class="lbm-saved-meta">'+esc(campaign.languageName||"")+(date ? " · "+esc(date) : "")+'</div></div>',
           '<div class="lbm-saved-actions">',
+            refundControl,
             '<button class="lbm-open-saved" type="button" data-open-saved="'+index+'">Open →</button>',
             '<button class="lbm-delete-saved" type="button" data-delete-saved="'+index+'" title="Delete campaign">🗑 Delete</button>',
           '</div>',
@@ -434,6 +539,68 @@
       button.addEventListener("click",function(){
         var campaign=state.campaigns[Number(button.dataset.openSaved)];
         if(campaign) showCampaign(campaign);
+      });
+    });
+
+    box.querySelectorAll("[data-refund-saved]").forEach(function(button){
+      button.addEventListener("click",async function(){
+        var index=Number(button.dataset.refundSaved);
+        var campaign=state.campaigns[index];
+        if(!campaign) return;
+
+        var reason=await requestGenerationRefund(campaign);
+        if(!reason) return;
+
+        button.disabled=true;
+        button.textContent="Submitting...";
+
+        try{
+          var data=await api("/marketing/refund-request",{
+            method:"POST",
+            body:JSON.stringify({
+              campaignId:campaign.id,
+              reason:reason
+            })
+          });
+
+          campaign.refundRequested=true;
+          campaign.refundReason=reason;
+          campaign.refundRequestedAt=Number(data.requestedAt||Date.now());
+          campaign.refundEligible=false;
+
+          state.marketingCredits=Math.max(
+            0,
+            Number(
+              data.balance ??
+              (Number(state.marketingCredits||0)+1)
+            )
+          );
+
+          if(
+            state.currentCampaign &&
+            state.currentCampaign.id===campaign.id
+          ){
+            state.currentCampaign.refundRequested=true;
+            state.currentCampaign.refundEligible=false;
+          }
+
+          renderMarketingCredits();
+          renderSaved();
+
+          setStatus(
+            "lbmGenerateStatus",
+            "✓ Report received. 1 Marketing Credit has been returned to your account.",
+            "good"
+          );
+
+        }catch(error){
+          button.disabled=false;
+          button.textContent="Report & request credit back";
+          window.alert(
+            error.message ||
+            "Unable to submit the generation report."
+          );
+        }
       });
     });
 
@@ -484,7 +651,6 @@
       });
     });
   }
-
   async function generateCampaign(){
     var button=document.getElementById("lbmGenerate");
     var language=document.getElementById("lbmLanguage").value;
@@ -518,6 +684,12 @@
           phoneNumber:document.getElementById("lbmPhone").value.trim()
         })
       });
+      data.campaign.refundRequested=false;
+      data.campaign.refundEligible=true;
+      data.campaign.refundExpiresAt=
+        Number(data.campaign.createdAt||Date.now())+
+        (24*60*60*1000);
+
       state.currentCampaign=data.campaign;
       state.campaigns.unshift(data.campaign);
       state.marketingCredits=Math.max(
