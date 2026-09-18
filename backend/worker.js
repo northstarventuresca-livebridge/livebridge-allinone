@@ -10658,6 +10658,442 @@ if (
 }
 
 
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/marketing/profile"
+) {
+  try {
+    const organization = await marketingOrganization(request, env);
+    const row = await marketingProfileRow(env, organization.id);
+    const campaignsResult = await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM marketing_campaigns
+      WHERE organization_id = ?
+      ORDER BY created_at DESC
+      LIMIT 50
+    `).bind(Number(organization.id)).all();
+
+    return jsonResponse({
+      success: true,
+      profile: marketingProfile(organization, row),
+      supportedLanguages: LIVEBRIDGE_MARKETING_LANGUAGES,
+      campaigns: (campaignsResult.results || []).map(marketingCampaign)
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to load marketing profile."
+    }, 401);
+  }
+}
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/profile"
+) {
+  try {
+    const organization = await marketingOrganization(request, env);
+    await ensureMarketingSchema(env);
+    const body = await request.json();
+    const existing = await marketingProfileRow(env, organization.id);
+    const now = Date.now();
+
+    const websiteUrl = String(body.websiteUrl ?? existing?.website_url ?? "").trim().slice(0, 600);
+    const address = String(body.address ?? existing?.address ?? "").trim().slice(0, 500);
+    const city = String(body.city ?? existing?.city ?? "").trim().slice(0, 120);
+    const region = String(body.region ?? existing?.region ?? "").trim().slice(0, 120);
+    const country = String(body.country ?? existing?.country ?? "Canada").trim().slice(0, 120) || "Canada";
+    const logoUrl = String(body.logoUrl ?? existing?.logo_url ?? "").trim().slice(0, 800);
+    const primaryColor = marketingColor(body.primaryColor ?? existing?.primary_color, "#2588ff");
+    const secondaryColor = marketingColor(body.secondaryColor ?? existing?.secondary_color, "#6f43df");
+    const serviceDetails = String(body.serviceDetails ?? existing?.service_details ?? "").trim().slice(0, 1200);
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_profiles (
+        organization_id, website_url, address, city, region, country,
+        logo_url, primary_color, secondary_color, service_details,
+        last_analysis_json, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id)
+      DO UPDATE SET
+        website_url = excluded.website_url,
+        address = excluded.address,
+        city = excluded.city,
+        region = excluded.region,
+        country = excluded.country,
+        logo_url = excluded.logo_url,
+        primary_color = excluded.primary_color,
+        secondary_color = excluded.secondary_color,
+        service_details = excluded.service_details,
+        updated_at = excluded.updated_at
+    `).bind(
+      Number(organization.id),
+      websiteUrl,
+      address,
+      city,
+      region,
+      country,
+      logoUrl,
+      primaryColor,
+      secondaryColor,
+      serviceDetails,
+      String(existing?.last_analysis_json || ""),
+      now
+    ).run();
+
+    const updated = await marketingProfileRow(env, organization.id);
+
+    return jsonResponse({
+      success: true,
+      profile: marketingProfile(organization, updated)
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to save marketing profile."
+    }, 400);
+  }
+}
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/analyze"
+) {
+  try {
+    const organization = await marketingOrganization(request, env);
+
+    if (!env.OPENAI_API_KEY) {
+      return jsonResponse({
+        success: false,
+        error: "OpenAI is not configured."
+      }, 503);
+    }
+
+    const profileRow = await marketingProfileRow(env, organization.id);
+    const profile = marketingProfile(organization, profileRow);
+
+    if (!profile.address && !profile.city && !profile.region) {
+      return jsonResponse({
+        success: false,
+        error: "Add the organization city or address before analyzing local languages."
+      }, 400);
+    }
+
+    const locationText = [
+      profile.address,
+      profile.city,
+      profile.region,
+      profile.country
+    ].filter(Boolean).join(", ");
+
+    const supportedList = Object.entries(LIVEBRIDGE_MARKETING_LANGUAGES)
+      .map(([code, name]) => code + "=" + name)
+      .join(", ");
+
+    const prompt = `Research current publicly available demographic and language data for the LOCAL area served by this organization.
+
+Organization: ${organization.organization_name || ""}
+Location: ${locationText}
+Website: ${profile.websiteUrl || "not supplied"}
+
+Goal:
+Identify the largest non-English language communities in this organization's local area so the organization can decide which language communities to invite to its multilingual service or event.
+
+Use reliable public evidence. Prefer official census/statistics sources, municipal/regional demographic reports, and other primary or highly credible sources. If exact city/neighborhood data is unavailable, use the smallest credible geographic area available and explicitly say what geography was used.
+
+Do not infer ethnicity, religion, immigration status, or any individual's traits. This is language-market research only.
+
+LiveBridge currently supports these campaign/listener language codes:
+${supportedList}
+
+Return ONLY valid JSON:
+{
+  "areaSummary": "short factual summary of the geographic evidence used",
+  "methodology": "one short sentence explaining the language metric used",
+  "languages": [
+    {
+      "language": "Language name",
+      "code": "best matching language code",
+      "estimatedShare": "percentage/estimate or Not reported",
+      "estimatedPeople": "population/count or Not reported",
+      "why": "brief factual explanation",
+      "sources": [
+        {"title": "source title", "url": "https://..."}
+      ]
+    }
+  ]
+}
+
+Requirements:
+- Exclude English.
+- Return up to 8 languages ordered by strongest evidence of local prevalence.
+- Do not fabricate percentages, counts, URLs, or source titles.
+- If datasets use different definitions, explain that briefly.
+- Use one of the supported LiveBridge codes when the language truly matches; otherwise use a normal short language code.
+- This ordering is descriptive demographic evidence only.`;
+
+    const userLocation = {
+      type: "approximate"
+    };
+
+    if (profile.city) userLocation.city = profile.city;
+    if (profile.region) userLocation.region = profile.region;
+
+    const countryRaw = String(profile.country || "").trim();
+    if (/^[A-Za-z]{2}$/.test(countryRaw)) {
+      userLocation.country = countryRaw.toUpperCase();
+    } else if (/^canada$/i.test(countryRaw)) {
+      userLocation.country = "CA";
+    } else if (/^(usa|united states|united states of america)$/i.test(countryRaw)) {
+      userLocation.country = "US";
+    } else if (/^(uk|united kingdom)$/i.test(countryRaw)) {
+      userLocation.country = "GB";
+    }
+
+    const aiResponse = await fetch(
+      OPENAI_RESPONSES_URL,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-5.6-luna",
+          tools: [{
+            type: "web_search",
+            search_context_size: "medium",
+            user_location: userLocation
+          }],
+          include: ["web_search_call.action.sources"],
+          input: prompt
+        })
+      }
+    );
+
+    const aiData = await aiResponse.json();
+
+    if (!aiResponse.ok) {
+      throw new Error(aiData?.error?.message || "Language analysis failed.");
+    }
+
+    const analysis = normalizeMarketingAnalysis(
+      parseAIJson(
+        openAIResponseText(aiData)
+      )
+    );
+
+    if (!analysis.languages.length) {
+      throw new Error("No usable local language data was found.");
+    }
+
+    const now = Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_profiles (
+        organization_id,
+        last_analysis_json,
+        updated_at
+      )
+      VALUES (?, ?, ?)
+      ON CONFLICT(organization_id)
+      DO UPDATE SET
+        last_analysis_json = excluded.last_analysis_json,
+        updated_at = excluded.updated_at
+    `).bind(
+      Number(organization.id),
+      JSON.stringify(analysis),
+      now
+    ).run();
+
+    return jsonResponse({
+      success: true,
+      analysis
+    });
+  } catch (error) {
+    console.error("Marketing language analysis failed:", error);
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to analyze local languages."
+    }, 500);
+  }
+}
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/generate"
+) {
+  try {
+    const organization = await marketingOrganization(request, env);
+
+    if (!env.OPENAI_API_KEY) {
+      return jsonResponse({
+        success: false,
+        error: "OpenAI is not configured."
+      }, 503);
+    }
+
+    await ensureMarketingSchema(env);
+
+    const body = await request.json();
+    const languageCode = String(body.languageCode || "").trim().toLowerCase();
+
+    if (!Object.prototype.hasOwnProperty.call(LIVEBRIDGE_MARKETING_LANGUAGES, languageCode)) {
+      return jsonResponse({
+        success: false,
+        error: "That language is not currently enabled on the LiveBridge listener."
+      }, 400);
+    }
+
+    const languageName = LIVEBRIDGE_MARKETING_LANGUAGES[languageCode];
+    const profileRow = await marketingProfileRow(env, organization.id);
+    const profile = marketingProfile(organization, profileRow);
+
+    if (!profile.websiteUrl && !profile.address && !profile.city) {
+      return jsonResponse({
+        success: false,
+        error: "Save the organization marketing details before generating a campaign."
+      }, 400);
+    }
+
+    const location = [profile.city, profile.region, profile.country]
+      .filter(Boolean)
+      .join(", ");
+
+    const prompt = `Create a welcoming outreach campaign for this organization.
+
+Organization: ${organization.organization_name || ""}
+Target language: ${languageName} (${languageCode})
+Location: ${location || "not supplied"}
+Address: ${profile.address || "not supplied"}
+Website: ${profile.websiteUrl || "not supplied"}
+Service/event details: ${profile.serviceDetails || "not supplied"}
+
+LiveBridge lets people attend the organization's live service/event and follow the message with live translated captions and translated audio in their selected language.
+
+Tone:
+Warm, welcoming, respectful, community-focused, simple and clear.
+Do not describe the target-language community as outsiders.
+Do not make claims about attendance, demographics, schedules, services, or the organization that were not supplied.
+
+Return ONLY valid JSON:
+{
+  "campaignName": "short internal campaign name",
+  "printTarget": {
+    "headline": "headline in ${languageName}",
+    "subheadline": "short subheadline in ${languageName}",
+    "body": "2-3 short sentences in ${languageName}",
+    "cta": "short call to action in ${languageName}"
+  },
+  "socialEnglish": {
+    "headline": "English headline",
+    "subheadline": "English subheadline",
+    "body": "1-2 short English sentences",
+    "cta": "short English call to action"
+  },
+  "socialTarget": {
+    "headline": "headline in ${languageName}",
+    "subheadline": "subheadline in ${languageName}",
+    "body": "1-2 short sentences in ${languageName}",
+    "cta": "short call to action in ${languageName}"
+  }
+}
+
+Clearly communicate that people can listen/follow the live service in their own language using LiveBridge. Keep every field concise enough for a poster/social graphic.`;
+
+    const aiResponse = await fetch(
+      OPENAI_RESPONSES_URL,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-5.6-luna",
+          input: prompt
+        })
+      }
+    );
+
+    const aiData = await aiResponse.json();
+
+    if (!aiResponse.ok) {
+      throw new Error(aiData?.error?.message || "Campaign generation failed.");
+    }
+
+    const generated = parseAIJson(
+      openAIResponseText(aiData)
+    );
+
+    const cleanBlock = block => ({
+      headline: String(block?.headline || "").trim().slice(0, 180),
+      subheadline: String(block?.subheadline || "").trim().slice(0, 220),
+      body: String(block?.body || "").trim().slice(0, 700),
+      cta: String(block?.cta || "").trim().slice(0, 180)
+    });
+
+    const now = Date.now();
+    const campaignId = crypto.randomUUID();
+
+    const campaign = {
+      campaignName: String(generated?.campaignName || (languageName + " Outreach")).trim().slice(0, 140),
+      organizationName: String(organization.organization_name || ""),
+      languageCode,
+      languageName,
+      websiteUrl: profile.websiteUrl,
+      address: profile.address,
+      location,
+      logoUrl: profile.logoUrl,
+      primaryColor: profile.primaryColor,
+      secondaryColor: profile.secondaryColor,
+      serviceDetails: profile.serviceDetails,
+      printTarget: cleanBlock(generated?.printTarget),
+      socialEnglish: cleanBlock(generated?.socialEnglish),
+      socialTarget: cleanBlock(generated?.socialTarget),
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_campaigns (
+        id,
+        organization_id,
+        language_code,
+        language_name,
+        campaign_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      campaignId,
+      Number(organization.id),
+      languageCode,
+      languageName,
+      JSON.stringify(campaign),
+      now,
+      now
+    ).run();
+
+    return jsonResponse({
+      success: true,
+      campaign: {
+        id: campaignId,
+        ...campaign
+      }
+    });
+  } catch (error) {
+    console.error("Marketing campaign generation failed:", error);
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to generate marketing campaign."
+    }, 500);
+  }
+}
+
 if (
   request.method === "GET" &&
   url.pathname === "/account"
