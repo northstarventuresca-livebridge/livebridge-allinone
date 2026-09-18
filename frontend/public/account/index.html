@@ -3824,6 +3824,361 @@ async function logout(){
   );
 }
 
+async function liveBridgeAccountApi(
+  path,
+  options = {}
+){
+  const token =
+    await getLiveBridgeSessionToken();
+
+  if(!token){
+    throw new Error(
+      "Please sign in again."
+    );
+  }
+
+  const opts = {
+    ...options,
+    headers:{
+      ...(options.headers || {}),
+      "Authorization":
+        "Bearer " + token
+    }
+  };
+
+  if(
+    opts.body &&
+    !opts.headers[
+      "Content-Type"
+    ]
+  ){
+    opts.headers[
+      "Content-Type"
+    ] = "application/json";
+  }
+
+  const response =
+    await fetch(
+      LB_WORKER + path,
+      opts
+    );
+
+  const data =
+    await response.json();
+
+  if(
+    !response.ok ||
+    data?.success === false
+  ){
+    throw new Error(
+      data?.error ||
+      "LiveBridge request failed."
+    );
+  }
+
+  return data;
+}
+
+
+function formatMarketingCreditPrice(
+  cents,
+  currency = "CAD"
+){
+  return new Intl.NumberFormat(
+    "en-CA",
+    {
+      style:"currency",
+      currency:
+        String(currency || "CAD")
+          .toUpperCase()
+    }
+  ).format(
+    Number(cents || 0) / 100
+  );
+}
+
+
+async function loadMarketingCreditBilling(){
+
+  const card =
+    document.getElementById(
+      "marketingCreditsBillingCard"
+    );
+
+  if(!card){
+    return;
+  }
+
+  const enabled =
+    window.liveBridgeServerAccount
+      ?.featureOverrides
+      ?.marketingCampaigns === true;
+
+  card.style.display =
+    enabled
+      ? "block"
+      : "none";
+
+  if(!enabled){
+    return;
+  }
+
+  const status =
+    document.getElementById(
+      "marketingCreditsBillingStatus"
+    );
+
+  const balance =
+    document.getElementById(
+      "marketingCreditsBillingBalance"
+    );
+
+  const packages =
+    document.getElementById(
+      "marketingCreditPackages"
+    );
+
+  try{
+
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    const purchaseState =
+      params.get(
+        "marketing_credits"
+      );
+
+    const sessionId =
+      String(
+        params.get(
+          "session_id"
+        ) || ""
+      ).trim();
+
+    if(
+      purchaseState === "success" &&
+      sessionId
+    ){
+      status.textContent =
+        "Confirming purchase...";
+
+      const verified =
+        await liveBridgeAccountApi(
+          "/marketing/credits/verify",
+          {
+            method:"POST",
+            body:
+              JSON.stringify({
+                sessionId
+              })
+          }
+        );
+
+      if(
+        verified.purchased
+      ){
+        status.textContent =
+          "✓ " +
+          Number(
+            verified.credits || 0
+          ) +
+          " credits added";
+
+        status.style.color =
+          "#63e7a1";
+      }
+    }else if(
+      purchaseState ===
+      "cancelled"
+    ){
+      status.textContent =
+        "Purchase cancelled.";
+    }
+
+    const data =
+      await liveBridgeAccountApi(
+        "/marketing/credits",
+        {
+          method:"GET"
+        }
+      );
+
+    balance.textContent =
+      Number(
+        data.balance || 0
+      ) +
+      " credits";
+
+    const rows =
+      Array.isArray(
+        data.packages
+      )
+        ? data.packages
+        : [];
+
+    packages.innerHTML =
+      rows.map(
+        item => {
+          const credits =
+            Number(
+              item.credits || 0
+            );
+
+          const label =
+            credits === 1
+              ? "Credit"
+              : "Credits";
+
+          return (
+            '<div class="lb-card" style="background:#0f1d2d;">' +
+              '<div class="lb-muted">' +
+                credits +
+                ' ' +
+                label +
+              '</div>' +
+              '<div class="lb-metric-number">' +
+                formatMarketingCreditPrice(
+                  item.priceCents,
+                  item.currency
+                ) +
+              '</div>' +
+              '<div class="lb-muted">CAD one-time purchase</div>' +
+              '<button class="lb-primary-button lb-wide marketing-credit-purchase" style="margin-top:16px;" type="button" data-package-key="' +
+                String(
+                  item.key || ""
+                ) +
+              '">' +
+                'Buy ' +
+                credits +
+              '</button>' +
+            '</div>'
+          );
+        }
+      )
+      .join("");
+
+    packages
+      .querySelectorAll(
+        ".marketing-credit-purchase"
+      )
+      .forEach(
+        button => {
+          button.addEventListener(
+            "click",
+            async function(){
+
+              const packageKey =
+                String(
+                  this.dataset
+                    .packageKey ||
+                  ""
+                );
+
+              if(!packageKey){
+                return;
+              }
+
+              const original =
+                this.textContent;
+
+              this.disabled =
+                true;
+
+              this.textContent =
+                "Opening Stripe...";
+
+              status.textContent =
+                "";
+
+              try{
+
+                const checkout =
+                  await liveBridgeAccountApi(
+                    "/marketing/credits/checkout",
+                    {
+                      method:"POST",
+                      body:
+                        JSON.stringify({
+                          packageKey
+                        })
+                    }
+                  );
+
+                if(
+                  !checkout.checkoutUrl
+                ){
+                  throw new Error(
+                    "Stripe checkout URL was not returned."
+                  );
+                }
+
+                window.location.href =
+                  checkout.checkoutUrl;
+
+              }catch(error){
+
+                status.textContent =
+                  error.message;
+
+                status.style.color =
+                  "#ff8c8c";
+
+                this.disabled =
+                  false;
+
+                this.textContent =
+                  original;
+              }
+            }
+          );
+        }
+      );
+
+    if(
+      purchaseState === "success" ||
+      purchaseState === "cancelled"
+    ){
+      params.delete(
+        "marketing_credits"
+      );
+
+      params.delete(
+        "session_id"
+      );
+
+      const clean =
+        window.location.pathname +
+        (
+          params.toString()
+            ? "?" +
+              params.toString()
+            : ""
+        ) +
+        window.location.hash;
+
+      window.history.replaceState(
+        {},
+        "",
+        clean
+      );
+    }
+
+  }catch(error){
+
+    status.textContent =
+      error.message;
+
+    status.style.color =
+      "#ff8c8c";
+
+    packages.innerHTML =
+      '<div class="lb-muted">Unable to load Marketing Credit packages.</div>';
+  }
+}
+
+
 function requestLiveBridgeTopUp(
   packageName,
   price
