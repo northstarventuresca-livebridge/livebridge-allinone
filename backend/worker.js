@@ -14418,6 +14418,461 @@ if (
 
 if (
   request.method === "GET" &&
+  url.pathname === "/account/stats-api"
+) {
+  try {
+    const organization =
+      await organizationForStatsApiAccount(
+        request,
+        env
+      );
+
+    await ensureOrganizationStatsApiSchema(
+      env
+    );
+
+    const now =
+      Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO organization_stats_api_access (
+        organization_id,
+        api_key_hash,
+        key_prefix,
+        scopes_json,
+        created_at,
+        updated_at,
+        rotated_at,
+        revoked_at,
+        last_used_at
+      )
+      VALUES (?, '', '', ?, ?, ?, NULL, NULL, NULL)
+      ON CONFLICT(organization_id) DO NOTHING
+    `)
+    .bind(
+      Number(
+        organization.id
+      ),
+      JSON.stringify(
+        defaultOrganizationStatsApiScopes()
+      ),
+      now,
+      now
+    )
+    .run();
+
+    const access =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organization_stats_api_access
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    return jsonResponse({
+      success: true,
+      enabled: true,
+      hasKey:
+        !!String(
+          access?.api_key_hash ||
+          ""
+        ),
+      keyPrefix:
+        String(
+          access?.key_prefix ||
+          ""
+        ),
+      scopes:
+        normalizeOrganizationStatsApiScopes(
+          safeJson(
+            access?.scopes_json,
+            {}
+          )
+        ),
+      scopeLabels:
+        LIVEBRIDGE_STATS_API_SCOPES,
+      apiEndpoint:
+        new URL(
+          request.url
+        ).origin +
+        "/api/v1/stats",
+      createdAt:
+        Number(
+          access?.created_at ||
+          0
+        ),
+      rotatedAt:
+        Number(
+          access?.rotated_at ||
+          0
+        ),
+      lastUsedAt:
+        Number(
+          access?.last_used_at ||
+          0
+        )
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load Organization Stats API settings."
+      },
+      error?.code ===
+        "STATS_API_DISABLED"
+          ? 403
+          : 500
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/account/stats-api"
+) {
+  try {
+    const organization =
+      await organizationForStatsApiAccount(
+        request,
+        env
+      );
+
+    await ensureOrganizationStatsApiSchema(
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const action =
+      String(
+        body.action || ""
+      )
+      .trim()
+      .toLowerCase();
+
+    const now =
+      Date.now();
+
+    const existing =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organization_stats_api_access
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    const existingScopes =
+      normalizeOrganizationStatsApiScopes(
+        safeJson(
+          existing?.scopes_json,
+          {}
+        )
+      );
+
+    if (
+      action ===
+      "save_scopes"
+    ) {
+      const scopes =
+        normalizeOrganizationStatsApiScopes(
+          body.scopes
+        );
+
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO organization_stats_api_access (
+          organization_id,
+          api_key_hash,
+          key_prefix,
+          scopes_json,
+          created_at,
+          updated_at,
+          rotated_at,
+          revoked_at,
+          last_used_at
+        )
+        VALUES (?, '', '', ?, ?, ?, NULL, NULL, NULL)
+        ON CONFLICT(organization_id)
+        DO UPDATE SET
+          scopes_json =
+            excluded.scopes_json,
+          updated_at =
+            excluded.updated_at
+      `)
+      .bind(
+        Number(
+          organization.id
+        ),
+        JSON.stringify(
+          scopes
+        ),
+        Number(
+          existing?.created_at ||
+          now
+        ),
+        now
+      )
+      .run();
+
+      return jsonResponse({
+        success: true,
+        scopes
+      });
+    }
+
+    if (
+      action === "generate" ||
+      action === "rotate"
+    ) {
+      const apiKey =
+        generateOrganizationStatsApiKey();
+
+      const keyHash =
+        await sha256(
+          apiKey
+        );
+
+      const keyPrefix =
+        apiKey.slice(0, 18) +
+        "…";
+
+      const scopes =
+        body.scopes
+          ? normalizeOrganizationStatsApiScopes(
+              body.scopes
+            )
+          : existingScopes;
+
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO organization_stats_api_access (
+          organization_id,
+          api_key_hash,
+          key_prefix,
+          scopes_json,
+          created_at,
+          updated_at,
+          rotated_at,
+          revoked_at,
+          last_used_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+        ON CONFLICT(organization_id)
+        DO UPDATE SET
+          api_key_hash =
+            excluded.api_key_hash,
+          key_prefix =
+            excluded.key_prefix,
+          scopes_json =
+            excluded.scopes_json,
+          updated_at =
+            excluded.updated_at,
+          rotated_at =
+            excluded.rotated_at,
+          revoked_at =
+            NULL,
+          last_used_at =
+            NULL
+      `)
+      .bind(
+        Number(
+          organization.id
+        ),
+        keyHash,
+        keyPrefix,
+        JSON.stringify(
+          scopes
+        ),
+        Number(
+          existing?.created_at ||
+          now
+        ),
+        now,
+        now
+      )
+      .run();
+
+      return jsonResponse({
+        success: true,
+        apiKey,
+        keyPrefix,
+        scopes,
+        apiEndpoint:
+          new URL(
+            request.url
+          ).origin +
+          "/api/v1/stats",
+        notice:
+          "Copy this API key now. LiveBridge will not display the full key again."
+      });
+    }
+
+    if (
+      action === "revoke"
+    ) {
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO organization_stats_api_access (
+          organization_id,
+          api_key_hash,
+          key_prefix,
+          scopes_json,
+          created_at,
+          updated_at,
+          rotated_at,
+          revoked_at,
+          last_used_at
+        )
+        VALUES (?, '', '', ?, ?, ?, NULL, ?, NULL)
+        ON CONFLICT(organization_id)
+        DO UPDATE SET
+          api_key_hash = '',
+          key_prefix = '',
+          updated_at =
+            excluded.updated_at,
+          revoked_at =
+            excluded.revoked_at,
+          last_used_at =
+            NULL
+      `)
+      .bind(
+        Number(
+          organization.id
+        ),
+        JSON.stringify(
+          existingScopes
+        ),
+        Number(
+          existing?.created_at ||
+          now
+        ),
+        now,
+        now
+      )
+      .run();
+
+      return jsonResponse({
+        success: true,
+        revoked: true
+      });
+    }
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          "Unknown Stats API action."
+      },
+      400
+    );
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to update Organization Stats API settings."
+      },
+      error?.code ===
+        "STATS_API_DISABLED"
+          ? 403
+          : 500
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/api/v1/stats"
+) {
+  try {
+    const {
+      organization,
+      scopes
+    } =
+      await authenticateOrganizationStatsApi(
+        request,
+        env
+      );
+
+    const payload =
+      await buildOrganizationStatsApiPayload(
+        env,
+        organization,
+        scopes,
+        url
+      );
+
+    return jsonResponse(
+      payload,
+      200,
+      {
+        "Cache-Control":
+          "no-store"
+      }
+    );
+
+  } catch (error) {
+    const code =
+      String(
+        error?.code || ""
+      );
+
+    const status =
+      [
+        "API_KEY_REQUIRED",
+        "API_KEY_INVALID"
+      ].includes(code)
+        ? 401
+        : (
+            [
+              "STATS_API_DISABLED",
+              "SCOPE_DISABLED"
+            ].includes(code)
+              ? 403
+              : (
+                  code ===
+                  "UNKNOWN_SCOPE"
+                    ? 400
+                    : 500
+                )
+          );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load organization statistics."
+      },
+      status,
+      {
+        "Cache-Control":
+          "no-store"
+      }
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
   url.pathname === "/account"
 ) {
 
