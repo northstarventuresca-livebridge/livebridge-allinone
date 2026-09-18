@@ -91,6 +91,441 @@ async function ensureMarketingSchema(env) {
   `).run();
 }
 
+const LIVEBRIDGE_MARKETING_CREDIT_PACKAGES = {
+  "1": { credits: 1, priceCents: 500, label: "1 Marketing Credit" },
+  "5": { credits: 5, priceCents: 2000, label: "5 Marketing Credits" },
+  "10": { credits: 10, priceCents: 3500, label: "10 Marketing Credits" },
+  "25": { credits: 25, priceCents: 7500, label: "25 Marketing Credits" }
+};
+
+async function ensureMarketingCreditsSchema(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_credit_accounts (
+      organization_id INTEGER PRIMARY KEY,
+      balance INTEGER NOT NULL DEFAULT 0,
+      lifetime_purchased INTEGER NOT NULL DEFAULT 0,
+      lifetime_used INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_credit_transactions (
+      id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      delta INTEGER NOT NULL,
+      balance_after INTEGER NOT NULL,
+      transaction_type TEXT NOT NULL,
+      reference_id TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_credit_transactions_org
+    ON marketing_credit_transactions (organization_id, created_at DESC)
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_credit_purchases (
+      checkout_session_id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      credits INTEGER NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'CAD',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER
+    )
+  `).run();
+}
+
+async function marketingCreditBalance(env, organizationId) {
+  await ensureMarketingCreditsSchema(env);
+
+  const id = Number(organizationId || 0);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_accounts (
+      organization_id,
+      balance,
+      lifetime_purchased,
+      lifetime_used,
+      updated_at
+    )
+    VALUES (?, 0, 0, 0, ?)
+    ON CONFLICT(organization_id) DO NOTHING
+  `)
+  .bind(id, Date.now())
+  .run();
+
+  const row = await env.TRANSLATIONS_DB.prepare(`
+    SELECT balance
+    FROM marketing_credit_accounts
+    WHERE organization_id = ?
+    LIMIT 1
+  `)
+  .bind(id)
+  .first();
+
+  return Math.max(0, Number(row?.balance || 0));
+}
+
+async function setMarketingCreditBalance(
+  env,
+  organizationId,
+  requestedBalance,
+  transactionType = "admin_override",
+  note = ""
+) {
+  await ensureMarketingCreditsSchema(env);
+
+  const id = Number(organizationId || 0);
+  const balance = Math.max(0, Math.floor(Number(requestedBalance || 0)));
+  const current = await marketingCreditBalance(env, id);
+  const delta = balance - current;
+  const now = Date.now();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    UPDATE marketing_credit_accounts
+    SET balance = ?, updated_at = ?
+    WHERE organization_id = ?
+  `)
+  .bind(balance, now, id)
+  .run();
+
+  if (delta !== 0) {
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_credit_transactions (
+        id,
+        organization_id,
+        delta,
+        balance_after,
+        transaction_type,
+        reference_id,
+        note,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, '', ?, ?)
+    `)
+    .bind(
+      crypto.randomUUID(),
+      id,
+      delta,
+      balance,
+      transactionType,
+      String(note || "").trim().slice(0, 500),
+      now
+    )
+    .run();
+  }
+
+  return balance;
+}
+
+async function addMarketingCredits(
+  env,
+  organizationId,
+  credits,
+  {
+    transactionType = "purchase",
+    referenceId = "",
+    note = "",
+    countAsPurchased = false
+  } = {}
+) {
+  await ensureMarketingCreditsSchema(env);
+
+  const id = Number(organizationId || 0);
+  const add = Math.max(0, Math.floor(Number(credits || 0)));
+  if (!id || !add) {
+    return marketingCreditBalance(env, id);
+  }
+
+  await marketingCreditBalance(env, id);
+  const now = Date.now();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    UPDATE marketing_credit_accounts
+    SET
+      balance = balance + ?,
+      lifetime_purchased = lifetime_purchased + ?,
+      updated_at = ?
+    WHERE organization_id = ?
+  `)
+  .bind(
+    add,
+    countAsPurchased ? add : 0,
+    now,
+    id
+  )
+  .run();
+
+  const balance = await marketingCreditBalance(env, id);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_transactions (
+      id,
+      organization_id,
+      delta,
+      balance_after,
+      transaction_type,
+      reference_id,
+      note,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  .bind(
+    crypto.randomUUID(),
+    id,
+    add,
+    balance,
+    transactionType,
+    String(referenceId || "").trim().slice(0, 220),
+    String(note || "").trim().slice(0, 500),
+    now
+  )
+  .run();
+
+  return balance;
+}
+
+async function consumeMarketingCredit(
+  env,
+  organizationId,
+  referenceId = ""
+) {
+  await ensureMarketingCreditsSchema(env);
+  const id = Number(organizationId || 0);
+  await marketingCreditBalance(env, id);
+  const now = Date.now();
+
+  const result = await env.TRANSLATIONS_DB.prepare(`
+    UPDATE marketing_credit_accounts
+    SET
+      balance = balance - 1,
+      lifetime_used = lifetime_used + 1,
+      updated_at = ?
+    WHERE organization_id = ?
+      AND balance > 0
+  `)
+  .bind(now, id)
+  .run();
+
+  if (Number(result?.meta?.changes || 0) < 1) {
+    const error = new Error("You need a Marketing Credit to generate a new campaign.");
+    error.code = "MARKETING_CREDITS_REQUIRED";
+    throw error;
+  }
+
+  const balance = await marketingCreditBalance(env, id);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_transactions (
+      id,
+      organization_id,
+      delta,
+      balance_after,
+      transaction_type,
+      reference_id,
+      note,
+      created_at
+    )
+    VALUES (?, ?, -1, ?, 'generation', ?, 'Generated marketing campaign', ?)
+  `)
+  .bind(
+    crypto.randomUUID(),
+    id,
+    balance,
+    String(referenceId || "").trim().slice(0, 220),
+    now
+  )
+  .run();
+
+  return balance;
+}
+
+async function refundMarketingCredit(
+  env,
+  organizationId,
+  referenceId = ""
+) {
+  await ensureMarketingCreditsSchema(env);
+  const id = Number(organizationId || 0);
+  const now = Date.now();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    UPDATE marketing_credit_accounts
+    SET
+      balance = balance + 1,
+      lifetime_used = CASE
+        WHEN lifetime_used > 0 THEN lifetime_used - 1
+        ELSE 0
+      END,
+      updated_at = ?
+    WHERE organization_id = ?
+  `)
+  .bind(now, id)
+  .run();
+
+  const balance = await marketingCreditBalance(env, id);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_transactions (
+      id,
+      organization_id,
+      delta,
+      balance_after,
+      transaction_type,
+      reference_id,
+      note,
+      created_at
+    )
+    VALUES (?, ?, 1, ?, 'generation_refund', ?, 'Generation failed; credit restored', ?)
+  `)
+  .bind(
+    crypto.randomUUID(),
+    id,
+    balance,
+    String(referenceId || "").trim().slice(0, 220),
+    now
+  )
+  .run();
+
+  return balance;
+}
+
+async function completeMarketingCreditPurchase(env, session) {
+  await ensureMarketingCreditsSchema(env);
+
+  const sessionId = String(session?.id || "").trim();
+  const purchaseType = String(
+    session?.metadata?.livebridge_purchase_type || ""
+  ).trim();
+
+  if (
+    !sessionId ||
+    purchaseType !== "marketing_credits"
+  ) {
+    return {
+      matched: false,
+      ignored: true
+    };
+  }
+
+  const organizationId = Number(
+    session?.metadata?.livebridge_organization_id || 0
+  );
+  const credits = Math.max(
+    0,
+    Math.floor(
+      Number(
+        session?.metadata?.livebridge_marketing_credits || 0
+      )
+    )
+  );
+
+  if (!organizationId || !credits) {
+    throw new Error("Marketing credit purchase metadata is invalid.");
+  }
+
+  const purchase = await env.TRANSLATIONS_DB.prepare(`
+    SELECT *
+    FROM marketing_credit_purchases
+    WHERE checkout_session_id = ?
+    LIMIT 1
+  `)
+  .bind(sessionId)
+  .first();
+
+  if (purchase?.status === "completed") {
+    return {
+      matched: true,
+      alreadyCompleted: true,
+      organizationId,
+      credits,
+      balance:
+        await marketingCreditBalance(
+          env,
+          organizationId
+        )
+    };
+  }
+
+  const paymentStatus = String(
+    session?.payment_status || ""
+  ).trim();
+
+  const checkoutStatus = String(
+    session?.status || ""
+  ).trim();
+
+  if (
+    checkoutStatus !== "complete" ||
+    paymentStatus !== "paid"
+  ) {
+    return {
+      matched: true,
+      paid: false,
+      organizationId,
+      credits
+    };
+  }
+
+  const balance = await addMarketingCredits(
+    env,
+    organizationId,
+    credits,
+    {
+      transactionType: "purchase",
+      referenceId: sessionId,
+      note: "Stripe marketing credit purchase",
+      countAsPurchased: true
+    }
+  );
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_purchases (
+      checkout_session_id,
+      organization_id,
+      credits,
+      amount_cents,
+      currency,
+      status,
+      created_at,
+      completed_at
+    )
+    VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)
+    ON CONFLICT(checkout_session_id)
+    DO UPDATE SET
+      status = 'completed',
+      completed_at = excluded.completed_at
+  `)
+  .bind(
+    sessionId,
+    organizationId,
+    credits,
+    Math.max(
+      0,
+      Number(session?.amount_total || purchase?.amount_cents || 0)
+    ),
+    String(session?.currency || purchase?.currency || "cad").toUpperCase(),
+    Number(purchase?.created_at || Date.now()),
+    Date.now()
+  )
+  .run();
+
+  return {
+    matched: true,
+    paid: true,
+    organizationId,
+    credits,
+    balance
+  };
+}
+
 function marketingColor(value, fallback) {
   const cleaned = String(value || "").trim().toLowerCase();
   return /^#[0-9a-f]{6}$/.test(cleaned) ? cleaned : fallback;
@@ -1823,6 +2258,17 @@ async function processStripeWebhookEvent(
       );
 
     case "checkout.session.completed": {
+
+      if (
+        String(
+          object?.metadata?.livebridge_purchase_type || ""
+        ) === "marketing_credits"
+      ) {
+        return completeMarketingCreditPurchase(
+          env,
+          object
+        );
+      }
 
       const subscriptionId =
         stripeEntityId(
@@ -6634,10 +7080,16 @@ if (
 
     return jsonResponse({
       success: true,
-      account:
-        buildOrganizationAccount(
+      account: {
+        ...buildOrganizationAccount(
           row
-        )
+        ),
+        marketingCredits:
+          await marketingCreditBalance(
+            env,
+            row.id
+          )
+      }
     });
 
   } catch (error) {
@@ -9191,10 +9643,16 @@ if (
 
       success: true,
 
-      account:
-        buildOrganizationAccount(
+      account: {
+        ...buildOrganizationAccount(
           row
         ),
+        marketingCredits:
+          await marketingCreditBalance(
+            env,
+            organizationId
+          )
+      },
 
       broadcasts,
 
@@ -9962,6 +10420,18 @@ if (
     .run();
 
 
+    if (
+      body.marketingCredits !== undefined
+    ) {
+      await setMarketingCreditBalance(
+        env,
+        organizationId,
+        body.marketingCredits,
+        "admin_override",
+        "Admin set Marketing Credit balance"
+      );
+    }
+
     const updated =
       await env.TRANSLATIONS_DB.prepare(`
         SELECT *
@@ -9974,15 +10444,24 @@ if (
       )
       .first();
 
+    const updatedMarketingCredits =
+      await marketingCreditBalance(
+        env,
+        organizationId
+      );
+
 
     return jsonResponse({
 
       success: true,
 
-      account:
-        buildOrganizationAccount(
+      account: {
+        ...buildOrganizationAccount(
           updated
-        )
+        ),
+        marketingCredits:
+          updatedMarketingCredits
+      }
     });
 
   } catch (error) {
@@ -10823,6 +11302,331 @@ if (
 
 if (
   request.method === "GET" &&
+  url.pathname === "/marketing/credits"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    const balance =
+      await marketingCreditBalance(
+        env,
+        organization.id
+      );
+
+    return jsonResponse({
+      success: true,
+      balance,
+      packages:
+        Object.entries(
+          LIVEBRIDGE_MARKETING_CREDIT_PACKAGES
+        ).map(([key, value]) => ({
+          key,
+          credits: value.credits,
+          priceCents: value.priceCents,
+          currency: "CAD",
+          label: value.label
+        }))
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load Marketing Credits."
+      },
+      403
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/credits/checkout"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    const body =
+      await request.json();
+
+    const packageKey =
+      String(
+        body.packageKey || ""
+      ).trim();
+
+    const pack =
+      LIVEBRIDGE_MARKETING_CREDIT_PACKAGES[
+        packageKey
+      ];
+
+    if (!pack) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That Marketing Credit package is not available."
+        },
+        400
+      );
+    }
+
+    await ensureMarketingCreditsSchema(
+      env
+    );
+
+    const registration =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM stripe_registrations
+        WHERE organization_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `)
+      .bind(
+        Number(organization.id)
+      )
+      .first();
+
+    const customerId =
+      String(
+        registration?.stripe_customer_id || ""
+      ).trim();
+
+    const origin =
+      String(
+        request.headers.get("Origin") || ""
+      ).trim();
+
+    const allowedReturnOrigin =
+      (
+        /^https:\/\/(?:[^/]+\.)?livebridge\.ca$/i.test(origin) ||
+        /^https:\/\/[^/]+\.northstarventures-ca\.workers\.dev$/i.test(origin)
+      )
+        ? origin
+        : "https://livebridge.ca";
+
+    const successUrl =
+      allowedReturnOrigin +
+      "/account/?panel=billing" +
+      "&marketing_credits=success" +
+      "&session_id={CHECKOUT_SESSION_ID}";
+
+    const cancelUrl =
+      allowedReturnOrigin +
+      "/account/?panel=billing" +
+      "&marketing_credits=cancelled";
+
+    const checkout =
+      await stripeApiRequest(
+        env,
+        "/v1/checkout/sessions",
+        {
+          mode: "payment",
+          "line_items[0][price_data][currency]": "cad",
+          "line_items[0][price_data][unit_amount]":
+            pack.priceCents,
+          "line_items[0][price_data][product_data][name]":
+            pack.label,
+          "line_items[0][price_data][product_data][description]":
+            "One Marketing Credit generates one complete four-graphic LiveBridge outreach campaign.",
+          "line_items[0][quantity]": 1,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          "metadata[livebridge_purchase_type]":
+            "marketing_credits",
+          "metadata[livebridge_organization_id]":
+            String(organization.id),
+          "metadata[livebridge_marketing_credits]":
+            String(pack.credits),
+          ...(customerId.startsWith("cus_")
+            ? { customer: customerId }
+            : {
+                customer_email:
+                  String(
+                    organization.account_email ||
+                    organization.email ||
+                    ""
+                  ).trim() || undefined
+              })
+        }
+      );
+
+    const sessionId =
+      String(
+        checkout?.id || ""
+      ).trim();
+
+    if (!sessionId) {
+      throw new Error(
+        "Stripe did not return a checkout session."
+      );
+    }
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_credit_purchases (
+        checkout_session_id,
+        organization_id,
+        credits,
+        amount_cents,
+        currency,
+        status,
+        created_at,
+        completed_at
+      )
+      VALUES (?, ?, ?, ?, 'CAD', 'pending', ?, NULL)
+      ON CONFLICT(checkout_session_id) DO NOTHING
+    `)
+    .bind(
+      sessionId,
+      Number(organization.id),
+      pack.credits,
+      pack.priceCents,
+      Date.now()
+    )
+    .run();
+
+    return jsonResponse({
+      success: true,
+      checkoutUrl:
+        String(checkout?.url || ""),
+      sessionId
+    });
+
+  } catch (error) {
+    console.error(
+      "Marketing credit checkout failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to start Marketing Credit checkout."
+      },
+      Number(error.stripeStatus || 500)
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/credits/verify"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    const body =
+      await request.json();
+
+    const sessionId =
+      String(
+        body.sessionId || ""
+      ).trim();
+
+    if (
+      !sessionId ||
+      !sessionId.startsWith("cs_")
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "A valid Stripe Checkout session is required."
+        },
+        400
+      );
+    }
+
+    const purchase =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_credit_purchases
+        WHERE checkout_session_id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        sessionId,
+        Number(organization.id)
+      )
+      .first();
+
+    if (!purchase) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Marketing Credit purchase was not found."
+        },
+        404
+      );
+    }
+
+    const session =
+      await stripeApiGet(
+        env,
+        "/v1/checkout/sessions/" +
+        encodeURIComponent(sessionId)
+      );
+
+    const result =
+      await completeMarketingCreditPurchase(
+        env,
+        session
+      );
+
+    return jsonResponse({
+      success: true,
+      purchased:
+        result?.paid === true ||
+        result?.alreadyCompleted === true,
+      credits:
+        Number(
+          result?.credits ||
+          purchase.credits ||
+          0
+        ),
+      balance:
+        await marketingCreditBalance(
+          env,
+          organization.id
+        )
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to verify Marketing Credit purchase."
+      },
+      Number(error.stripeStatus || 500)
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
   url.pathname === "/marketing/profile"
 ) {
   try {
@@ -10840,7 +11644,12 @@ if (
       success: true,
       profile: marketingProfile(organization, row),
       supportedLanguages: LIVEBRIDGE_MARKETING_LANGUAGES,
-      campaigns: (campaignsResult.results || []).map(marketingCampaign)
+      campaigns: (campaignsResult.results || []).map(marketingCampaign),
+      marketingCredits:
+        await marketingCreditBalance(
+          env,
+          organization.id
+        )
     });
   } catch (error) {
     return jsonResponse({
@@ -10925,6 +11734,11 @@ if (
 ) {
   try {
     const organization = await marketingOrganization(request, env);
+
+    const marketingGenerationReference =
+      crypto.randomUUID();
+
+    let marketingCreditConsumed = false;
 
     if (!env.OPENAI_API_KEY) {
       return jsonResponse({
@@ -11271,6 +12085,16 @@ if (
     }
 
     const languageName = LIVEBRIDGE_MARKETING_LANGUAGES[languageCode];
+
+    const marketingCreditsRemaining =
+      await consumeMarketingCredit(
+        env,
+        organization.id,
+        marketingGenerationReference
+      );
+
+    marketingCreditConsumed = true;
+
     const profileRow = await marketingProfileRow(env, organization.id);
     const profile = marketingProfile(organization, profileRow);
 
@@ -11431,14 +12255,43 @@ Clearly communicate that people can listen/follow the live service in their own 
       campaign: {
         id: campaignId,
         ...campaign
-      }
+      },
+      marketingCreditsRemaining
     });
   } catch (error) {
+    if (
+      typeof marketingCreditConsumed !== "undefined" &&
+      marketingCreditConsumed === true &&
+      typeof organization !== "undefined" &&
+      organization?.id
+    ) {
+      try {
+        await refundMarketingCredit(
+          env,
+          organization.id,
+          marketingGenerationReference
+        );
+      } catch (refundError) {
+        console.error(
+          "Marketing credit refund failed:",
+          refundError
+        );
+      }
+    }
+
     console.error("Marketing campaign generation failed:", error);
+
+    const needsCredits =
+      error?.code === "MARKETING_CREDITS_REQUIRED";
+
     return jsonResponse({
       success: false,
+      code:
+        needsCredits
+          ? "MARKETING_CREDITS_REQUIRED"
+          : undefined,
       error: error.message || "Unable to generate marketing campaign."
-    }, 500);
+    }, needsCredits ? 402 : 500);
   }
 }
 
