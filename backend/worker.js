@@ -310,11 +310,13 @@ A warm, modern community or church gathering environment in Canada. Friendly, ho
 
 Composition:
 ${portrait
-  ? "Portrait composition. Keep the people mainly on the right and/or lower half, with generous clean darker negative space on the upper-left and left-centre for headline and invitation copy."
-  : "Square composition. Keep the people mainly on the right side and centre-right, with useful clean darker negative space on the left for headline and invitation copy."}
+  ? "Portrait composition. Keep the people mainly on the right and/or lower half. Leave the upper-left and left-centre visually calm enough for text by using natural dark background, wall, depth-of-field blur, shadow, or open room space."
+  : "Square composition. Keep the people mainly on the right side and centre-right. Leave the left side visually calm enough for text by using natural dark background, wall, depth-of-field blur, shadow, or open room space."}
+
+The image must remain a continuous edge-to-edge photographic scene. The negative space must look like a real part of the environment — never like a graphic-design placeholder.
 
 Critical:
-Do NOT render any words, letters, numbers, logos, QR codes, signs, watermarks or readable text. LiveBridge will overlay all exact typography, branding and QR information afterward.`;
+Do NOT render any words, letters, numbers, logos, QR codes, signs, posters, banners, blank cards, white panels, white boxes, speech bubbles, rounded rectangles, abstract white shapes, empty billboards, frames, overlays, watermarks or readable text. Do not create a blank area by inserting a solid white or light-coloured object. LiveBridge will overlay all exact typography, branding and QR information afterward.`;
 }
 
 async function generateMarketingArtworkBase64(env, campaign, kind) {
@@ -11507,21 +11509,27 @@ if (
     .run();
 
     if (env.AZURE_TTS_CACHE) {
-      const cachePrefix =
-        "marketing-artwork/v2/" +
+      const cachePrefixes = [
+        "marketing-artwork/v3/",
+        "marketing-artwork/v2/"
+      ].map(version =>
+        version +
         Number(organization.id) +
         "/" +
         campaignId +
-        "/";
+        "/"
+      );
 
-      await Promise.allSettled([
-        env.AZURE_TTS_CACHE.delete(
-          cachePrefix + "portrait.b64"
-        ),
-        env.AZURE_TTS_CACHE.delete(
-          cachePrefix + "square.b64"
-        )
-      ]);
+      await Promise.allSettled(
+        cachePrefixes.flatMap(prefix => [
+          env.AZURE_TTS_CACHE.delete(
+            prefix + "portrait.b64"
+          ),
+          env.AZURE_TTS_CACHE.delete(
+            prefix + "square.b64"
+          )
+        ])
+      );
     }
 
     return jsonResponse({
@@ -11633,7 +11641,7 @@ if (
     }
 
     const cacheKey =
-      "marketing-artwork/v2/" +
+      "marketing-artwork/v3/" +
       Number(organization.id) +
       "/" +
       campaignId +
