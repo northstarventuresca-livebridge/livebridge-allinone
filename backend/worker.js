@@ -15350,6 +15350,96 @@ if (
 
 if (
   request.method === "GET" &&
+  url.pathname === "/account/stats-api/test"
+) {
+  try {
+    const organization =
+      await organizationForStatsApiAccount(
+        request,
+        env
+      );
+
+    await ensureOrganizationStatsApiSchema(
+      env
+    );
+
+    const access =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organization_stats_api_access
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    const scopes =
+      normalizeOrganizationStatsApiScopes(
+        safeJson(
+          access?.scopes_json,
+          {}
+        )
+      );
+
+    const payload =
+      await buildOrganizationStatsApiPayload(
+        env,
+        organization,
+        scopes,
+        url
+      );
+
+    return jsonResponse(
+      payload,
+      200,
+      {
+        "Cache-Control":
+          "no-store"
+      }
+    );
+
+  } catch (error) {
+    const code =
+      String(
+        error?.code || ""
+      );
+
+    const status =
+      code ===
+      "STATS_API_DISABLED"
+        ? 403
+        : (
+            [
+              "SCOPE_DISABLED",
+              "UNKNOWN_SCOPE"
+            ].includes(code)
+              ? 400
+              : 500
+          );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to preview Organization Stats API data."
+      },
+      status,
+      {
+        "Cache-Control":
+          "no-store"
+      }
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
   url.pathname === "/account/stats-api"
 ) {
   try {
