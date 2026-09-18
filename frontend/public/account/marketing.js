@@ -239,8 +239,13 @@
       return;
     }
 
+    var verifiedSources=(analysis.sources||[]).map(function(source){
+      return '<a href="'+esc(source.url)+'" target="_blank" rel="noopener">'+esc(source.title||"Source")+'</a>';
+    }).join(" ");
+
     var summary='<div class="lbm-summary"><strong>Area summary:</strong> '+esc(analysis.areaSummary||"")+
       (analysis.methodology ? '<br><strong>Measurement:</strong> '+esc(analysis.methodology) : '')+
+      (verifiedSources ? '<br><strong>Research sources:</strong> <span class="lbm-sources">'+verifiedSources+'</span>' : '')+
       '</div>';
 
     var rows=analysis.languages.map(function(item,index){
