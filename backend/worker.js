@@ -12019,8 +12019,13 @@ if (
   request.method === "POST" &&
   url.pathname === "/marketing/generate"
 ) {
+  let marketingGenerationOrganization = null;
+  let marketingCreditConsumed = false;
+  const marketingGenerationReference = crypto.randomUUID();
+
   try {
     const organization = await marketingOrganization(request, env);
+    marketingGenerationOrganization = organization;
 
     if (!env.OPENAI_API_KEY) {
       return jsonResponse({
@@ -12086,15 +12091,6 @@ if (
 
     const languageName = LIVEBRIDGE_MARKETING_LANGUAGES[languageCode];
 
-    const marketingCreditsRemaining =
-      await consumeMarketingCredit(
-        env,
-        organization.id,
-        marketingGenerationReference
-      );
-
-    marketingCreditConsumed = true;
-
     const profileRow = await marketingProfileRow(env, organization.id);
     const profile = marketingProfile(organization, profileRow);
 
@@ -12104,6 +12100,15 @@ if (
         error: "Save the organization marketing details before generating a campaign."
       }, 400);
     }
+
+    const marketingCreditsRemaining =
+      await consumeMarketingCredit(
+        env,
+        organization.id,
+        marketingGenerationReference
+      );
+
+    marketingCreditConsumed = true;
 
     const location = [profile.city, profile.region, profile.country]
       .filter(Boolean)
@@ -12260,15 +12265,13 @@ Clearly communicate that people can listen/follow the live service in their own 
     });
   } catch (error) {
     if (
-      typeof marketingCreditConsumed !== "undefined" &&
       marketingCreditConsumed === true &&
-      typeof organization !== "undefined" &&
-      organization?.id
+      marketingGenerationOrganization?.id
     ) {
       try {
         await refundMarketingCredit(
           env,
-          organization.id,
+          marketingGenerationOrganization.id,
           marketingGenerationReference
         );
       } catch (refundError) {
