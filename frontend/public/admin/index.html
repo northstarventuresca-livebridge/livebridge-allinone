@@ -1649,6 +1649,11 @@ body{
                   <input type="checkbox" id="overrideCustomOnboarding">
                   <span><strong>Custom Onboarding / Configuration</strong><small>Marks this organization for custom setup support.</small></span>
                 </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideMarketingCampaigns">
+                  <span><strong>Marketing Campaign Generator</strong><small>Enables local language research, outreach strategy, AI graphics and printable campaign tools for this organization.</small></span>
+                </label>
               </div>
 
               <div
@@ -4228,6 +4233,9 @@ async function openOrganization(id){
   document.getElementById("overrideCustomOnboarding").checked =
     !!featureOverrides.customOnboarding;
 
+  document.getElementById("overrideMarketingCampaigns").checked =
+    !!featureOverrides.marketingCampaigns;
+
   renderFeatureOverrideSummary();
 
   document.getElementById(
@@ -4636,7 +4644,10 @@ function collectFeatureOverrides(){
       document.getElementById("overridePrioritySupport")?.checked === true,
 
     customOnboarding:
-      document.getElementById("overrideCustomOnboarding")?.checked === true
+      document.getElementById("overrideCustomOnboarding")?.checked === true,
+
+    marketingCampaigns:
+      document.getElementById("overrideMarketingCampaigns")?.checked === true
   };
 }
 
@@ -4664,7 +4675,8 @@ function renderFeatureOverrideSummary(){
     reportExport:"Report Export",
     scriptureDetection:"Scripture Detection",
     prioritySupport:"Priority Support",
-    customOnboarding:"Custom Onboarding"
+    customOnboarding:"Custom Onboarding",
+    marketingCampaigns:"Marketing Campaign Generator"
   };
 
   const enabled =
