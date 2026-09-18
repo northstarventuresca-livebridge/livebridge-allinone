@@ -1427,6 +1427,59 @@ body{
 
   </div>
 
+  <div
+    class="lb-card"
+    id="marketingCreditsBillingCard"
+    style="margin-top:16px;display:none;"
+  >
+    <div class="lb-card-title">
+      Marketing Generation Credits
+    </div>
+
+    <div class="lb-muted" style="margin-top:6px;line-height:1.5;">
+      Each credit creates one complete new 4-graphic marketing campaign. Credits do not expire, and reopening saved campaigns does not use another credit.
+    </div>
+
+    <div
+      style="
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:14px;
+        margin-top:15px;
+        padding:13px 14px;
+        border-radius:12px;
+        background:rgba(111,67,223,.08);
+        border:1px solid rgba(111,67,223,.22);
+      "
+    >
+      <div>
+        <div class="lb-muted" style="font-size:10px;">CURRENT BALANCE</div>
+        <div
+          id="marketingCreditsBillingBalance"
+          style="font-size:26px;font-weight:900;color:white;margin-top:2px;"
+        >
+          —
+        </div>
+      </div>
+
+      <div
+        id="marketingCreditsBillingStatus"
+        class="lb-muted"
+        style="font-size:11px;text-align:right;"
+      ></div>
+    </div>
+
+    <div
+      id="marketingCreditPackages"
+      class="lb-grid-3"
+      style="margin-top:14px;"
+    >
+      <div class="lb-muted">Loading Marketing Credit packages...</div>
+    </div>
+  </div>
+
+
   <div class="lb-card" style="margin-top:16px;">
 
     <div class="lb-card-title">
@@ -3681,6 +3734,8 @@ async function renderDashboard(
   renderTranscriptRetentionUI();
 
   renderProReportingExport();
+
+  loadMarketingCreditBilling();
 
   loadBroadcastHistory(
     account
