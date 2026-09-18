@@ -1399,10 +1399,391 @@ function countAzureTextCharacters(
 }
 
 
+function countAzureSsmlBillableCharacters(
+  ssml
+) {
+
+  const billable =
+    String(ssml || "")
+      .replace(
+        /<\/?speak\b[^>]*>/gi,
+        ""
+      )
+      .replace(
+        /<\/?voice\b[^>]*>/gi,
+        ""
+      );
+
+  let total = 0;
+
+  for (const character of billable) {
+
+    total +=
+      /\p{Script=Han}/u.test(
+        character
+      )
+        ? 2
+        : 1;
+  }
+
+  return total;
+}
+
+
+const LIVEBRIDGE_API_COST_PRICING = {
+  currency:
+    "USD",
+
+  azureTtsStandardNeuralPerMillionCharacters:
+    16,
+
+  gpt41MiniInputPerMillionTokens:
+    0.40,
+
+  gpt41MiniCachedInputPerMillionTokens:
+    0.10,
+
+  gpt41MiniOutputPerMillionTokens:
+    1.60,
+
+  gpt4oMiniTranscribeInputPerMillionTokens:
+    1.25,
+
+  gpt4oMiniTranscribeOutputPerMillionTokens:
+    5.00
+};
+
+
+let apiCostSchemaReady = false;
+
+
+async function ensureApiCostSchema(
+  env
+) {
+
+  if (apiCostSchemaReady) {
+    return;
+  }
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS azure_tts_usage (
+      organization_id INTEGER NOT NULL,
+      usage_month TEXT NOT NULL,
+      characters INTEGER NOT NULL DEFAULT 0,
+      generations INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (
+        organization_id,
+        usage_month
+      )
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS openai_usage (
+      organization_id INTEGER NOT NULL,
+      usage_month TEXT NOT NULL,
+      category TEXT NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      requests INTEGER NOT NULL DEFAULT 0,
+      cost_usd REAL NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (
+        organization_id,
+        usage_month,
+        category,
+        model
+      )
+    )
+  `).run();
+
+  apiCostSchemaReady = true;
+}
+
+
+function normalizedOpenAiUsage(
+  usage
+) {
+
+  const source =
+    usage || {};
+
+  const inputTokens =
+    Math.max(
+      0,
+      Number(
+        source.input_tokens ??
+        source.prompt_tokens ??
+        0
+      ) || 0
+    );
+
+  const cachedInputTokens =
+    Math.min(
+      inputTokens,
+      Math.max(
+        0,
+        Number(
+          source.input_token_details
+            ?.cached_tokens ??
+          source.prompt_tokens_details
+            ?.cached_tokens ??
+          0
+        ) || 0
+      )
+    );
+
+  const outputTokens =
+    Math.max(
+      0,
+      Number(
+        source.output_tokens ??
+        source.completion_tokens ??
+        0
+      ) || 0
+    );
+
+  return {
+    inputTokens:
+      Math.round(inputTokens),
+
+    cachedInputTokens:
+      Math.round(cachedInputTokens),
+
+    outputTokens:
+      Math.round(outputTokens)
+  };
+}
+
+
+function calculateOpenAiCostUsd(
+  model,
+  usage
+) {
+
+  const normalized =
+    normalizedOpenAiUsage(
+      usage
+    );
+
+  const modelName =
+    String(
+      model || ""
+    ).toLowerCase();
+
+  if (
+    modelName.startsWith(
+      "gpt-4.1-mini"
+    )
+  ) {
+
+    const uncachedInput =
+      Math.max(
+        0,
+        normalized.inputTokens -
+        normalized.cachedInputTokens
+      );
+
+    return (
+      (
+        uncachedInput *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt41MiniInputPerMillionTokens
+      ) +
+      (
+        normalized.cachedInputTokens *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt41MiniCachedInputPerMillionTokens
+      ) +
+      (
+        normalized.outputTokens *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt41MiniOutputPerMillionTokens
+      )
+    ) / 1000000;
+  }
+
+  if (
+    modelName.startsWith(
+      "gpt-4o-mini-transcribe"
+    )
+  ) {
+
+    return (
+      (
+        normalized.inputTokens *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt4oMiniTranscribeInputPerMillionTokens
+      ) +
+      (
+        normalized.outputTokens *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt4oMiniTranscribeOutputPerMillionTokens
+      )
+    ) / 1000000;
+  }
+
+  return 0;
+}
+
+
+async function recordOpenAiUsageByOrganization(
+  env,
+  organizationId,
+  category,
+  model,
+  usage
+) {
+
+  const id =
+    Number(
+      organizationId || 0
+    );
+
+  if (!id) {
+    return;
+  }
+
+  const normalized =
+    normalizedOpenAiUsage(
+      usage
+    );
+
+  if (
+    normalized.inputTokens <= 0 &&
+    normalized.outputTokens <= 0
+  ) {
+    return;
+  }
+
+  await ensureApiCostSchema(
+    env
+  );
+
+  const costUsd =
+    calculateOpenAiCostUsd(
+      model,
+      usage
+    );
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO openai_usage (
+      organization_id,
+      usage_month,
+      category,
+      model,
+      input_tokens,
+      cached_input_tokens,
+      output_tokens,
+      requests,
+      cost_usd,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+
+    ON CONFLICT(
+      organization_id,
+      usage_month,
+      category,
+      model
+    )
+    DO UPDATE SET
+      input_tokens =
+        input_tokens +
+        excluded.input_tokens,
+
+      cached_input_tokens =
+        cached_input_tokens +
+        excluded.cached_input_tokens,
+
+      output_tokens =
+        output_tokens +
+        excluded.output_tokens,
+
+      requests =
+        requests + 1,
+
+      cost_usd =
+        cost_usd +
+        excluded.cost_usd,
+
+      updated_at =
+        excluded.updated_at
+  `)
+  .bind(
+    id,
+    currentUsageMonth(),
+    String(category || "other"),
+    String(model || "unknown"),
+    normalized.inputTokens,
+    normalized.cachedInputTokens,
+    normalized.outputTokens,
+    costUsd,
+    Date.now()
+  )
+  .run();
+}
+
+
+async function recordOpenAiUsageForRoom(
+  env,
+  room,
+  category,
+  model,
+  usage
+) {
+
+  const organization =
+    await getOrganizationForRoom(
+      env,
+      room
+    );
+
+  if (!organization) {
+
+    console.warn(
+      "OpenAI usage could not be matched to organization:",
+      normalizeRoom(room)
+    );
+
+    return;
+  }
+
+  await recordOpenAiUsageByOrganization(
+    env,
+    organization.id,
+    category,
+    model,
+    usage
+  );
+}
+
+
+function calculateAzureTtsCostUsd(
+  characters
+) {
+
+  return (
+    Math.max(
+      0,
+      Number(
+        characters || 0
+      )
+    ) *
+    LIVEBRIDGE_API_COST_PRICING
+      .azureTtsStandardNeuralPerMillionCharacters
+  ) / 1000000;
+}
+
+
 async function recordAzureTtsUsage(
   env,
   room,
-  text
+  text,
+  billableCharacters = null
 ) {
 
   const normalizedRoom =
@@ -1445,13 +1826,29 @@ async function recordAzureTtsUsage(
     return;
   }
 
+  await ensureApiCostSchema(
+    env
+  );
+
   const usageMonth =
     currentUsageMonth();
 
-  const characters =
-    countAzureTextCharacters(
-      text
+  const suppliedCharacters =
+    Number(
+      billableCharacters
     );
+
+  const characters =
+    Number.isFinite(
+      suppliedCharacters
+    ) &&
+    suppliedCharacters > 0
+      ? Math.round(
+          suppliedCharacters
+        )
+      : countAzureTextCharacters(
+          text
+        );
 
   await env.TRANSLATIONS_DB.prepare(`
     INSERT INTO azure_tts_usage (
@@ -6503,6 +6900,12 @@ var LiveBridgeRoom = class {
         );
       }
       const text = String(body.text || "").trim();
+
+      const room =
+        normalizeRoom(
+          body.room
+        );
+
       if (!text) {
         return jsonResponse(
           {
@@ -6543,7 +6946,8 @@ var LiveBridgeRoom = class {
               text,
               chunkId,
               sourceLanguage,
-              targetLanguage: language
+              targetLanguage: language,
+              room
             });
             translations.push({
               language,
@@ -6715,6 +7119,9 @@ var LiveBridgeRoom = class {
 
         let audio;
 
+        let azureBillableCharacters =
+          0;
+
         await this.state.blockConcurrencyWhile(
           async () => {
 
@@ -6778,6 +7185,11 @@ var LiveBridgeRoom = class {
               </speak>
             `;
 
+
+            azureBillableCharacters =
+              countAzureSsmlBillableCharacters(
+                ssml
+              );
 
             const azureResponse =
               await fetch(
@@ -6873,7 +7285,14 @@ var LiveBridgeRoom = class {
               "X-LiveBridge-TTS-Cache":
                 generatedByThisRequest
                   ? "MISS"
-                  : "HIT"
+                  : "HIT",
+
+              "X-LiveBridge-TTS-Billable-Characters":
+                generatedByThisRequest
+                  ? String(
+                      azureBillableCharacters
+                    )
+                  : "0"
             }
           }
         );
@@ -7102,7 +7521,8 @@ var LiveBridgeRoom = class {
         const verse =
           await this.lookupBibleVerse({
             reference,
-            language
+            language,
+            room
           });
 
         if (!verse) {
@@ -8018,6 +8438,21 @@ Scripture rules:
     const summaryData =
       await summaryResponse.json();
 
+    try {
+      await recordOpenAiUsageForRoom(
+        this.env,
+        room,
+        "live_notes",
+        "gpt-4.1-mini",
+        summaryData.usage
+      );
+    } catch (usageError) {
+      console.error(
+        "Live notes OpenAI usage tracking failed:",
+        usageError
+      );
+    }
+
     const rawContent =
       summaryData.choices?.[0]
         ?.message
@@ -8226,7 +8661,8 @@ Scripture rules:
 
   async lookupBibleVerse({
     reference,
-    language
+    language,
+    room
   }) {
 
     /*
@@ -8356,6 +8792,21 @@ Scripture rules:
     const translationData =
       await translationResponse.json();
 
+    try {
+      await recordOpenAiUsageForRoom(
+        this.env,
+        room,
+        "scripture_translation",
+        "gpt-4.1-mini",
+        translationData.usage
+      );
+    } catch (usageError) {
+      console.error(
+        "Scripture OpenAI usage tracking failed:",
+        usageError
+      );
+    }
+
     const translated =
       translationData.choices?.[0]
         ?.message
@@ -8385,7 +8836,8 @@ Scripture rules:
     text,
     chunkId,
     sourceLanguage,
-    targetLanguage
+    targetLanguage,
+    room
   }) {
     if (sourceLanguage === targetLanguage) {
       return text;
@@ -8400,7 +8852,8 @@ Scripture rules:
     }
     const translationPromise = this.translateWithOpenAI(
       text,
-      targetLanguage
+      targetLanguage,
+      room
     );
     this.inFlightTranslations.set(
       cacheKey,
@@ -8417,7 +8870,11 @@ Scripture rules:
       this.inFlightTranslations.delete(cacheKey);
     }
   }
-  async translateWithOpenAI(text, targetLanguage) {
+  async translateWithOpenAI(
+    text,
+    targetLanguage,
+    room
+  ) {
     if (!this.env.OPENAI_API_KEY) {
       throw new Error(
         "OPENAI_API_KEY is not configured."
@@ -8461,6 +8918,22 @@ Scripture rules:
       );
     }
     const data = await response.json();
+
+    try {
+      await recordOpenAiUsageForRoom(
+        this.env,
+        room,
+        "translation",
+        "gpt-4.1-mini",
+        data.usage
+      );
+    } catch (usageError) {
+      console.error(
+        "Translation OpenAI usage tracking failed:",
+        usageError
+      );
+    }
+
     const translatedText = data.choices?.[0]?.message?.content?.trim();
     if (!translatedText) {
       throw new Error(
@@ -11634,6 +12107,10 @@ if (
       env
     );
 
+    await ensureApiCostSchema(
+      env
+    );
+
     await verifyAdminRequest(
       request,
       env
@@ -11731,6 +12208,123 @@ if (
         .first();
 
 
+      const openAiUsageResult =
+        await env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            category,
+
+            COALESCE(
+              SUM(input_tokens),
+              0
+            ) AS input_tokens,
+
+            COALESCE(
+              SUM(cached_input_tokens),
+              0
+            ) AS cached_input_tokens,
+
+            COALESCE(
+              SUM(output_tokens),
+              0
+            ) AS output_tokens,
+
+            COALESCE(
+              SUM(requests),
+              0
+            ) AS requests,
+
+            COALESCE(
+              SUM(cost_usd),
+              0
+            ) AS cost_usd
+
+          FROM openai_usage
+
+          WHERE
+            organization_id = ?
+            AND usage_month = ?
+
+          GROUP BY category
+        `)
+        .bind(
+          Number(
+            row.id
+          ),
+          currentUsageMonth()
+        )
+        .all();
+
+
+      const openAiCostBreakdown = {};
+
+      let openAiInputTokens = 0;
+      let openAiCachedInputTokens = 0;
+      let openAiOutputTokens = 0;
+      let openAiRequests = 0;
+      let openAiCostUsd = 0;
+
+      for (
+        const usageRow of
+        openAiUsageResult.results || []
+      ) {
+
+        const category =
+          String(
+            usageRow.category ||
+            "other"
+          );
+
+        const categoryCost =
+          Number(
+            usageRow.cost_usd || 0
+          );
+
+        openAiCostBreakdown[
+          category
+        ] =
+          Math.round(
+            categoryCost *
+            1000000
+          ) / 1000000;
+
+        openAiInputTokens +=
+          Number(
+            usageRow.input_tokens || 0
+          );
+
+        openAiCachedInputTokens +=
+          Number(
+            usageRow.cached_input_tokens || 0
+          );
+
+        openAiOutputTokens +=
+          Number(
+            usageRow.output_tokens || 0
+          );
+
+        openAiRequests +=
+          Number(
+            usageRow.requests || 0
+          );
+
+        openAiCostUsd +=
+          categoryCost;
+      }
+
+
+      const azureTtsCostUsd =
+        calculateAzureTtsCostUsd(
+          azureUsage
+            ?.characters ||
+          0
+        );
+
+
+      const totalApiCostUsd =
+        openAiCostUsd +
+        azureTtsCostUsd;
+
+
       organizations.push({
 
         ...account,
@@ -11793,6 +12387,38 @@ if (
             ),
 
           azureTtsUsageMonth:
+            currentUsageMonth(),
+
+          azureTtsCostUsd:
+            Math.round(
+              azureTtsCostUsd *
+              1000000
+            ) / 1000000,
+
+          openAiInputTokens,
+          openAiCachedInputTokens,
+          openAiOutputTokens,
+          openAiRequests,
+
+          openAiCostUsd:
+            Math.round(
+              openAiCostUsd *
+              1000000
+            ) / 1000000,
+
+          openAiCostBreakdown,
+
+          apiCostUsd:
+            Math.round(
+              totalApiCostUsd *
+              1000000
+            ) / 1000000,
+
+          apiCostCurrency:
+            LIVEBRIDGE_API_COST_PRICING
+              .currency,
+
+          apiCostUsageMonth:
             currentUsageMonth()
         }
       });
@@ -17786,6 +18412,7 @@ const audioMuted =
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
+              room,
               text,
               chunkId: body.chunkId || null,
               sourceLanguage: body.sourceLanguage || "en"
@@ -17997,6 +18624,22 @@ return jsonResponse({
           );
         }
         const data = await response.json();
+
+        try {
+          await recordOpenAiUsageForRoom(
+            env,
+            room,
+            "transcription",
+            "gpt-4o-mini-transcribe",
+            data.usage
+          );
+        } catch (usageError) {
+          console.error(
+            "Transcription OpenAI usage tracking failed:",
+            usageError
+          );
+        }
+
         return jsonResponse({
           success: true,
           text: String(data.text || "").trim()
@@ -19276,6 +19919,21 @@ const now =
 
     const summaryData = await summaryResponse.json();
 
+    try {
+      await recordOpenAiUsageByOrganization(
+        env,
+        ownedRoom.organization.id,
+        "transcript_notes",
+        "gpt-4.1-mini",
+        summaryData.usage
+      );
+    } catch (usageError) {
+      console.error(
+        "Transcript notes OpenAI usage tracking failed:",
+        usageError
+      );
+    }
+
     const summary =
       summaryData.choices?.[0]?.message?.content?.trim() ||
       "Summary unavailable.";
@@ -19878,10 +20536,18 @@ if (
 
       try {
 
+        const billableCharacters =
+          Number(
+            internalResponse.headers.get(
+              "X-LiveBridge-TTS-Billable-Characters"
+            ) || 0
+          );
+
         await recordAzureTtsUsage(
           env,
           room,
-          text
+          text,
+          billableCharacters
         );
 
       } catch (usageError) {
