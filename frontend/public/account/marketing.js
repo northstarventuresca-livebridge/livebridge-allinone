@@ -404,7 +404,85 @@
     return "https://livebridge.ca/t/?room="+encodeURIComponent(room)+"&lang="+encodeURIComponent(lang);
   }
 
-  async function makeGraphic(campaign,block,kind,targetLanguage){
+  async function fetchMarketingBackground(campaign,kind){
+    if(!campaign || !campaign.id) return null;
+
+    try{
+      var token=await sessionToken();
+      if(!token) return null;
+
+      var response=await fetch(
+        (window.LB_WORKER || "https://livebridge.northstarventures-ca.workers.dev")+
+        "/marketing/background?campaignId="+encodeURIComponent(campaign.id)+
+        "&kind="+encodeURIComponent(kind),
+        {
+          method:"GET",
+          cache:"no-store",
+          headers:{
+            "Authorization":"Bearer "+token
+          }
+        }
+      );
+
+      if(!response.ok){
+        return null;
+      }
+
+      var blob=await response.blob();
+      var objectUrl=URL.createObjectURL(blob);
+
+      return await new Promise(function(resolve){
+        var img=new Image();
+        var finished=false;
+
+        function done(value){
+          if(finished) return;
+          finished=true;
+
+          if(!value){
+            URL.revokeObjectURL(objectUrl);
+          }else{
+            value.__lbObjectUrl=objectUrl;
+          }
+
+          resolve(value);
+        }
+
+        img.onload=function(){done(img);};
+        img.onerror=function(){done(null);};
+        img.src=objectUrl;
+      });
+    }catch(error){
+      console.warn("Marketing AI artwork unavailable:",error);
+      return null;
+    }
+  }
+
+  function drawImageCover(ctx,img,width,height){
+    if(!img || !img.width || !img.height) return false;
+
+    var scale=Math.max(
+      width/img.width,
+      height/img.height
+    );
+
+    var drawWidth=img.width*scale;
+    var drawHeight=img.height*scale;
+    var x=(width-drawWidth)/2;
+    var y=(height-drawHeight)/2;
+
+    ctx.drawImage(
+      img,
+      x,
+      y,
+      drawWidth,
+      drawHeight
+    );
+
+    return true;
+  }
+
+  async function makeGraphic(campaign,block,kind,targetLanguage,backgroundImage){
     var print=kind==="print";
     var width=print ? 1275 : 1080;
     var height=print ? 1650 : 1080;
@@ -415,12 +493,28 @@
     var primary=campaign.primaryColor||"#2588ff";
     var secondary=campaign.secondaryColor||"#6f43df";
 
-    var gradient=ctx.createLinearGradient(0,0,width,height);
-    gradient.addColorStop(0,"#071321");
-    gradient.addColorStop(.55,"#0a1d31");
-    gradient.addColorStop(1,"#050b14");
-    ctx.fillStyle=gradient;
-    ctx.fillRect(0,0,width,height);
+    var hasAiBackground=drawImageCover(
+      ctx,
+      backgroundImage,
+      width,
+      height
+    );
+
+    if(hasAiBackground){
+      var readability=ctx.createLinearGradient(0,0,width,height);
+      readability.addColorStop(0,"rgba(3,10,18,.84)");
+      readability.addColorStop(.56,"rgba(3,10,18,.58)");
+      readability.addColorStop(1,"rgba(3,10,18,.76)");
+      ctx.fillStyle=readability;
+      ctx.fillRect(0,0,width,height);
+    }else{
+      var gradient=ctx.createLinearGradient(0,0,width,height);
+      gradient.addColorStop(0,"#071321");
+      gradient.addColorStop(.55,"#0a1d31");
+      gradient.addColorStop(1,"#050b14");
+      ctx.fillStyle=gradient;
+      ctx.fillRect(0,0,width,height);
+    }
 
     var glow=ctx.createRadialGradient(width*.85,height*.1,20,width*.85,height*.1,width*.7);
     glow.addColorStop(0,primary+"66");
@@ -523,6 +617,15 @@
     ctx.font=(print ? "800 20px" : "800 16px")+" Arial";
     ctx.fillText("Scan to follow the live message in "+String(campaign.languageName||"your language"),infoX,height-pad);
 
+    if(
+      backgroundImage &&
+      backgroundImage.__lbObjectUrl
+    ){
+      URL.revokeObjectURL(
+        backgroundImage.__lbObjectUrl
+      );
+    }
+
     return canvas;
   }
 
@@ -530,12 +633,18 @@
     state.currentCampaign=campaign;
     var box=document.getElementById("lbmCampaign");
     if(!box) return;
-    box.innerHTML='<div class="lbm-summary"><strong>'+esc(campaign.campaignName||"Marketing Campaign")+'</strong> · '+esc(campaign.languageName||"")+'</div><div class="lbm-campaign-grid" id="lbmGraphics"><div class="lbm-graphic-card">Creating poster...</div><div class="lbm-graphic-card">Creating English social graphic...</div><div class="lbm-graphic-card">Creating translated social graphic...</div></div>';
+    box.innerHTML='<div class="lbm-summary"><strong>'+esc(campaign.campaignName||"Marketing Campaign")+'</strong> · '+esc(campaign.languageName||"")+'<br><span style="color:#8fa6bf">Creating AI artwork and applying your exact logo, wording and QR code.</span></div><div class="lbm-campaign-grid" id="lbmGraphics"><div class="lbm-graphic-card">Creating AI poster artwork...</div><div class="lbm-graphic-card">Creating AI English social artwork...</div><div class="lbm-graphic-card">Creating AI translated social artwork...</div></div>';
+
+    var backgrounds=await Promise.all([
+      fetchMarketingBackground(campaign,"print"),
+      fetchMarketingBackground(campaign,"socialEnglish"),
+      fetchMarketingBackground(campaign,"socialTarget")
+    ]);
 
     var results=await Promise.all([
-      makeGraphic(campaign,campaign.printTarget||{},"print",true),
-      makeGraphic(campaign,campaign.socialEnglish||{},"social",false),
-      makeGraphic(campaign,campaign.socialTarget||{},"social",true)
+      makeGraphic(campaign,campaign.printTarget||{},"print",true,backgrounds[0]),
+      makeGraphic(campaign,campaign.socialEnglish||{},"social",false,backgrounds[1]),
+      makeGraphic(campaign,campaign.socialTarget||{},"social",true,backgrounds[2])
     ]);
 
     state.graphics=[
