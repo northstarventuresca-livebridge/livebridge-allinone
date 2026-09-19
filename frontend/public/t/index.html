@@ -2650,6 +2650,60 @@ listenerAudioButton.addEventListener("click", () => {
   }
 
 
+  async function resolveLiveBridgeRoomAlias(
+    room
+  ) {
+
+    const requestedRoom =
+      String(room || "")
+        .trim()
+        .toUpperCase();
+
+    if (!requestedRoom) {
+      return "";
+    }
+
+    try {
+
+      const response =
+        await fetch(
+          WORKER_URL +
+          "/room-resolve?room=" +
+          encodeURIComponent(
+            requestedRoom
+          ),
+          {
+            cache: "no-store"
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        response.ok &&
+        data.success &&
+        data.resolvedRoom
+      ) {
+        return String(
+          data.resolvedRoom
+        )
+        .trim()
+        .toUpperCase();
+      }
+
+    } catch (error) {
+
+      console.error(
+        "LiveBridge room alias resolve failed:",
+        error
+      );
+    }
+
+    return requestedRoom;
+  }
+
+
   async function handleRoomAccessDenied(
     data
   ) {
@@ -2924,10 +2978,20 @@ if (listenerReconnectTimer) {
     const languageSelect =
       document.getElementById("listenerLanguage");
 
-    ROOM_ID =
+    const requestedRoom =
       roomInput.value
         .trim()
         .toUpperCase();
+
+    if (!requestedRoom) {
+      alert("Please enter a room name.");
+      return;
+    }
+
+    ROOM_ID =
+      await resolveLiveBridgeRoomAlias(
+        requestedRoom
+      );
 
     if (!ROOM_ID) {
       alert("Please enter a room name.");
@@ -2936,7 +3000,12 @@ if (listenerReconnectTimer) {
 
     listenerConnectionWanted = true;
 
-    roomInput.value = ROOM_ID;
+    /*
+      Keep the public alias visible to the listener
+      while all live traffic uses the canonical room.
+    */
+    roomInput.value =
+      requestedRoom;
 
     const [
       translateLang,
@@ -4313,6 +4382,7 @@ resolve(email);
 
       const room =
         String(
+          ROOM_ID ||
           roomInput?.value ||
           new URLSearchParams(
             window.location.search
@@ -4743,6 +4813,7 @@ resolve(email);
 
       const room =
         String(
+          ROOM_ID ||
           document.getElementById(
             "listenerRoom"
           )?.value ||
