@@ -41,6 +41,18 @@
     font-size: 42px;
     font-weight: 900;
     margin-bottom: 8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+  }
+
+  .lb-official-brand-logo {
+    width:62px;
+    height:62px;
+    border-radius:16px;
+    object-fit:cover;
+    flex:0 0 auto;
   }
 
   .lb-live-brand span {
@@ -527,7 +539,7 @@
   }
   .lb-language-gate.show{display:block}
   .lb-language-gate-inner{width:100%;max-width:1050px;margin:0 auto}
-  .lb-language-gate-brand{text-align:center;font-size:44px;font-weight:900;margin:16px 0 8px}
+  .lb-language-gate-brand{text-align:center;font-size:44px;font-weight:900;margin:16px 0 8px;display:flex;align-items:center;justify-content:center;gap:14px}
   .lb-language-gate-brand span{
     background:linear-gradient(90deg,#34d4bd,#2897ff,#a14cff);
     -webkit-background-clip:text;
@@ -598,7 +610,7 @@
 </style>
         <div id="lbLanguageGate" class="lb-language-gate">
           <div class="lb-language-gate-inner">
-            <div class="lb-language-gate-brand">Live<span>Bridge</span>
+            <div class="lb-language-gate-brand"><img class="lb-official-brand-logo" src="/assets/livebridge-logo.jpg" alt="LiveBridge logo"><div>Live<span>Bridge</span></div>
           </div>
           <div class="lb-language-gate-title">Choose your language</div>
           <div class="lb-language-gate-subtitle">
@@ -619,7 +631,7 @@
             <a class="lb-listener-home" href="/">← Back to LiveBridge</a>
           </div>
           <div class="lb-live-header">
-            <div class="lb-live-brand">Live<span>Bridge</span>
+            <div class="lb-live-brand"><img class="lb-official-brand-logo" src="/assets/livebridge-logo.jpg" alt="LiveBridge logo"><div>Live<span>Bridge</span></div>
           </div>
           <div class="lb-live-subtitle">
             Join a room. Choose your language. Understand live.
@@ -2592,8 +2604,12 @@ listenerAudioButton.addEventListener("click", () => {
             font-size:26px;
             font-weight:900;
             margin-bottom:5px;
+            display:flex;
+            align-items:center;
+            gap:12px;
           ">
-            Live<span style="color:#39d7c1;">Bridge</span>
+            <img src="/assets/livebridge-logo.jpg" alt="LiveBridge logo" style="width:48px;height:48px;border-radius:12px;object-fit:cover;">
+            <div>Live<span style="color:#39d7c1;">Bridge</span></div>
           </div>
 
           <div style="
