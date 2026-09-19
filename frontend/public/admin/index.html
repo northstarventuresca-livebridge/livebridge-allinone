@@ -3342,6 +3342,19 @@ async function downloadOfferGraphic(){
   const offer = data.offer;
   const plan = offer.plan || {};
 
+  const brandLogo =
+    new Image();
+
+  brandLogo.src =
+    "/assets/livebridge-logo.jpg";
+
+  await new Promise(
+    (resolve,reject) => {
+      brandLogo.onload = resolve;
+      brandLogo.onerror = reject;
+    }
+  );
+
   const canvas =
     document.createElement("canvas");
 
@@ -3516,15 +3529,34 @@ async function downloadOfferGraphic(){
   =====================================================
   */
 
+  ctx.save();
+  roundedRect(
+    100,
+    62,
+    92,
+    92,
+    18,
+    null
+  );
+  ctx.clip();
+  ctx.drawImage(
+    brandLogo,
+    100,
+    62,
+    92,
+    92
+  );
+  ctx.restore();
+
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 54px Arial";
-  ctx.fillText("LiveBridge",100,118);
+  ctx.fillText("LiveBridge",216,118);
 
   ctx.fillStyle = "#66d8f5";
   ctx.font = "900 16px Arial";
   ctx.fillText(
     "REAL-TIME MULTILINGUAL COMMUNICATION",
-    102,
+    218,
     158
   );
 
