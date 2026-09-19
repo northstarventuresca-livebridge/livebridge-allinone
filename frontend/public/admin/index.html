@@ -7345,9 +7345,13 @@ Keeps existing admin + speech-rate embeds unchanged.
     background:rgba(45,151,255,.08);
   }
 
+  #clientRows .lb-client-row > div:first-child{
+    padding-left:22px;
+  }
+
   .lb-org-drag-handle{
     position:absolute;
-    left:-18px;
+    left:0;
     top:50%;
     transform:translateY(-50%);
     color:#64809b;
@@ -7361,12 +7365,6 @@ Keeps existing admin + speech-rate embeds unchanged.
 
   .lb-org-drag-handle:active{
     cursor:grabbing;
-  }
-
-  @media(max-width:760px){
-    .lb-org-drag-handle{
-      left:-14px;
-    }
   }
 
   /* Keep every header/body column on the exact same grid. */
