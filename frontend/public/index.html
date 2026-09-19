@@ -35,9 +35,8 @@ body{margin:0;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-ser
   width:44px;
   height:44px;
   border-radius:14px;
-  display:grid;
-  place-items:center;
-  background:linear-gradient(135deg,#37d39a,#2588ff,#9747ff);
+  display:block;
+  object-fit:cover;
   box-shadow:0 10px 30px rgba(37,136,255,.25);
 }
 .lb-nav-actions,.lb-actions{
@@ -660,7 +659,7 @@ body{margin:0;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-ser
 
 <nav class="lb-nav">
   <div class="lb-brand">
-    <div class="lb-logo">🌉</div>
+    <img class="lb-logo" src="/assets/livebridge-logo.jpg" alt="LiveBridge logo">
     LiveBridge
   </div>
 
@@ -1383,8 +1382,9 @@ body{margin:0;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-ser
     <div class="lb-demo-modal-top">
 
       <div>
-        <div class="lb-demo-modal-brand">
-          Live<span class="lb-gradient">Bridge</span> Demo
+        <div class="lb-demo-modal-brand" style="display:flex;align-items:center;justify-content:center;gap:12px;">
+          <img src="/assets/livebridge-logo.jpg" alt="LiveBridge logo" style="width:44px;height:44px;border-radius:12px;object-fit:cover;">
+          <span>Live<span class="lb-gradient">Bridge</span> Demo</span>
         </div>
 
         <div style="
