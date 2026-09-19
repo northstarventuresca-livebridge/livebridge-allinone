@@ -1732,6 +1732,22 @@ body{
 
 
             <div class="lb-field" style="margin-top:18px;">
+              <label>Alias Room Name</label>
+
+              <input
+                id="editRoomAlias"
+                type="text"
+                placeholder="Example: GREATCHURCH"
+                autocomplete="off"
+              >
+
+              <div class="lb-muted" style="margin-top:7px;line-height:1.45;">
+                Admin-only public alias. Listeners can enter this name, but LiveBridge still connects them to the default room above.
+              </div>
+            </div>
+
+
+            <div class="lb-field" style="margin-top:18px;">
               <label>Private Admin Notes</label>
 
               <textarea
@@ -1791,6 +1807,11 @@ body{
               <div class="lb-info-row">
                 <span>Room</span>
                 <strong id="detailRoomInfo">—</strong>
+              </div>
+
+              <div class="lb-info-row">
+                <span>Alias</span>
+                <strong id="detailRoomAlias">—</strong>
               </div>
 
               <div class="lb-info-row">
@@ -4109,6 +4130,11 @@ async function openOrganization(id){
     account.roomName;
 
   document.getElementById(
+    "detailRoomAlias"
+  ).textContent =
+    account.roomAlias || "—";
+
+  document.getElementById(
     "detailPlanName"
   ).textContent =
     account.planName;
@@ -4150,6 +4176,11 @@ async function openOrganization(id){
     "editRoomName"
   ).value =
     account.roomName;
+
+  document.getElementById(
+    "editRoomAlias"
+  ).value =
+    account.roomAlias || "";
 
 
   document.getElementById(
@@ -4997,6 +5028,13 @@ async function saveOrganization(){
             roomName:
               document.getElementById(
                 "editRoomName"
+              ).value
+              .trim()
+              .toUpperCase(),
+
+            roomAlias:
+              document.getElementById(
+                "editRoomAlias"
               ).value
               .trim()
               .toUpperCase(),
