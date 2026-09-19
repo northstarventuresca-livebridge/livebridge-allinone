@@ -23,8 +23,7 @@ body{margin:0;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-ser
 }
 .lb-brand{display:flex;align-items:center;gap:12px;font-weight:900;font-size:23px}
 .lb-logo{
-  width:42px;height:42px;border-radius:13px;display:grid;place-items:center;
-  background:linear-gradient(135deg,#37d39a,#2588ff,#9747ff)
+  width:42px;height:42px;border-radius:13px;display:block;object-fit:cover
 }
 .lb-btn{
   display:inline-block;text-decoration:none;color:#fff;font-weight:800;
@@ -66,7 +65,7 @@ a{color:#78b7ff}
 <div class="lb-legal-wrap">
 
 <nav class="lb-legal-nav">
-  <div class="lb-brand"><div class="lb-logo">🌉</div>LiveBridge</div>
+  <div class="lb-brand"><img class="lb-logo" src="/assets/livebridge-logo.jpg" alt="LiveBridge logo">LiveBridge</div>
   <a class="lb-btn" href="/">← Back to LiveBridge</a>
 </nav>
 
