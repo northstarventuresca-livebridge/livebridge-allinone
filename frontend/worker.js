@@ -175,7 +175,20 @@ function protectListenerPage(
           element.append(
             `<script>
 (() => {
-  const BACKEND = "https://livebridge.northstarventures-ca.workers.dev";
+  const host =
+    String(
+      window.location.hostname || ""
+    ).toLowerCase();
+
+  const preview =
+    host.includes("dev-v1-3-0") ||
+    host.includes("livebridge-allinone-frontend-test") ||
+    host.includes("livebridge-promoter-frontend-test");
+
+  const BACKEND =
+    preview
+      ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+      : "https://livebridge.northstarventures-ca.workers.dev";
 
   function moveDataMeterToTopbar() {
     const meter = document.getElementById("listenerDataUsage");
