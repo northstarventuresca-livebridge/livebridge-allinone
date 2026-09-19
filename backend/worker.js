@@ -5819,6 +5819,10 @@ if (
 
   try {
 
+    await ensureRoomAliasSchema(
+      env
+    );
+
     const auth =
       await verifyClerkRequest(
         request
@@ -6045,10 +6049,20 @@ if (
         await env.TRANSLATIONS_DB.prepare(`
           SELECT id
           FROM organizations
-          WHERE room_name = ?
+          WHERE
+            UPPER(room_name) = ?
+            OR UPPER(
+              COALESCE(
+                room_alias,
+                ''
+              )
+            ) = ?
           LIMIT 1
         `)
-        .bind(roomName)
+        .bind(
+          roomName,
+          roomName
+        )
         .first();
 
       if (roomOwner) {
