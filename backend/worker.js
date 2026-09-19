@@ -33,6 +33,101 @@ function normalizeRoom(room) {
 }
 __name(normalizeRoom, "normalizeRoom");
 
+let roomAliasSchemaReady = false;
+
+async function ensureRoomAliasSchema(env) {
+  if (roomAliasSchemaReady) {
+    return;
+  }
+
+  try {
+    await env.TRANSLATIONS_DB.prepare(`
+      ALTER TABLE organizations
+      ADD COLUMN room_alias TEXT
+    `).run();
+  } catch (error) {
+    const message =
+      String(error?.message || error || "")
+        .toLowerCase();
+
+    if (
+      !message.includes("duplicate column") &&
+      !message.includes("already exists")
+    ) {
+      throw error;
+    }
+  }
+
+  roomAliasSchemaReady = true;
+}
+__name(ensureRoomAliasSchema, "ensureRoomAliasSchema");
+
+async function resolveCanonicalRoom(env, room) {
+  const normalizedRoom =
+    normalizeRoom(room);
+
+  if (!normalizedRoom) {
+    return {
+      requestedRoom: "",
+      resolvedRoom: "",
+      aliasMatched: false
+    };
+  }
+
+  await ensureRoomAliasSchema(env);
+
+  const row =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        room_name,
+        room_alias
+      FROM organizations
+      WHERE
+        UPPER(room_name) = ?
+        OR UPPER(COALESCE(room_alias, '')) = ?
+      ORDER BY
+        CASE
+          WHEN UPPER(room_name) = ?
+          THEN 0
+          ELSE 1
+        END
+      LIMIT 1
+    `)
+    .bind(
+      normalizedRoom,
+      normalizedRoom,
+      normalizedRoom
+    )
+    .first();
+
+  if (!row?.room_name) {
+    return {
+      requestedRoom:
+        normalizedRoom,
+      resolvedRoom:
+        normalizedRoom,
+      aliasMatched:
+        false
+    };
+  }
+
+  const canonicalRoom =
+    normalizeRoom(
+      row.room_name
+    );
+
+  return {
+    requestedRoom:
+      normalizedRoom,
+    resolvedRoom:
+      canonicalRoom,
+    aliasMatched:
+      normalizedRoom !==
+      canonicalRoom
+  };
+}
+__name(resolveCanonicalRoom, "resolveCanonicalRoom");
+
 /*
 =======================================================
 LIVEBRIDGE v1.0.20 ROOM AVAILABILITY + STRIPE VERIFY + CHECKOUT + PLANS API + v1.0.16 EVENT-DRIVEN BROADCAST WATCHDOG
@@ -51,6 +146,8 @@ async function getOrganizationForRoom(env, room) {
     return null;
   }
 
+  await ensureRoomAliasSchema(env);
+
   return env.TRANSLATIONS_DB.prepare(`
     SELECT *
     FROM organizations
@@ -59,9 +156,11 @@ async function getOrganizationForRoom(env, room) {
       OR UPPER(
         room_name || '-' || COALESCE(last_subroom, '')
       ) = ?
+      OR UPPER(COALESCE(room_alias, '')) = ?
     LIMIT 1
   `)
   .bind(
+    normalizedRoom,
     normalizedRoom,
     normalizedRoom
   )
@@ -2343,6 +2442,9 @@ function buildOrganizationAccount(
 
     roomName:
       row.room_name,
+
+    roomAlias:
+      row.room_alias || "",
 
     planCode:
       row.plan_code,
@@ -7867,6 +7969,54 @@ if (
 
 /*
 =======================================================
+PUBLIC - RESOLVE OPTIONAL ROOM ALIAS
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/room-resolve"
+) {
+
+  try {
+
+    const resolved =
+      await resolveCanonicalRoom(
+        env,
+        url.searchParams.get("room") || ""
+      );
+
+    return jsonResponse({
+      success: true,
+      requestedRoom:
+        resolved.requestedRoom,
+      resolvedRoom:
+        resolved.resolvedRoom,
+      aliasMatched:
+        resolved.aliasMatched
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Room alias resolve failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          "Unable to resolve room."
+      },
+      500
+    );
+  }
+}
+
+
+/*
+=======================================================
 PUBLIC - CHECK ROOM AVAILABILITY
 Read-only. Does not reserve or create the room.
 =======================================================
@@ -7878,6 +8028,10 @@ if (
 ) {
 
   try {
+
+    await ensureRoomAliasSchema(
+      env
+    );
 
     const roomName =
       normalizeRoomName(
@@ -7910,12 +8064,21 @@ if (
         SELECT
           clerk_user_id,
           organization_name,
-          room_name
+          room_name,
+          room_alias
         FROM organizations
-        WHERE UPPER(room_name) = ?
+        WHERE
+          UPPER(room_name) = ?
+          OR UPPER(
+            COALESCE(
+              room_alias,
+              ''
+            )
+          ) = ?
         LIMIT 1
       `)
       .bind(
+        roomName,
         roomName
       )
       .first();
@@ -8511,6 +8674,10 @@ if (
       env
     );
 
+    await ensureRoomAliasSchema(
+      env
+    );
+
     await verifyAdminRequest(
       request,
       env
@@ -8723,6 +8890,10 @@ if (
     );
 
     await ensureReturnVisitorSchema(
+      env
+    );
+
+    await ensureRoomAliasSchema(
       env
     );
 
@@ -9179,6 +9350,10 @@ if (
       env
     );
 
+    await ensureRoomAliasSchema(
+      env
+    );
+
     await verifyAdminRequest(
       request,
       env
@@ -9491,11 +9666,21 @@ if (
         await env.TRANSLATIONS_DB.prepare(`
           SELECT id
           FROM organizations
-          WHERE room_name = ?
+          WHERE
+            (
+              UPPER(room_name) = ?
+              OR UPPER(
+                COALESCE(
+                  room_alias,
+                  ''
+                )
+              ) = ?
+            )
             AND id != ?
           LIMIT 1
         `)
         .bind(
+          requestedRoomName,
           requestedRoomName,
           organizationId
         )
@@ -9517,6 +9702,98 @@ if (
 
       roomName =
         requestedRoomName;
+    }
+
+
+    let roomAlias =
+      normalizeRoom(
+        existing.room_alias || ""
+      );
+
+    if (
+      body.roomAlias !==
+      undefined
+    ) {
+
+      roomAlias =
+        normalizeRoom(
+          body.roomAlias
+        );
+
+      if (roomAlias) {
+
+        const aliasValidationError =
+          roomNameValidationError(
+            roomAlias
+          );
+
+        if (aliasValidationError) {
+
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                aliasValidationError
+            },
+            400
+          );
+        }
+
+        if (roomAlias === roomName) {
+
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "Room alias must be different from the default room name."
+            },
+            400
+          );
+        }
+
+        const aliasOwner =
+          await env.TRANSLATIONS_DB.prepare(`
+            SELECT id
+            FROM organizations
+            WHERE
+              (
+                UPPER(room_name) = ?
+                OR UPPER(
+                  COALESCE(
+                    room_alias,
+                    ''
+                  )
+                ) = ?
+              )
+              AND id != ?
+            LIMIT 1
+          `)
+          .bind(
+            roomAlias,
+            roomAlias,
+            organizationId
+          )
+          .first();
+
+        if (aliasOwner) {
+
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "That LiveBridge alias is already assigned to another organization."
+            },
+            409
+          );
+        }
+      }
+    }
+
+    if (
+      roomAlias &&
+      roomAlias === roomName
+    ) {
+      roomAlias = "";
     }
 
 
@@ -9571,6 +9848,7 @@ if (
         account_email = ?,
         phone = ?,
         room_name = ?,
+        room_alias = ?,
 
         plan_code = ?,
         plan_name = ?,
@@ -9599,6 +9877,7 @@ if (
       newAccountEmail,
       newPhone,
       roomName,
+      roomAlias || null,
 
       planCode,
       planName,
