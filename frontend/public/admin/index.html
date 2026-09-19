@@ -6941,7 +6941,7 @@ Keeps the existing admin Embed unchanged.
 </script>
 
 <!-- =====================================================
-LIVEBRIDGE /admin AZURE TTS USAGE COLUMN
+LIVEBRIDGE /admin API COST COLUMN
 ADD AS THIRD Embed on /admin.
 Keeps existing admin + speech-rate embeds unchanged.
 ===================================================== -->
@@ -7044,9 +7044,6 @@ Keeps existing admin + speech-rate embeds unchanged.
 <script>
 (function(){
 
-  const AZURE_FREE_CHARACTERS =
-    500000;
-
 
   function formatAzureCharacters(
     value
@@ -7084,54 +7081,334 @@ Keeps existing admin + speech-rate embeds unchanged.
   }
 
 
-  function azureUsageMarkup(
+  function formatApiCost(
+    value
+  ){
+
+    const number =
+      Math.max(
+        0,
+        Number(value || 0)
+      );
+
+    if(
+      number > 0 &&
+      number < 0.01
+    ){
+      return (
+        "$" +
+        number.toFixed(4)
+      );
+    }
+
+    return (
+      "$" +
+      number.toFixed(2)
+    );
+  }
+
+
+  function apiCostMarkup(
     item
   ){
 
-    const characters =
+    const stats =
+      item?.stats || {};
+
+    const totalCost =
       Number(
-        item?.stats
-          ?.azureTtsCharacters ||
-        0
+        stats.apiCostUsd || 0
       );
 
-    const generations =
+    const openAiCost =
       Number(
-        item?.stats
-          ?.azureTtsGenerations ||
-        0
+        stats.openAiCostUsd || 0
       );
 
-    const percent =
-      Math.min(
-        999,
-        (
-          characters /
-          AZURE_FREE_CHARACTERS
-        ) * 100
+    const azureCost =
+      Number(
+        stats.azureTtsCostUsd || 0
       );
-
-    const percentText =
-      percent < 0.1 &&
-      characters > 0
-        ? "<0.1%"
-        : percent.toFixed(1) + "%";
 
     return `
       <div class="lb-azure-usage">
         <strong>
-          ${formatAzureCharacters(characters)}
+          ${formatApiCost(totalCost)}
         </strong>
 
         <span>
-          ${percentText} of 500K
+          OpenAI ${formatApiCost(openAiCost)}
         </span>
 
         <span>
-          ${generations} new audio
+          Azure ${formatApiCost(azureCost)}
         </span>
       </div>
     `;
+  }
+
+
+  function apiCostStatsForOrganization(
+    organizationId
+  ){
+
+    try{
+
+      const list =
+        Array.isArray(
+          adminOrganizations
+        )
+          ? adminOrganizations
+          : [];
+
+      return (
+        list.find(
+          item =>
+            Number(item?.id || 0) ===
+            Number(organizationId || 0)
+        )?.stats ||
+        {}
+      );
+
+    }catch(error){
+
+      return {};
+    }
+  }
+
+
+  function apiCostCategoryLabel(
+    key
+  ){
+
+    const labels = {
+      transcription:
+        "Transcription",
+      translation:
+        "Live translation",
+      live_notes:
+        "Live notes",
+      scripture_translation:
+        "Scripture translation",
+      transcript_notes:
+        "Transcript / AI notes"
+    };
+
+    return (
+      labels[key] ||
+      String(key || "")
+        .replace(/_/g," ")
+    );
+  }
+
+
+  function ensureApiCostDetailCard(){
+
+    let card =
+      document.getElementById(
+        "apiCostAnalyticsCard"
+      );
+
+    if(card){
+      return card;
+    }
+
+    const marketingAnalytics =
+      document.getElementById(
+        "marketingCreditAnalytics"
+      );
+
+    const marketingCard =
+      marketingAnalytics
+        ?.parentElement;
+
+    if(
+      !marketingCard ||
+      !marketingCard.parentElement
+    ){
+      return null;
+    }
+
+    card =
+      document.createElement(
+        "div"
+      );
+
+    card.id =
+      "apiCostAnalyticsCard";
+
+    card.style.cssText =
+      "margin-top:18px;padding:16px;border-radius:14px;border:1px solid rgba(83,165,255,.22);background:rgba(83,165,255,.055);";
+
+    card.innerHTML = `
+      <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
+        Monthly API Cost
+      </div>
+
+      <div style="color:#8fa8bf;font-size:11px;line-height:1.5;margin-bottom:12px;">
+        Estimated LiveBridge service-delivery cost for this organization.
+      </div>
+
+      <div id="apiCostAnalytics">
+        <div class="lb-muted">
+          Loading API cost...
+        </div>
+      </div>
+    `;
+
+    marketingCard.parentElement
+      .insertBefore(
+        card,
+        marketingCard
+      );
+
+    return card;
+  }
+
+
+  function renderApiCostDetail(
+    organizationId
+  ){
+
+    ensureApiCostDetailCard();
+
+    const target =
+      document.getElementById(
+        "apiCostAnalytics"
+      );
+
+    if(!target){
+      return;
+    }
+
+    const stats =
+      apiCostStatsForOrganization(
+        organizationId
+      );
+
+    const breakdown =
+      stats.openAiCostBreakdown ||
+      {};
+
+    const categories =
+      Object.keys(
+        breakdown
+      )
+      .filter(
+        key =>
+          Number(
+            breakdown[key] || 0
+          ) > 0
+      );
+
+    const categoryMarkup =
+      categories.length
+        ? categories
+            .map(
+              key => `
+                <div style="display:flex;justify-content:space-between;gap:14px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+                  <span style="color:#8fa8bf;">
+                    ${apiCostCategoryLabel(key)}
+                  </span>
+                  <strong style="color:#dfeaff;">
+                    ${formatApiCost(breakdown[key])}
+                  </strong>
+                </div>
+              `
+            )
+            .join("")
+        : `
+            <div style="color:#71869b;font-size:10px;">
+              No OpenAI usage recorded yet this month.
+            </div>
+          `;
+
+    target.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:12px;">
+        <div style="padding:11px;border-radius:10px;background:rgba(255,255,255,.035);">
+          <div style="color:#7890a8;font-size:9px;text-transform:uppercase;font-weight:800;">Total</div>
+          <div style="color:white;font-size:18px;font-weight:900;margin-top:3px;">
+            ${formatApiCost(stats.apiCostUsd)}
+          </div>
+        </div>
+
+        <div style="padding:11px;border-radius:10px;background:rgba(255,255,255,.035);">
+          <div style="color:#7890a8;font-size:9px;text-transform:uppercase;font-weight:800;">OpenAI</div>
+          <div style="color:white;font-size:18px;font-weight:900;margin-top:3px;">
+            ${formatApiCost(stats.openAiCostUsd)}
+          </div>
+        </div>
+
+        <div style="padding:11px;border-radius:10px;background:rgba(255,255,255,.035);">
+          <div style="color:#7890a8;font-size:9px;text-transform:uppercase;font-weight:800;">Azure S0 TTS</div>
+          <div style="color:white;font-size:18px;font-weight:900;margin-top:3px;">
+            ${formatApiCost(stats.azureTtsCostUsd)}
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;color:#8fa8bf;font-size:10px;">
+        <div>
+          <strong style="color:#dfeaff;">${Number(stats.openAiRequests || 0).toLocaleString()}</strong>
+          OpenAI requests
+        </div>
+        <div>
+          <strong style="color:#dfeaff;">${formatAzureCharacters(stats.azureTtsCharacters || 0)}</strong>
+          Azure billable characters
+        </div>
+      </div>
+
+      <div style="margin-top:8px;">
+        ${categoryMarkup}
+      </div>
+
+      <div style="font-size:9px;color:#667d93;margin-top:9px;line-height:1.4;">
+        ${String(stats.apiCostUsageMonth || stats.azureTtsUsageMonth || "")}
+        · USD estimate · Azure S0 Standard Neural + recorded OpenAI token usage
+      </div>
+    `;
+  }
+
+
+  function wrapOpenOrganizationForApiCost(){
+
+    if(
+      typeof window.openOrganization !==
+      "function"
+    ){
+      return false;
+    }
+
+    if(
+      window.openOrganization
+        .__lbApiCostWrapped
+    ){
+      return true;
+    }
+
+    const original =
+      window.openOrganization;
+
+    const wrapped =
+      async function(id){
+
+        const result =
+          await original(id);
+
+        renderApiCostDetail(
+          id
+        );
+
+        return result;
+      };
+
+    wrapped.__lbApiCostWrapped =
+      true;
+
+    window.openOrganization =
+      wrapped;
+
+    return true;
   }
 
 
@@ -7163,7 +7440,7 @@ Keeps existing admin + speech-rate embeds unchanged.
       "lb-azure-head lb-azure-mobile-hide";
 
     column.textContent =
-      "Azure TTS";
+      "API Cost";
 
     head.insertBefore(
       column,
@@ -7225,7 +7502,7 @@ Keeps existing admin + speech-rate embeds unchanged.
           "lb-azure-column lb-azure-mobile-hide";
 
         column.innerHTML =
-          azureUsageMarkup(
+          apiCostMarkup(
             item
           );
 
@@ -7286,6 +7563,8 @@ Keeps existing admin + speech-rate embeds unchanged.
 
     installAzureHeader();
 
+    wrapOpenOrganizationForApiCost();
+
     let attempts = 0;
 
     const timer =
@@ -7295,6 +7574,8 @@ Keeps existing admin + speech-rate embeds unchanged.
           attempts += 1;
 
           installAzureHeader();
+
+          wrapOpenOrganizationForApiCost();
 
           if(
             wrapRenderOrganizations()
