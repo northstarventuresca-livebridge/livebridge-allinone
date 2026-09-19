@@ -873,8 +873,20 @@
           </div>
         </div>
         <script>
+  const LISTENER_HOST =
+    String(
+      window.location.hostname || ""
+    ).toLowerCase();
+
+  const LISTENER_PREVIEW =
+    LISTENER_HOST.includes("dev-v1-3-0") ||
+    LISTENER_HOST.includes("livebridge-allinone-frontend-test") ||
+    LISTENER_HOST.includes("livebridge-promoter-frontend-test");
+
   const WORKER_URL =
-  "https://livebridge.northstarventures-ca.workers.dev";
+    LISTENER_PREVIEW
+      ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+      : "https://livebridge.northstarventures-ca.workers.dev";
 
   let ROOM_ID = "";
   let listenerSocket = null;
@@ -4335,7 +4347,9 @@ resolve(email);
 (function () {
 
   const AZURE_WORKER =
-    "https://livebridge.northstarventures-ca.workers.dev";
+    typeof WORKER_URL === "string"
+      ? WORKER_URL
+      : "https://livebridge.northstarventures-ca.workers.dev";
 
   let azureVoices = [];
   let azureVoicesLoaded = false;
