@@ -945,6 +945,13 @@ body{
 
           </div>
 
+          <div
+            id="organizationOrderHint"
+            class="lb-org-order-hint"
+          >
+            Drag the ⋮⋮ handle to arrange organizations. Order saves automatically.
+          </div>
+
 
           <div class="lb-client-row head">
 
@@ -4063,6 +4070,277 @@ function renderAdminStats(){
 }
 
 
+let draggedOrganizationRow = null;
+let organizationOrderChanged = false;
+
+function organizationReorderEnabled(){
+  const search =
+    document.getElementById(
+      "clientSearch"
+    );
+
+  return !String(
+    search?.value || ""
+  ).trim();
+}
+
+
+async function saveOrganizationOrder(){
+
+  const rows =
+    Array.from(
+      document.querySelectorAll(
+        "#clientRows .lb-client-row[data-organization-id]"
+      )
+    );
+
+  const organizationIds =
+    rows
+      .map(
+        row =>
+          Number(
+            row.dataset.organizationId ||
+            0
+          )
+      )
+      .filter(Boolean);
+
+  if(
+    organizationIds.length !==
+    adminOrganizations.length
+  ){
+    return;
+  }
+
+  const hint =
+    document.getElementById(
+      "organizationOrderHint"
+    );
+
+  if(hint){
+    hint.textContent =
+      "Saving organization order...";
+  }
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/organization-order",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            organizationIds
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to save organization order."
+      );
+    }
+
+    const byId =
+      new Map(
+        adminOrganizations.map(
+          item => [
+            Number(item.id),
+            item
+          ]
+        )
+      );
+
+    adminOrganizations =
+      organizationIds
+        .map(id => byId.get(id))
+        .filter(Boolean);
+
+    if(hint){
+      hint.textContent =
+        "✓ Custom organization order saved. Drag the ⋮⋮ handle anytime to rearrange.";
+    }
+
+  }catch(error){
+
+    if(hint){
+      hint.textContent =
+        "Could not save order: " +
+        String(
+          error.message ||
+          "Please refresh and try again."
+        );
+    }
+
+    await loadOrganizations();
+  }
+}
+
+
+function initializeOrganizationReorder(){
+
+  const enabled =
+    organizationReorderEnabled();
+
+  const hint =
+    document.getElementById(
+      "organizationOrderHint"
+    );
+
+  if(hint){
+    hint.textContent =
+      enabled
+        ? "Drag the ⋮⋮ handle to arrange organizations. Order saves automatically."
+        : "Clear the search box to reorder organizations.";
+  }
+
+  document
+    .querySelectorAll(
+      "#clientRows .lb-org-drag-handle"
+    )
+    .forEach(
+      handle => {
+
+        handle.draggable =
+          enabled;
+
+        if(!enabled){
+          return;
+        }
+
+        handle.addEventListener(
+          "dragstart",
+          event => {
+
+            draggedOrganizationRow =
+              handle.closest(
+                ".lb-client-row"
+              );
+
+            organizationOrderChanged =
+              false;
+
+            draggedOrganizationRow
+              ?.classList
+              .add(
+                "lb-org-dragging"
+              );
+
+            try{
+              event.dataTransfer.effectAllowed =
+                "move";
+
+              event.dataTransfer.setData(
+                "text/plain",
+                String(
+                  draggedOrganizationRow
+                    ?.dataset
+                    ?.organizationId ||
+                  ""
+                )
+              );
+            }catch{}
+          }
+        );
+
+        handle.addEventListener(
+          "dragend",
+          async () => {
+
+            draggedOrganizationRow
+              ?.classList
+              .remove(
+                "lb-org-dragging"
+              );
+
+            draggedOrganizationRow =
+              null;
+
+            if(
+              organizationOrderChanged
+            ){
+              organizationOrderChanged =
+                false;
+
+              await saveOrganizationOrder();
+            }
+          }
+        );
+      }
+    );
+
+  document
+    .querySelectorAll(
+      "#clientRows .lb-client-row[data-organization-id]"
+    )
+    .forEach(
+      row => {
+
+        if(!enabled){
+          return;
+        }
+
+        row.addEventListener(
+          "dragover",
+          event => {
+
+            if(
+              !draggedOrganizationRow ||
+              draggedOrganizationRow ===
+                row
+            ){
+              return;
+            }
+
+            event.preventDefault();
+
+            const rectangle =
+              row.getBoundingClientRect();
+
+            const insertAfter =
+              event.clientY >
+              rectangle.top +
+              rectangle.height / 2;
+
+            const parent =
+              row.parentElement;
+
+            if(!parent){
+              return;
+            }
+
+            if(insertAfter){
+              parent.insertBefore(
+                draggedOrganizationRow,
+                row.nextSibling
+              );
+            }else{
+              parent.insertBefore(
+                draggedOrganizationRow,
+                row
+              );
+            }
+
+            organizationOrderChanged =
+              true;
+          }
+        );
+
+        row.addEventListener(
+          "drop",
+          event => {
+            event.preventDefault();
+          }
+        );
+      }
+    );
+}
+
+
 function renderOrganizations(list){
 
   const rows =
@@ -4075,8 +4353,15 @@ function renderOrganizations(list){
     rows.innerHTML =
       '<div class="lb-empty">No organizations found.</div>';
 
+    initializeOrganizationReorder();
+
     return;
   }
+
+  const canReorder =
+    organizationReorderEnabled() &&
+    list.length ===
+      adminOrganizations.length;
 
 
   rows.innerHTML =
@@ -4087,9 +4372,18 @@ function renderOrganizations(list){
         "active";
 
       return `
-        <div class="lb-client-row">
+        <div
+          class="lb-client-row ${canReorder ? "lb-org-reorder-row" : ""}"
+          data-organization-id="${Number(item.id)}"
+        >
 
-          <div>
+          <div style="position:relative;">
+            <span
+              class="lb-org-drag-handle"
+              title="${canReorder ? "Drag to reorder" : "Clear search to reorder"}"
+              aria-label="Drag organization to reorder"
+            >⋮⋮</span>
+
             <div class="lb-org-name">
               ${escapeHtml(item.organizationName)}
             </div>
@@ -4138,6 +4432,8 @@ function renderOrganizations(list){
       `;
 
     }).join("");
+
+  initializeOrganizationReorder();
 }
 
 
@@ -7030,6 +7326,49 @@ Keeps existing admin + speech-rate embeds unchanged.
 ===================================================== -->
 
 <style>
+  .lb-org-order-hint{
+    margin:0 0 10px;
+    color:#7890a8;
+    font-size:10px;
+    line-height:1.4;
+  }
+
+  .lb-org-reorder-row{
+    transition:
+      transform .12s ease,
+      opacity .12s ease,
+      background .12s ease;
+  }
+
+  .lb-org-dragging{
+    opacity:.48;
+    background:rgba(45,151,255,.08);
+  }
+
+  .lb-org-drag-handle{
+    position:absolute;
+    left:-18px;
+    top:50%;
+    transform:translateY(-50%);
+    color:#64809b;
+    font-size:17px;
+    font-weight:900;
+    letter-spacing:-4px;
+    cursor:grab;
+    user-select:none;
+    touch-action:none;
+  }
+
+  .lb-org-drag-handle:active{
+    cursor:grabbing;
+  }
+
+  @media(max-width:760px){
+    .lb-org-drag-handle{
+      left:-14px;
+    }
+  }
+
   /* Keep every header/body column on the exact same grid. */
   .lb-client-row{
     grid-template-columns:
