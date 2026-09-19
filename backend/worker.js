@@ -130,6 +130,28 @@ async function resolveCanonicalRoom(env, room) {
 }
 __name(resolveCanonicalRoom, "resolveCanonicalRoom");
 
+let adminOrganizationOrderSchemaReady = false;
+
+async function ensureAdminOrganizationOrderSchema(env) {
+  if (adminOrganizationOrderSchemaReady) {
+    return;
+  }
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_admin_order (
+      organization_id INTEGER PRIMARY KEY,
+      sort_order INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
+  adminOrganizationOrderSchemaReady = true;
+}
+__name(
+  ensureAdminOrganizationOrderSchema,
+  "ensureAdminOrganizationOrderSchema"
+);
+
 const LIVEBRIDGE_MARKETING_LANGUAGES = {
   fr: "French",
   es: "Spanish",
@@ -12292,6 +12314,10 @@ if (
       env
     );
 
+    await ensureAdminOrganizationOrderSchema(
+      env
+    );
+
     await verifyAdminRequest(
       request,
       env
@@ -12299,9 +12325,20 @@ if (
 
     const result =
       await env.TRANSLATIONS_DB.prepare(`
-        SELECT *
-        FROM organizations
-        ORDER BY created_at DESC
+        SELECT
+          o.*,
+          ao.sort_order AS admin_sort_order
+        FROM organizations o
+        LEFT JOIN organization_admin_order ao
+          ON ao.organization_id = o.id
+        ORDER BY
+          CASE
+            WHEN ao.sort_order IS NULL
+            THEN 1
+            ELSE 0
+          END,
+          ao.sort_order ASC,
+          o.created_at DESC
       `)
       .all();
 
@@ -13108,6 +13145,142 @@ async function buildMarketingAdminAnalytics(
         30
       )
   };
+}
+
+
+/*
+=======================================================
+ADMIN - SAVE ORGANIZATION DISPLAY ORDER
+=======================================================
+*/
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/organization-order"
+) {
+
+  try {
+
+    await ensureAdminOrganizationOrderSchema(
+      env
+    );
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const organizationIds =
+      Array.isArray(
+        body.organizationIds
+      )
+        ? body.organizationIds
+            .map(
+              value =>
+                Number(value)
+            )
+            .filter(
+              value =>
+                Number.isInteger(value) &&
+                value > 0
+            )
+        : [];
+
+    const uniqueIds =
+      Array.from(
+        new Set(
+          organizationIds
+        )
+      );
+
+    const countRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT COUNT(*) AS count
+        FROM organizations
+      `)
+      .first();
+
+    const organizationCount =
+      Number(
+        countRow?.count || 0
+      );
+
+    if (
+      uniqueIds.length !==
+      organizationIds.length ||
+      uniqueIds.length !==
+      organizationCount
+    ) {
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization list changed while reordering. Refresh the Admin page and try again."
+        },
+        409
+      );
+    }
+
+    const now =
+      Date.now();
+
+    const statements = [
+      env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_admin_order
+      `)
+    ];
+
+    uniqueIds.forEach(
+      (organizationId,index) => {
+        statements.push(
+          env.TRANSLATIONS_DB.prepare(`
+            INSERT INTO organization_admin_order (
+              organization_id,
+              sort_order,
+              updated_at
+            )
+            VALUES (?, ?, ?)
+          `)
+          .bind(
+            organizationId,
+            index,
+            now
+          )
+        );
+      }
+    );
+
+    await env.TRANSLATIONS_DB.batch(
+      statements
+    );
+
+    return jsonResponse({
+      success: true,
+      organizationIds:
+        uniqueIds
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin organization reorder failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to save organization order."
+      },
+      403
+    );
+  }
 }
 
 
