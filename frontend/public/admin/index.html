@@ -61,6 +61,17 @@ body{
 .lb-logo{
   font-size:27px;
   font-weight:900;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.lb-logo img{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  object-fit:cover;
+  flex:0 0 auto;
 }
 
 .lb-logo span{
@@ -790,7 +801,8 @@ body{
     <aside class="lb-sidebar">
 
       <div class="lb-logo">
-        Live<span>Bridge</span>
+        <img src="/assets/livebridge-logo.jpg" alt="LiveBridge logo">
+        <div>Live<span>Bridge</span></div>
       </div>
 
       <div class="lb-admin-label">
