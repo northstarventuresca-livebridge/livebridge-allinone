@@ -4399,6 +4399,8 @@ resolve(email);
   let azureVoices = [];
   let azureVoicesLoaded = false;
   let azureAudio = null;
+  let listenerAudioUnlockOverlay = null;
+  let listenerAudioUnlockCancel = null;
 
   /*
     Demo-only STOP protection.
@@ -4725,7 +4727,30 @@ resolve(email);
   }
 
 
+  function removeListenerAudioUnlockPrompt() {
+
+    if (listenerAudioUnlockOverlay) {
+      listenerAudioUnlockOverlay.remove();
+      listenerAudioUnlockOverlay = null;
+    }
+  }
+
+
   function stopAzureAudio() {
+
+    const cancelUnlock =
+      listenerAudioUnlockCancel;
+
+    listenerAudioUnlockCancel =
+      null;
+
+    removeListenerAudioUnlockPrompt();
+
+    if (cancelUnlock) {
+      try {
+        cancelUnlock();
+      } catch (error) {}
+    }
 
     if (!azureAudio) {
       return;
@@ -5169,6 +5194,16 @@ const cacheStatus =
             finished =
               true;
 
+            if (
+              listenerAudioUnlockCancel ===
+              finish
+            ) {
+              listenerAudioUnlockCancel =
+                null;
+            }
+
+            removeListenerAudioUnlockPrompt();
+
             try {
               URL.revokeObjectURL(
                 objectUrl
@@ -5199,13 +5234,109 @@ const cacheStatus =
 
         } catch (error) {}
 
-        audio.play()
-          .catch(
-            function (error) {
-              console.error("Azure audio playback failed; browser TTS fallback is disabled in production.", error);
-              finish();
-            }
-          );
+        const attemptPlayback =
+          function () {
+
+            audio.play()
+              .then(
+                () => {
+                  removeListenerAudioUnlockPrompt();
+                }
+              )
+              .catch(
+                function (error) {
+
+                  const blocked =
+                    String(
+                      error?.name ||
+                      ""
+                    ) ===
+                      "NotAllowedError";
+
+                  if (
+                    blocked &&
+                    !finished
+                  ) {
+
+                    listenerAudioUnlockCancel =
+                      finish;
+
+                    removeListenerAudioUnlockPrompt();
+
+                    const overlay =
+                      document.createElement(
+                        "div"
+                      );
+
+                    listenerAudioUnlockOverlay =
+                      overlay;
+
+                    overlay.style.cssText = `
+                      position:fixed;
+                      inset:0;
+                      z-index:999999;
+                      display:flex;
+                      align-items:flex-end;
+                      justify-content:center;
+                      padding:22px;
+                      background:rgba(2,8,18,.42);
+                      pointer-events:auto;
+                    `;
+
+                    overlay.innerHTML = `
+                      <button
+                        type="button"
+                        id="lbEnableLiveAudio"
+                        style="
+                          width:min(520px,100%);
+                          padding:17px 20px;
+                          border:1px solid rgba(91,220,194,.55);
+                          border-radius:14px;
+                          background:#16a34a;
+                          color:white;
+                          font-size:16px;
+                          font-weight:900;
+                          box-shadow:0 16px 45px rgba(0,0,0,.38);
+                          cursor:pointer;
+                        "
+                      >
+                        🔊 Tap to Enable Live Audio
+                      </button>
+                    `;
+
+                    document.body.appendChild(
+                      overlay
+                    );
+
+                    overlay
+                      .querySelector(
+                        "#lbEnableLiveAudio"
+                      )
+                      ?.addEventListener(
+                        "click",
+                        function () {
+
+                          attemptPlayback();
+                        },
+                        {
+                          once:true
+                        }
+                      );
+
+                    return;
+                  }
+
+                  console.error(
+                    "Azure audio playback failed; browser TTS fallback is disabled in production.",
+                    error
+                  );
+
+                  finish();
+                }
+              );
+          };
+
+        attemptPlayback();
       }
     );
   }
