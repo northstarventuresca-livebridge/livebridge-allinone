@@ -12287,6 +12287,147 @@ if (
 
 /*
 =======================================================
+ADMIN - LIVE SYSTEM STATUS
+Lightweight current-state endpoint for the admin dashboard.
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/live-status"
+) {
+
+  try {
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const cutoff =
+      Date.now() -
+      BROADCAST_STALE_MS;
+
+    const activeResult =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          room
+        FROM active_broadcasts
+        WHERE last_seen >= ?
+        ORDER BY started_at ASC
+      `)
+      .bind(
+        cutoff
+      )
+      .all();
+
+    const rooms =
+      (activeResult.results || [])
+        .map(
+          row =>
+            normalizeRoom(
+              row.room
+            )
+        )
+        .filter(Boolean);
+
+    const listenerCounts =
+      await Promise.all(
+        rooms.map(
+          async room => {
+
+            try {
+
+              const id =
+                env.LIVEBRIDGE_ROOMS
+                  .idFromName(
+                    room
+                  );
+
+              const stub =
+                env.LIVEBRIDGE_ROOMS
+                  .get(
+                    id
+                  );
+
+              const response =
+                await stub.fetch(
+                  new Request(
+                    "https://livebridge.internal/status"
+                  )
+                );
+
+              if (!response.ok) {
+                return 0;
+              }
+
+              const data =
+                await response.json();
+
+              return Math.max(
+                0,
+                Number(
+                  data.listeners ||
+                  0
+                )
+              );
+
+            } catch (error) {
+
+              console.error(
+                "Admin live listener count failed:",
+                room,
+                error
+              );
+
+              return 0;
+            }
+          }
+        )
+      );
+
+    const liveListeners =
+      listenerCounts.reduce(
+        (sum, count) =>
+          sum +
+          Number(
+            count ||
+            0
+          ),
+        0
+      );
+
+    return jsonResponse({
+      success: true,
+      liveBroadcasts:
+        rooms.length,
+      liveListeners,
+      checkedAt:
+        Date.now()
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin live status failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Admin access denied."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
 ADMIN - LIST ALL ORGANIZATIONS
 =======================================================
 */
