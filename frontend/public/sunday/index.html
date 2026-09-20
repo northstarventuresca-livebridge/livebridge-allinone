@@ -1339,6 +1339,8 @@ let roomReserved = false;
 let lastBroadcastAuthToken = null;
 let mediaStream = null;
 let mediaRecorder = null;
+let mediaRecorderStopTimer = null;
+let mediaRecorderGeneration = 0;
 let broadcasting = false;
 let broadcastStartedAt = null;
 let broadcastTimer = null;
@@ -3272,13 +3274,7 @@ async function endBroadcastForTimeLimit(){
     false;
 
 
-  if(
-    mediaRecorder &&
-    mediaRecorder.state ===
-      "recording"
-  ){
-    mediaRecorder.stop();
-  }
+  stopBroadcastRecorderCycle();
 
 
   if(mediaStream){
@@ -3625,6 +3621,8 @@ async function toggleBroadcast() {
         return;
       }
 
+      prepareBroadcastRecorderCycle();
+
       broadcasting =
         true;
 
@@ -3720,14 +3718,7 @@ async function toggleBroadcast() {
     broadcasting =
       false;
 
-    if (
-      mediaRecorder &&
-      mediaRecorder.state ===
-        "recording"
-    ) {
-
-      mediaRecorder.stop();
-    }
+    stopBroadcastRecorderCycle();
 
     if (mediaStream) {
 
@@ -4483,6 +4474,56 @@ function stopAudioSafetyMonitoring() {
    RECORDING
 ===================================================== */
 
+function stopBroadcastRecorderCycle() {
+
+  mediaRecorderGeneration += 1;
+
+  if (mediaRecorderStopTimer) {
+    clearTimeout(
+      mediaRecorderStopTimer
+    );
+
+    mediaRecorderStopTimer =
+      null;
+  }
+
+  const recorder =
+    mediaRecorder;
+
+  mediaRecorder =
+    null;
+
+  if (
+    recorder &&
+    recorder.state ===
+      "recording"
+  ) {
+
+    try {
+      recorder.stop();
+    } catch (error) {
+      console.warn(
+        "LiveBridge recorder stop failed:",
+        error
+      );
+    }
+  }
+}
+
+
+function prepareBroadcastRecorderCycle() {
+
+  stopBroadcastRecorderCycle();
+
+  /*
+    start a fresh generation after invalidating
+    every recorder callback/timer from the
+    previous broadcast.
+  */
+  mediaRecorderGeneration += 1;
+}
+
+
 function recordNextChunk() {
 
   if (
@@ -4492,15 +4533,31 @@ function recordNextChunk() {
     return;
   }
 
+  const generation =
+    mediaRecorderGeneration;
+
   const chunks = [];
 
-  mediaRecorder =
+  const recorder =
     new MediaRecorder(
       mediaStream
     );
 
-  mediaRecorder.ondataavailable =
+  mediaRecorder =
+    recorder;
+
+  let chunkStopTimer =
+    null;
+
+  recorder.ondataavailable =
     function(event) {
+
+      if (
+        generation !==
+        mediaRecorderGeneration
+      ) {
+        return;
+      }
 
       if (
         event.data.size > 0
@@ -4512,10 +4569,44 @@ function recordNextChunk() {
       }
     };
 
-  mediaRecorder.onstop =
+  recorder.onstop =
     function() {
 
+      if (chunkStopTimer) {
+        clearTimeout(
+          chunkStopTimer
+        );
+      }
+
       if (
+        mediaRecorderStopTimer ===
+        chunkStopTimer
+      ) {
+        mediaRecorderStopTimer =
+          null;
+      }
+
+      if (
+        mediaRecorder ===
+        recorder
+      ) {
+        mediaRecorder =
+          null;
+      }
+
+      /*
+        Ignore every late callback belonging to
+        an earlier broadcast or recorder cycle.
+      */
+      if (
+        generation !==
+        mediaRecorderGeneration
+      ) {
+        return;
+      }
+
+      if (
+        broadcasting &&
         chunks.length > 0
       ) {
 
@@ -4524,7 +4615,7 @@ function recordNextChunk() {
             chunks,
             {
               type:
-                mediaRecorder.mimeType ||
+                recorder.mimeType ||
                 "audio/webm"
             }
           );
@@ -4538,28 +4629,42 @@ function recordNextChunk() {
         }
       }
 
-      if (broadcasting) {
+      if (
+        broadcasting &&
+        generation ===
+          mediaRecorderGeneration
+      ) {
         recordNextChunk();
       }
     };
 
-  mediaRecorder.start();
+  recorder.start();
 
-  setTimeout(
-    () => {
+  chunkStopTimer =
+    setTimeout(
+      () => {
 
-      if (
-        mediaRecorder &&
-        mediaRecorder.state ===
-          "recording"
-      ) {
+        if (
+          generation !==
+          mediaRecorderGeneration
+        ) {
+          return;
+        }
 
-        mediaRecorder.stop();
-      }
+        if (
+          recorder.state ===
+            "recording"
+        ) {
 
-    },
-    7000
-  );
+          recorder.stop();
+        }
+
+      },
+      7000
+    );
+
+  mediaRecorderStopTimer =
+    chunkStopTimer;
 }
 
 
