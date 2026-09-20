@@ -4498,6 +4498,14 @@ async function ensureAnalyticsTables(env) {
     ON broadcast_sessions (room, started_at)
   `).run();
 
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_stats_reset (
+      organization_id INTEGER PRIMARY KEY,
+      reset_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
   await ensureBroadcastSafetySchema(env);
   await ensureReturnVisitorSchema(env);
 }
@@ -17966,6 +17974,497 @@ if (
             }
           : {})
       }
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/account-usage-stats"
+) {
+
+  try {
+
+    const auth =
+      await verifyClerkRequest(
+        request
+      );
+
+    await ensureAnalyticsTables(
+      env
+    );
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        auth.clerkUserId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "LiveBridge account not found."
+        },
+        404
+      );
+    }
+
+    const resetRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT reset_at
+        FROM organization_stats_reset
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    const resetAt =
+      Math.max(
+        0,
+        Number(
+          resetRow?.reset_at || 0
+        )
+      );
+
+    const requestedStart =
+      Number(
+        url.searchParams.get(
+          "start"
+        ) || 0
+      );
+
+    const requestedEnd =
+      Number(
+        url.searchParams.get(
+          "end"
+        ) || 0
+      );
+
+    const start =
+      Number.isFinite(
+        requestedStart
+      ) &&
+      requestedStart > 0
+        ? Math.floor(
+            requestedStart
+          )
+        : resetAt;
+
+    const end =
+      Number.isFinite(
+        requestedEnd
+      ) &&
+      requestedEnd > start
+        ? Math.floor(
+            requestedEnd
+          )
+        : Date.now() + 1;
+
+    if (
+      end <= start
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "A valid stats start and end time are required."
+        },
+        400
+      );
+    }
+
+    const baseRoom =
+      normalizeRoom(
+        organization.room_name
+      );
+
+    const roomLike =
+      baseRoom + "-%";
+
+    const now =
+      Date.now();
+
+    const broadcastStats =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS broadcast_count,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN ended_at IS NOT NULL
+                THEN MAX(
+                  0,
+                  ended_at - started_at
+                )
+                ELSE MAX(
+                  0,
+                  ? - started_at
+                )
+              END
+            ),
+            0
+          ) AS broadcast_time_ms,
+
+          COALESCE(
+            MAX(
+              peak_listeners
+            ),
+            0
+          ) AS highest_peak
+
+        FROM broadcast_sessions
+
+        WHERE
+          (
+            room = ?
+            OR room LIKE ?
+          )
+          AND started_at >= ?
+          AND started_at < ?
+      `)
+      .bind(
+        now,
+        baseRoom,
+        roomLike,
+        start,
+        end
+      )
+      .first();
+
+    const listenerStats =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS listener_sessions,
+
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms
+
+        FROM listener_sessions ls
+
+        INNER JOIN broadcast_sessions bs
+          ON bs.id =
+            ls.broadcast_id
+
+        WHERE
+          (
+            bs.room = ?
+            OR bs.room LIKE ?
+          )
+          AND bs.started_at >= ?
+          AND bs.started_at < ?
+      `)
+      .bind(
+        now,
+        baseRoom,
+        roomLike,
+        start,
+        end
+      )
+      .first();
+
+    const detailedAnalytics =
+      buildEffectivePlanEntitlements(
+        organization
+      ).detailedAnalytics ===
+      true;
+
+    let languageTotals = [];
+
+    if (
+      detailedAnalytics
+    ) {
+
+      const languageResult =
+        await env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            ls.language AS language,
+
+            COUNT(*) AS listeners,
+
+            COALESCE(
+              SUM(
+                MAX(
+                  0,
+                  COALESCE(
+                    ls.ended_at,
+                    ls.last_seen,
+                    ?
+                  ) -
+                  ls.joined_at
+                )
+              ),
+              0
+            ) AS total_listening_ms
+
+          FROM listener_sessions ls
+
+          INNER JOIN broadcast_sessions bs
+            ON bs.id =
+              ls.broadcast_id
+
+          WHERE
+            (
+              bs.room = ?
+              OR bs.room LIKE ?
+            )
+            AND bs.started_at >= ?
+            AND bs.started_at < ?
+
+          GROUP BY
+            ls.language
+
+          ORDER BY
+            listeners DESC,
+            ls.language ASC
+        `)
+        .bind(
+          now,
+          baseRoom,
+          roomLike,
+          start,
+          end
+        )
+        .all();
+
+      languageTotals =
+        (
+          languageResult.results ||
+          []
+        )
+        .map(
+          row => ({
+            language:
+              String(
+                row.language || ""
+              ),
+            listeners:
+              Number(
+                row.listeners || 0
+              ),
+            totalListeningMs:
+              Number(
+                row.total_listening_ms ||
+                0
+              )
+          })
+        );
+    }
+
+    const totalListeners =
+      Number(
+        listenerStats
+          ?.listener_sessions ||
+        0
+      );
+
+    const totalListeningMs =
+      detailedAnalytics
+        ? Number(
+            listenerStats
+              ?.total_listening_ms ||
+            0
+          )
+        : null;
+
+    return jsonResponse({
+      success: true,
+
+      range: {
+        start,
+        end
+      },
+
+      resetAt,
+
+      stats: {
+        broadcasts:
+          Number(
+            broadcastStats
+              ?.broadcast_count ||
+            0
+          ),
+
+        broadcastTimeMs:
+          Number(
+            broadcastStats
+              ?.broadcast_time_ms ||
+            0
+          ),
+
+        totalListenerSessions:
+          totalListeners,
+
+        highestPeakAudience:
+          Number(
+            broadcastStats
+              ?.highest_peak ||
+            0
+          ),
+
+        detailedAnalytics,
+
+        totalListeningMs,
+
+        averageListenerSessionMs:
+          detailedAnalytics &&
+          totalListeners > 0
+            ? Math.round(
+                Number(
+                  totalListeningMs ||
+                  0
+                ) /
+                totalListeners
+              )
+            : null,
+
+        uniqueLanguages:
+          detailedAnalytics
+            ? languageTotals.length
+            : null,
+
+        languages:
+          detailedAnalytics
+            ? languageTotals
+            : null
+      }
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Account usage stats failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load usage statistics."
+      },
+      403
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/account-usage-stats-reset"
+) {
+
+  try {
+
+    const auth =
+      await verifyClerkRequest(
+        request
+      );
+
+    await ensureAnalyticsTables(
+      env
+    );
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        auth.clerkUserId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "LiveBridge account not found."
+        },
+        404
+      );
+    }
+
+    const now =
+      Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO organization_stats_reset (
+        organization_id,
+        reset_at,
+        updated_at
+      )
+      VALUES (?, ?, ?)
+
+      ON CONFLICT(
+        organization_id
+      )
+      DO UPDATE SET
+        reset_at =
+          excluded.reset_at,
+        updated_at =
+          excluded.updated_at
+    `)
+    .bind(
+      Number(
+        organization.id
+      ),
+      now,
+      now
+    )
+    .run();
+
+    return jsonResponse({
+      success: true,
+      resetAt:
+        now
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Account usage stats reset failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to reset usage statistics."
+      },
+      403
     );
   }
 }
