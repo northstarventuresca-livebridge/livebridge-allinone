@@ -13726,6 +13726,287 @@ if (
 
 /*
 =======================================================
+ADMIN - ORGANIZATION BROADCAST HISTORY RANGE
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/organization-broadcast-history"
+) {
+
+  try {
+
+    await ensureAnalyticsTables(
+      env
+    );
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const organizationId =
+      Number(
+        url.searchParams.get(
+          "organizationId"
+        ) || 0
+      );
+
+    if (
+      !Number.isInteger(
+        organizationId
+      ) ||
+      organizationId <= 0
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID is required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          room_name
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        organizationId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    const rawStart =
+      url.searchParams.get(
+        "start"
+      );
+
+    const rawEnd =
+      url.searchParams.get(
+        "end"
+      );
+
+    const hasStart =
+      rawStart !== null &&
+      String(rawStart).trim() !== "";
+
+    const hasEnd =
+      rawEnd !== null &&
+      String(rawEnd).trim() !== "";
+
+    const start =
+      hasStart
+        ? Number(rawStart)
+        : null;
+
+    const end =
+      hasEnd
+        ? Number(rawEnd)
+        : null;
+
+    if (
+      (
+        hasStart &&
+        (
+          !Number.isFinite(start) ||
+          start < 0
+        )
+      ) ||
+      (
+        hasEnd &&
+        (
+          !Number.isFinite(end) ||
+          end <= 0
+        )
+      ) ||
+      (
+        hasStart &&
+        hasEnd &&
+        end <= start
+      )
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "A valid broadcast history time range is required."
+        },
+        400
+      );
+    }
+
+    const requestedLimit =
+      Math.floor(
+        Number(
+          url.searchParams.get(
+            "limit"
+          ) || 250
+        )
+      );
+
+    const limit =
+      Math.min(
+        500,
+        Math.max(
+          1,
+          Number.isFinite(
+            requestedLimit
+          )
+            ? requestedLimit
+            : 250
+        )
+      );
+
+    const room =
+      normalizeRoom(
+        organization.room_name
+      );
+
+    let sql = `
+      SELECT
+        id,
+        room,
+        started_at,
+        ended_at,
+        peak_listeners
+      FROM broadcast_sessions
+      WHERE room = ?
+    `;
+
+    const bindings = [
+      room
+    ];
+
+    if (hasStart) {
+      sql += `
+        AND started_at >= ?
+      `;
+
+      bindings.push(
+        Math.floor(start)
+      );
+    }
+
+    if (hasEnd) {
+      sql += `
+        AND started_at < ?
+      `;
+
+      bindings.push(
+        Math.floor(end)
+      );
+    }
+
+    sql += `
+      ORDER BY started_at DESC
+      LIMIT ?
+    `;
+
+    bindings.push(
+      limit + 1
+    );
+
+    const historyResult =
+      await env.TRANSLATIONS_DB.prepare(
+        sql
+      )
+      .bind(
+        ...bindings
+      )
+      .all();
+
+    const rows =
+      historyResult.results ||
+      [];
+
+    const truncated =
+      rows.length > limit;
+
+    const broadcasts = [];
+
+    for (
+      const broadcast of
+      rows.slice(
+        0,
+        limit
+      )
+    ) {
+
+      const summary =
+        await buildBroadcastSummary(
+          env,
+          broadcast.id
+        );
+
+      if (summary) {
+        broadcasts.push(
+          summary
+        );
+      }
+    }
+
+    return jsonResponse({
+      success: true,
+
+      organizationId,
+
+      range: {
+        start:
+          hasStart
+            ? Math.floor(start)
+            : null,
+
+        end:
+          hasEnd
+            ? Math.floor(end)
+            : null
+      },
+
+      limit,
+      truncated,
+      broadcasts
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin organization broadcast history range failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load broadcast history."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
 ADMIN - GET ONE ORGANIZATION
 =======================================================
 */
