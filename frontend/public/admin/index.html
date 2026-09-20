@@ -171,6 +171,43 @@ body{
   margin-bottom:17px;
 }
 
+.lb-live-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:13px;
+  margin-bottom:13px;
+}
+
+.lb-live-card{
+  border-color:rgba(41,215,131,.26);
+  background:
+    linear-gradient(
+      135deg,
+      rgba(41,215,131,.09),
+      rgba(45,151,255,.055)
+    );
+}
+
+.lb-live-kicker{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#63e9aa;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  margin-bottom:8px;
+}
+
+.lb-live-dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#41df96;
+  box-shadow:0 0 0 4px rgba(65,223,150,.10);
+}
+
 .lb-card{
   border-radius:16px;
   background:rgba(255,255,255,.05);
@@ -903,6 +940,28 @@ body{
 
         </div>
 
+
+        <div class="lb-live-grid">
+
+          <div class="lb-card lb-live-card">
+            <div class="lb-live-kicker">
+              <span class="lb-live-dot"></span>
+              Live Now
+            </div>
+            <div class="lb-metric" id="liveBroadcastsNow">0</div>
+            <div class="lb-muted">Broadcasts Live Right Now</div>
+          </div>
+
+          <div class="lb-card lb-live-card">
+            <div class="lb-live-kicker">
+              <span class="lb-live-dot"></span>
+              Live Now
+            </div>
+            <div class="lb-metric" id="liveListenersNow">0</div>
+            <div class="lb-muted">Listeners Live Right Now</div>
+          </div>
+
+        </div>
 
         <div class="lb-grid4">
 
@@ -2143,6 +2202,7 @@ const ADMIN_WORKER =
     : "https://livebridge.northstarventures-ca.workers.dev";
 
 let adminOrganizations = [];
+let adminLiveStatusTimer = null;
 let selectedOrganization = null;
 let currentReturnMessages = [];
 let adminPlans = [];
@@ -3973,6 +4033,89 @@ async function downloadOfferGraphic(){
     );
 
   link.click();
+}
+
+
+async function loadLiveStatus(){
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/live-status"
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to load live status."
+      );
+    }
+
+    const broadcasts =
+      Math.max(
+        0,
+        Number(
+          data.liveBroadcasts ||
+          0
+        )
+      );
+
+    const listeners =
+      Math.max(
+        0,
+        Number(
+          data.liveListeners ||
+          0
+        )
+      );
+
+    const broadcastBox =
+      document.getElementById(
+        "liveBroadcastsNow"
+      );
+
+    const listenerBox =
+      document.getElementById(
+        "liveListenersNow"
+      );
+
+    if(broadcastBox){
+      broadcastBox.textContent =
+        broadcasts;
+    }
+
+    if(listenerBox){
+      listenerBox.textContent =
+        listeners;
+    }
+
+  }catch(error){
+
+    console.error(
+      "LiveBridge admin live status failed:",
+      error
+    );
+  }
+}
+
+
+function startLiveStatusPolling(){
+
+  if(adminLiveStatusTimer){
+    clearInterval(
+      adminLiveStatusTimer
+    );
+  }
+
+  adminLiveStatusTimer =
+    setInterval(
+      loadLiveStatus,
+      10000
+    );
 }
 
 
@@ -6652,7 +6795,10 @@ document.getElementById(
   "click",
   async function(){
 
-    await loadOrganizations();
+    await Promise.all([
+      loadOrganizations(),
+      loadLiveStatus()
+    ]);
 
     showClientList();
   }
@@ -6706,7 +6852,10 @@ window.addEventListener(
 
       await verifyAdmin();
 
-      await loadOrganizations();
+      await Promise.all([
+        loadOrganizations(),
+        loadLiveStatus()
+      ]);
 
       await loadPlans();
 
@@ -6720,6 +6869,8 @@ window.addEventListener(
         "adminShell"
       ).style.display =
         "grid";
+
+      startLiveStatusPolling();
 
 
     }catch(error){
