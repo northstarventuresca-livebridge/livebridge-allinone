@@ -2088,6 +2088,150 @@ body{
                 </button>
               </div>
 
+              <div
+                style="
+                  display:grid;
+                  grid-template-columns:minmax(160px,220px) minmax(0,1fr);
+                  gap:10px;
+                  align-items:end;
+                  margin:12px 0 10px;
+                "
+              >
+                <label style="display:block;">
+                  <span
+                    class="lb-muted"
+                    style="
+                      display:block;
+                      font-size:9px;
+                      font-weight:900;
+                      margin-bottom:5px;
+                      text-transform:uppercase;
+                    "
+                  >
+                    Broadcast Range
+                  </span>
+
+                  <select
+                    id="historyRangePreset"
+                    style="
+                      width:100%;
+                      box-sizing:border-box;
+                      padding:9px 10px;
+                      border-radius:9px;
+                      border:1px solid rgba(255,255,255,.12);
+                      background:#101f31;
+                      color:white;
+                      font-size:11px;
+                      font-weight:800;
+                    "
+                  >
+                    <option value="recent">Recent 25</option>
+                    <option value="today">Today</option>
+                    <option value="24h">Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="month">This Month</option>
+                    <option value="all">All Time</option>
+                    <option value="custom">Custom Date / Time</option>
+                  </select>
+                </label>
+
+                <div
+                  id="historyRangeStatus"
+                  class="lb-muted"
+                  style="
+                    padding-bottom:8px;
+                    font-size:10px;
+                    line-height:1.4;
+                  "
+                >
+                  Latest 25 broadcasts
+                </div>
+              </div>
+
+              <div
+                id="historyCustomRange"
+                style="
+                  display:none;
+                  grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;
+                  gap:9px;
+                  align-items:end;
+                  margin-bottom:12px;
+                "
+              >
+                <label style="display:block;">
+                  <span
+                    class="lb-muted"
+                    style="
+                      display:block;
+                      font-size:9px;
+                      font-weight:900;
+                      margin-bottom:5px;
+                      text-transform:uppercase;
+                    "
+                  >
+                    Start
+                  </span>
+
+                  <input
+                    id="historyCustomStart"
+                    type="datetime-local"
+                    style="
+                      width:100%;
+                      box-sizing:border-box;
+                      padding:9px 10px;
+                      border-radius:9px;
+                      border:1px solid rgba(255,255,255,.12);
+                      background:#101f31;
+                      color:white;
+                      font-size:11px;
+                    "
+                  >
+                </label>
+
+                <label style="display:block;">
+                  <span
+                    class="lb-muted"
+                    style="
+                      display:block;
+                      font-size:9px;
+                      font-weight:900;
+                      margin-bottom:5px;
+                      text-transform:uppercase;
+                    "
+                  >
+                    End
+                  </span>
+
+                  <input
+                    id="historyCustomEnd"
+                    type="datetime-local"
+                    style="
+                      width:100%;
+                      box-sizing:border-box;
+                      padding:9px 10px;
+                      border-radius:9px;
+                      border:1px solid rgba(255,255,255,.12);
+                      background:#101f31;
+                      color:white;
+                      font-size:11px;
+                    "
+                  >
+                </label>
+
+                <button
+                  type="button"
+                  id="historyApplyCustomRange"
+                  class="lb-button primary"
+                  style="
+                    min-height:37px;
+                    padding:8px 12px;
+                  "
+                >
+                  Apply
+                </button>
+              </div>
+
               <div class="lb-history-row head">
                 <div>Date</div>
                 <div>Duration</div>
@@ -4991,6 +5135,51 @@ async function openOrganization(id){
   );
 
 
+  const historyPreset =
+    document.getElementById(
+      "historyRangePreset"
+    );
+
+  if(historyPreset){
+    historyPreset.value =
+      "recent";
+  }
+
+  const historyCustom =
+    document.getElementById(
+      "historyCustomRange"
+    );
+
+  if(historyCustom){
+    historyCustom.style.display =
+      "none";
+  }
+
+  const historyStatus =
+    document.getElementById(
+      "historyRangeStatus"
+    );
+
+  if(historyStatus){
+    historyStatus.textContent =
+      "Latest 25 broadcasts · " +
+      Number(
+        data.broadcasts
+          ?.length ||
+        0
+      ) +
+      " broadcast" +
+      (
+        Number(
+          data.broadcasts
+            ?.length ||
+          0
+        ) === 1
+          ? ""
+          : "s"
+      );
+  }
+
   renderDetailHistory(
     data.broadcasts || []
   );
@@ -5532,6 +5721,360 @@ function renderScriptureAdminStatus(
 
 let currentHistoryBroadcasts = [];
 let historyAdvancedMode = false;
+
+
+function historyDateTimeLocalValue(
+  value
+){
+
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  const pad =
+    number =>
+      String(number)
+        .padStart(2,"0");
+
+  return (
+    date.getFullYear() +
+    "-" +
+    pad(date.getMonth() + 1) +
+    "-" +
+    pad(date.getDate()) +
+    "T" +
+    pad(date.getHours()) +
+    ":" +
+    pad(date.getMinutes())
+  );
+}
+
+
+function historyPresetRange(
+  preset
+){
+
+  const now =
+    new Date();
+
+  let start =
+    new Date(now);
+
+  if(
+    preset ===
+    "today"
+  ){
+
+    start.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+  }else if(
+    preset ===
+    "24h"
+  ){
+
+    start =
+      new Date(
+        now.getTime() -
+        24 * 60 * 60 * 1000
+      );
+
+  }else if(
+    preset ===
+    "7d"
+  ){
+
+    start =
+      new Date(
+        now.getTime() -
+        7 * 24 * 60 * 60 * 1000
+      );
+
+  }else if(
+    preset ===
+    "30d"
+  ){
+
+    start =
+      new Date(
+        now.getTime() -
+        30 * 24 * 60 * 60 * 1000
+      );
+
+  }else if(
+    preset ===
+    "month"
+  ){
+
+    start =
+      new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+        0,
+        0,
+        0,
+        0
+      );
+
+  }else if(
+    preset ===
+    "all"
+  ){
+
+    return {
+      start:null,
+      end:null
+    };
+  }
+
+  return {
+    start:
+      start.getTime(),
+    end:
+      now.getTime()
+  };
+}
+
+
+function historyRangeLabel(
+  start,
+  end
+){
+
+  const options = {
+    month:"short",
+    day:"numeric",
+    hour:"numeric",
+    minute:"2-digit"
+  };
+
+  return (
+    new Date(start)
+      .toLocaleString(
+        [],
+        options
+      ) +
+    " – " +
+    new Date(end)
+      .toLocaleString(
+        [],
+        options
+      )
+  );
+}
+
+
+async function loadAdminBroadcastHistoryRange(
+  preset,
+  customStart = null,
+  customEnd = null
+){
+
+  if(
+    !selectedOrganization
+  ){
+    return;
+  }
+
+  const status =
+    document.getElementById(
+      "historyRangeStatus"
+    );
+
+  if(status){
+    status.textContent =
+      "Loading broadcasts...";
+  }
+
+  try{
+
+    const params =
+      new URLSearchParams();
+
+    params.set(
+      "organizationId",
+      String(
+        selectedOrganization.id
+      )
+    );
+
+    let label =
+      "Latest 25 broadcasts";
+
+    if(
+      preset ===
+      "recent"
+    ){
+
+      params.set(
+        "limit",
+        "25"
+      );
+
+    }else{
+
+      params.set(
+        "limit",
+        "500"
+      );
+
+      let range;
+
+      if(
+        preset ===
+        "custom"
+      ){
+
+        range = {
+          start:
+            customStart,
+          end:
+            customEnd
+        };
+
+        label =
+          historyRangeLabel(
+            customStart,
+            customEnd
+          );
+
+      }else{
+
+        range =
+          historyPresetRange(
+            preset
+          );
+
+        const labels = {
+          today:
+            "Today",
+          "24h":
+            "Last 24 Hours",
+          "7d":
+            "Last 7 Days",
+          "30d":
+            "Last 30 Days",
+          month:
+            "This Month",
+          all:
+            "All Time"
+        };
+
+        label =
+          labels[preset] ||
+          "Selected range";
+      }
+
+      if(
+        range?.start !==
+          null &&
+        range?.start !==
+          undefined
+      ){
+
+        params.set(
+          "start",
+          String(
+            Math.floor(
+              range.start
+            )
+          )
+        );
+      }
+
+      if(
+        range?.end !==
+          null &&
+        range?.end !==
+          undefined
+      ){
+
+        params.set(
+          "end",
+          String(
+            Math.floor(
+              range.end
+            )
+          )
+        );
+      }
+    }
+
+    const response =
+      await adminFetch(
+        "/admin/organization-broadcast-history?" +
+        params.toString()
+      );
+
+    const data =
+      await response.json();
+
+    if(
+      !response.ok ||
+      !data.success
+    ){
+      throw new Error(
+        data.error ||
+        "Unable to load broadcast history."
+      );
+    }
+
+    renderDetailHistory(
+      data.broadcasts || []
+    );
+
+    if(status){
+
+      status.textContent =
+        label +
+        " · " +
+        Number(
+          data.broadcasts
+            ?.length ||
+          0
+        ) +
+        " broadcast" +
+        (
+          Number(
+            data.broadcasts
+              ?.length ||
+            0
+          ) === 1
+            ? ""
+            : "s"
+        ) +
+        (
+          data.truncated
+            ? " · showing newest " +
+              Number(
+                data.limit ||
+                500
+              )
+            : ""
+        );
+    }
+
+  }catch(error){
+
+    console.error(
+      "Admin broadcast history range failed:",
+      error
+    );
+
+    if(status){
+      status.textContent =
+        error.message ||
+        "Unable to load broadcast history.";
+    }
+  }
+}
+
 
 function renderDetailHistory(
   broadcasts
@@ -6555,6 +7098,127 @@ document.getElementById(
 )?.addEventListener(
   "click",
   () => setHistoryMode(true)
+);
+
+
+document.getElementById(
+  "historyRangePreset"
+)?.addEventListener(
+  "change",
+  function(){
+
+    const custom =
+      document.getElementById(
+        "historyCustomRange"
+      );
+
+    if(custom){
+      custom.style.display =
+        this.value ===
+          "custom"
+          ? "grid"
+          : "none";
+    }
+
+    if(
+      this.value ===
+      "custom"
+    ){
+
+      const now =
+        new Date();
+
+      const todayStart =
+        new Date(now);
+
+      todayStart.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const startInput =
+        document.getElementById(
+          "historyCustomStart"
+        );
+
+      const endInput =
+        document.getElementById(
+          "historyCustomEnd"
+        );
+
+      if(
+        startInput &&
+        !startInput.value
+      ){
+        startInput.value =
+          historyDateTimeLocalValue(
+            todayStart
+          );
+      }
+
+      if(
+        endInput &&
+        !endInput.value
+      ){
+        endInput.value =
+          historyDateTimeLocalValue(
+            now
+          );
+      }
+
+      return;
+    }
+
+    loadAdminBroadcastHistoryRange(
+      this.value
+    );
+  }
+);
+
+
+document.getElementById(
+  "historyApplyCustomRange"
+)?.addEventListener(
+  "click",
+  function(){
+
+    const start =
+      new Date(
+        document.getElementById(
+          "historyCustomStart"
+        )?.value ||
+        ""
+      ).getTime();
+
+    const end =
+      new Date(
+        document.getElementById(
+          "historyCustomEnd"
+        )?.value ||
+        ""
+      ).getTime();
+
+    if(
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      end <= start
+    ){
+
+      alert(
+        "Choose a valid broadcast history start and end time."
+      );
+
+      return;
+    }
+
+    loadAdminBroadcastHistoryRange(
+      "custom",
+      start,
+      end
+    );
+  }
 );
 
 
