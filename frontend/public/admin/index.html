@@ -7622,6 +7622,127 @@ Keeps existing admin + speech-rate embeds unchanged.
   }
 
 
+  let apiCostCurrentOrganizationId =
+    null;
+
+
+  function apiCostDateTimeLocalValue(
+    value
+  ){
+
+    const date =
+      value instanceof Date
+        ? value
+        : new Date(value);
+
+    const pad =
+      number =>
+        String(number)
+          .padStart(2,"0");
+
+    return (
+      date.getFullYear() +
+      "-" +
+      pad(date.getMonth() + 1) +
+      "-" +
+      pad(date.getDate()) +
+      "T" +
+      pad(date.getHours()) +
+      ":" +
+      pad(date.getMinutes())
+    );
+  }
+
+
+  function apiCostRangeLabel(
+    start,
+    end
+  ){
+
+    const options = {
+      month:"short",
+      day:"numeric",
+      hour:"numeric",
+      minute:"2-digit"
+    };
+
+    return (
+      new Date(start)
+        .toLocaleString(
+          [],
+          options
+        ) +
+      " – " +
+      new Date(end)
+        .toLocaleString(
+          [],
+          options
+        )
+    );
+  }
+
+
+  function apiCostPresetRange(
+    preset
+  ){
+
+    const now =
+      new Date();
+
+    let start =
+      new Date(now);
+
+    if(
+      preset ===
+      "today"
+    ){
+      start.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+    }else if(
+      preset ===
+      "24h"
+    ){
+      start =
+        new Date(
+          now.getTime() -
+          24 * 60 * 60 * 1000
+        );
+
+    }else if(
+      preset ===
+      "7d"
+    ){
+      start =
+        new Date(
+          now.getTime() -
+          7 * 24 * 60 * 60 * 1000
+        );
+
+    }else if(
+      preset ===
+      "30d"
+    ){
+      start =
+        new Date(
+          now.getTime() -
+          30 * 24 * 60 * 60 * 1000
+        );
+    }
+
+    return {
+      start:
+        start.getTime(),
+      end:
+        now.getTime()
+    };
+  }
+
+
   function ensureApiCostDetailCard(){
 
     let card =
@@ -7661,12 +7782,95 @@ Keeps existing admin + speech-rate embeds unchanged.
       "margin-top:18px;padding:16px;border-radius:14px;border:1px solid rgba(83,165,255,.22);background:rgba(83,165,255,.055);";
 
     card.innerHTML = `
-      <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
-        Monthly API Cost
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+        <div>
+          <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
+            API Cost
+          </div>
+
+          <div style="color:#8fa8bf;font-size:11px;line-height:1.5;">
+            Estimated LiveBridge service-delivery cost for this organization.
+          </div>
+        </div>
+
+        <select
+          id="apiCostRangePreset"
+          style="
+            min-width:145px;
+            padding:8px 10px;
+            border-radius:9px;
+            border:1px solid rgba(255,255,255,.12);
+            background:#101f31;
+            color:white;
+            font-size:11px;
+            font-weight:800;
+          "
+        >
+          <option value="month">This Month</option>
+          <option value="today">Today</option>
+          <option value="24h">Last 24 Hours</option>
+          <option value="7d">Last 7 Days</option>
+          <option value="30d">Last 30 Days</option>
+          <option value="custom">Custom Date / Time</option>
+        </select>
       </div>
 
-      <div style="color:#8fa8bf;font-size:11px;line-height:1.5;margin-bottom:12px;">
-        Estimated LiveBridge service-delivery cost for this organization.
+      <div
+        id="apiCostCustomRange"
+        style="
+          display:none;
+          grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;
+          gap:8px;
+          align-items:end;
+          margin-bottom:12px;
+        "
+      >
+        <label style="display:block;color:#7890a8;font-size:9px;font-weight:800;text-transform:uppercase;">
+          Start
+          <input
+            id="apiCostCustomStart"
+            type="datetime-local"
+            style="
+              width:100%;
+              margin-top:5px;
+              box-sizing:border-box;
+              padding:8px 9px;
+              border-radius:8px;
+              border:1px solid rgba(255,255,255,.12);
+              background:#101f31;
+              color:white;
+              font-size:11px;
+            "
+          >
+        </label>
+
+        <label style="display:block;color:#7890a8;font-size:9px;font-weight:800;text-transform:uppercase;">
+          End
+          <input
+            id="apiCostCustomEnd"
+            type="datetime-local"
+            style="
+              width:100%;
+              margin-top:5px;
+              box-sizing:border-box;
+              padding:8px 9px;
+              border-radius:8px;
+              border:1px solid rgba(255,255,255,.12);
+              background:#101f31;
+              color:white;
+              font-size:11px;
+            "
+          >
+        </label>
+
+        <button
+          type="button"
+          id="apiCostApplyRange"
+          class="lb-button primary"
+          style="min-height:34px;padding:8px 12px;"
+        >
+          Apply
+        </button>
       </div>
 
       <div id="apiCostAnalytics">
@@ -7682,15 +7886,121 @@ Keeps existing admin + speech-rate embeds unchanged.
         marketingCard
       );
 
+    const now =
+      new Date();
+
+    const todayStart =
+      new Date(now);
+
+    todayStart.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    document.getElementById(
+      "apiCostCustomStart"
+    ).value =
+      apiCostDateTimeLocalValue(
+        todayStart
+      );
+
+    document.getElementById(
+      "apiCostCustomEnd"
+    ).value =
+      apiCostDateTimeLocalValue(
+        now
+      );
+
+    document.getElementById(
+      "apiCostRangePreset"
+    )?.addEventListener(
+      "change",
+      function(){
+
+        const custom =
+          document.getElementById(
+            "apiCostCustomRange"
+          );
+
+        if(custom){
+          custom.style.display =
+            this.value ===
+              "custom"
+              ? "grid"
+              : "none";
+        }
+
+        if(
+          this.value !==
+          "custom"
+        ){
+          loadApiCostPreset(
+            this.value
+          );
+        }
+      }
+    );
+
+    document.getElementById(
+      "apiCostApplyRange"
+    )?.addEventListener(
+      "click",
+      function(){
+
+        const startValue =
+          document.getElementById(
+            "apiCostCustomStart"
+          )?.value;
+
+        const endValue =
+          document.getElementById(
+            "apiCostCustomEnd"
+          )?.value;
+
+        const start =
+          new Date(
+            startValue
+          ).getTime();
+
+        const end =
+          new Date(
+            endValue
+          ).getTime();
+
+        if(
+          !Number.isFinite(start) ||
+          !Number.isFinite(end) ||
+          end <= start
+        ){
+          alert(
+            "Choose a valid API cost start and end time."
+          );
+
+          return;
+        }
+
+        loadApiCostRange(
+          start,
+          end,
+          apiCostRangeLabel(
+            start,
+            end
+          )
+        );
+      }
+    );
+
     return card;
   }
 
 
-  function renderApiCostDetail(
-    organizationId
+  function renderApiCostStats(
+    stats,
+    rangeLabel,
+    preciseRange = false
   ){
-
-    ensureApiCostDetailCard();
 
     const target =
       document.getElementById(
@@ -7701,10 +8011,8 @@ Keeps existing admin + speech-rate embeds unchanged.
       return;
     }
 
-    const stats =
-      apiCostStatsForOrganization(
-        organizationId
-      );
+    stats =
+      stats || {};
 
     const breakdown =
       stats.openAiCostBreakdown ||
@@ -7739,11 +8047,15 @@ Keeps existing admin + speech-rate embeds unchanged.
             .join("")
         : `
             <div style="color:#71869b;font-size:10px;">
-              No OpenAI usage recorded yet this month.
+              No OpenAI usage recorded in this range.
             </div>
           `;
 
     target.innerHTML = `
+      <div style="color:#9bb2c8;font-size:10px;font-weight:800;margin-bottom:9px;">
+        ${escapeHtml(rangeLabel || "This Month")}
+      </div>
+
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:12px;">
         <div style="padding:11px;border-radius:10px;background:rgba(255,255,255,.035);">
           <div style="color:#7890a8;font-size:9px;text-transform:uppercase;font-weight:800;">Total</div>
@@ -7782,11 +8094,182 @@ Keeps existing admin + speech-rate embeds unchanged.
         ${categoryMarkup}
       </div>
 
-      <div style="font-size:9px;color:#667d93;margin-top:9px;line-height:1.4;">
-        ${String(stats.apiCostUsageMonth || stats.azureTtsUsageMonth || "")}
-        · USD estimate · Azure S0 Standard Neural + recorded OpenAI token usage
+      <div style="font-size:9px;color:#667d93;margin-top:9px;line-height:1.45;">
+        USD estimate · Azure S0 Standard Neural + recorded OpenAI token usage
+        ${preciseRange
+          ? "<br>Precise date/time tracking includes usage recorded after range tracking was enabled."
+          : ""}
       </div>
     `;
+  }
+
+
+  async function loadApiCostRange(
+    start,
+    end,
+    rangeLabel
+  ){
+
+    if(
+      !apiCostCurrentOrganizationId
+    ){
+      return;
+    }
+
+    const target =
+      document.getElementById(
+        "apiCostAnalytics"
+      );
+
+    if(target){
+      target.innerHTML =
+        '<div class="lb-muted">Loading API cost range...</div>';
+    }
+
+    try{
+
+      const response =
+        await adminFetch(
+          "/admin/organization-api-cost" +
+          "?organizationId=" +
+          encodeURIComponent(
+            apiCostCurrentOrganizationId
+          ) +
+          "&start=" +
+          encodeURIComponent(
+            Math.floor(start)
+          ) +
+          "&end=" +
+          encodeURIComponent(
+            Math.floor(end)
+          )
+        );
+
+      const data =
+        await response.json();
+
+      if(
+        !response.ok ||
+        !data.success
+      ){
+        throw new Error(
+          data.error ||
+          "Unable to load API cost range."
+        );
+      }
+
+      renderApiCostStats(
+        data.stats || {},
+        rangeLabel,
+        true
+      );
+
+    }catch(error){
+
+      if(target){
+        target.innerHTML =
+          '<div style="color:#f87171;font-size:10px;">' +
+          escapeHtml(
+            error.message ||
+            "Unable to load API cost range."
+          ) +
+          '</div>';
+      }
+    }
+  }
+
+
+  function loadApiCostPreset(
+    preset
+  ){
+
+    if(
+      !apiCostCurrentOrganizationId
+    ){
+      return;
+    }
+
+    if(
+      preset ===
+      "month"
+    ){
+
+      const stats =
+        apiCostStatsForOrganization(
+          apiCostCurrentOrganizationId
+        );
+
+      renderApiCostStats(
+        stats,
+        "This Month",
+        false
+      );
+
+      return;
+    }
+
+    const range =
+      apiCostPresetRange(
+        preset
+      );
+
+    const labels = {
+      today:
+        "Today",
+      "24h":
+        "Last 24 Hours",
+      "7d":
+        "Last 7 Days",
+      "30d":
+        "Last 30 Days"
+    };
+
+    loadApiCostRange(
+      range.start,
+      range.end,
+      labels[preset] ||
+        apiCostRangeLabel(
+          range.start,
+          range.end
+        )
+    );
+  }
+
+
+  function renderApiCostDetail(
+    organizationId
+  ){
+
+    apiCostCurrentOrganizationId =
+      Number(
+        organizationId || 0
+      );
+
+    ensureApiCostDetailCard();
+
+    const preset =
+      document.getElementById(
+        "apiCostRangePreset"
+      );
+
+    if(preset){
+      preset.value =
+        "month";
+    }
+
+    const custom =
+      document.getElementById(
+        "apiCostCustomRange"
+      );
+
+    if(custom){
+      custom.style.display =
+        "none";
+    }
+
+    loadApiCostPreset(
+      "month"
+    );
   }
 
 
