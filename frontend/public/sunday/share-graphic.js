@@ -1,6 +1,7 @@
 /* LiveBridge broadcaster share graphic v3 — language-gate QR + visual poster refresh */
 (() => {
-  const LISTENER_GATE_BASE_URL = "https://livebridge.ca/t/";
+  const LISTENER_GATE_BASE_URL =
+    window.location.origin + "/t/";
 
   function buildRoomLanguageGateURL() {
     const room =

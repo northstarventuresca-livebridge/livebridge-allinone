@@ -2,7 +2,8 @@
    Account + listener pages use the same language-gate URL and poster style as /sunday/.
 */
 (() => {
-  const LISTENER_GATE_BASE_URL = "https://livebridge.ca/t/";
+  const LISTENER_GATE_BASE_URL =
+    window.location.origin + "/t/";
 
   const TRANSLATIONS = {
     en:{title:"Listen Live",subtitle:"In Your Language",message:"We’re live now. Join our LiveBridge broadcast and listen in your own language.",room:"ROOM"},

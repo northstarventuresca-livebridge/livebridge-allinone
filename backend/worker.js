@@ -1621,6 +1621,32 @@ async function ensureApiCostSchema(
     )
   `).run();
 
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS api_cost_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL,
+      provider TEXT NOT NULL,
+      category TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT '',
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      requests INTEGER NOT NULL DEFAULT 0,
+      characters INTEGER NOT NULL DEFAULT 0,
+      generations INTEGER NOT NULL DEFAULT 0,
+      cost_usd REAL NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_api_cost_events_org_time
+    ON api_cost_events (
+      organization_id,
+      created_at
+    )
+  `).run();
+
   apiCostSchemaReady = true;
 }
 
@@ -1790,6 +1816,9 @@ async function recordOpenAiUsageByOrganization(
       usage
     );
 
+  const usageNow =
+    Date.now();
+
   await env.TRANSLATIONS_DB.prepare(`
     INSERT INTO openai_usage (
       organization_id,
@@ -1843,7 +1872,36 @@ async function recordOpenAiUsageByOrganization(
     normalized.cachedInputTokens,
     normalized.outputTokens,
     costUsd,
-    Date.now()
+    usageNow
+  )
+  .run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO api_cost_events (
+      organization_id,
+      provider,
+      category,
+      model,
+      input_tokens,
+      cached_input_tokens,
+      output_tokens,
+      requests,
+      characters,
+      generations,
+      cost_usd,
+      created_at
+    )
+    VALUES (?, 'openai', ?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
+  `)
+  .bind(
+    id,
+    String(category || "other"),
+    String(model || "unknown"),
+    normalized.inputTokens,
+    normalized.cachedInputTokens,
+    normalized.outputTokens,
+    costUsd,
+    usageNow
   )
   .run();
 }
@@ -1971,6 +2029,14 @@ async function recordAzureTtsUsage(
           text
         );
 
+  const usageNow =
+    Date.now();
+
+  const costUsd =
+    calculateAzureTtsCostUsd(
+      characters
+    );
+
   await env.TRANSLATIONS_DB.prepare(`
     INSERT INTO azure_tts_usage (
       organization_id,
@@ -2002,7 +2068,34 @@ async function recordAzureTtsUsage(
     ),
     usageMonth,
     characters,
-    Date.now()
+    usageNow
+  )
+  .run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO api_cost_events (
+      organization_id,
+      provider,
+      category,
+      model,
+      input_tokens,
+      cached_input_tokens,
+      output_tokens,
+      requests,
+      characters,
+      generations,
+      cost_usd,
+      created_at
+    )
+    VALUES (?, 'azure', 'tts', 's0-standard-neural', 0, 0, 0, 0, ?, 1, ?, ?)
+  `)
+  .bind(
+    Number(
+      organization.id
+    ),
+    characters,
+    costUsd,
+    usageNow
   )
   .run();
 }
@@ -4403,6 +4496,14 @@ async function ensureAnalyticsTables(env) {
   await env.TRANSLATIONS_DB.prepare(`
     CREATE INDEX IF NOT EXISTS idx_broadcast_sessions_room_started
     ON broadcast_sessions (room, started_at)
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_stats_reset (
+      organization_id INTEGER PRIMARY KEY,
+      reset_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
   `).run();
 
   await ensureBroadcastSafetySchema(env);
@@ -13286,6 +13387,626 @@ if (
 
 /*
 =======================================================
+ADMIN - API COST RANGE
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/organization-api-cost"
+) {
+
+  try {
+
+    await ensureApiCostSchema(
+      env
+    );
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const organizationId =
+      Number(
+        url.searchParams.get(
+          "organizationId"
+        ) || 0
+      );
+
+    let start =
+      Number(
+        url.searchParams.get(
+          "start"
+        ) || 0
+      );
+
+    let end =
+      Number(
+        url.searchParams.get(
+          "end"
+        ) || 0
+      );
+
+    if (
+      !Number.isInteger(
+        organizationId
+      ) ||
+      organizationId <= 0
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID is required."
+        },
+        400
+      );
+    }
+
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      start <= 0 ||
+      end <= start
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "A valid start and end time are required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          organization_name
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        organizationId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    const rows =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          provider,
+          category,
+          model,
+
+          COALESCE(
+            SUM(input_tokens),
+            0
+          ) AS input_tokens,
+
+          COALESCE(
+            SUM(cached_input_tokens),
+            0
+          ) AS cached_input_tokens,
+
+          COALESCE(
+            SUM(output_tokens),
+            0
+          ) AS output_tokens,
+
+          COALESCE(
+            SUM(requests),
+            0
+          ) AS requests,
+
+          COALESCE(
+            SUM(characters),
+            0
+          ) AS characters,
+
+          COALESCE(
+            SUM(generations),
+            0
+          ) AS generations,
+
+          COALESCE(
+            SUM(cost_usd),
+            0
+          ) AS cost_usd,
+
+          COUNT(*) AS event_count
+
+        FROM api_cost_events
+
+        WHERE
+          organization_id = ?
+          AND created_at >= ?
+          AND created_at < ?
+
+        GROUP BY
+          provider,
+          category,
+          model
+
+        ORDER BY
+          provider ASC,
+          category ASC,
+          model ASC
+      `)
+      .bind(
+        organizationId,
+        Math.floor(start),
+        Math.floor(end)
+      )
+      .all();
+
+    let openAiInputTokens = 0;
+    let openAiCachedInputTokens = 0;
+    let openAiOutputTokens = 0;
+    let openAiRequests = 0;
+    let openAiCostUsd = 0;
+    let azureTtsCharacters = 0;
+    let azureTtsGenerations = 0;
+    let azureTtsCostUsd = 0;
+
+    const openAiCostBreakdown = {};
+
+    for (
+      const row of
+      rows.results || []
+    ) {
+
+      const provider =
+        String(
+          row.provider || ""
+        );
+
+      const category =
+        String(
+          row.category || "other"
+        );
+
+      const rowCost =
+        Number(
+          row.cost_usd || 0
+        );
+
+      if (
+        provider === "openai"
+      ) {
+
+        openAiInputTokens +=
+          Number(
+            row.input_tokens || 0
+          );
+
+        openAiCachedInputTokens +=
+          Number(
+            row.cached_input_tokens || 0
+          );
+
+        openAiOutputTokens +=
+          Number(
+            row.output_tokens || 0
+          );
+
+        openAiRequests +=
+          Number(
+            row.requests || 0
+          );
+
+        openAiCostUsd +=
+          rowCost;
+
+        openAiCostBreakdown[
+          category
+        ] =
+          Math.round(
+            (
+              Number(
+                openAiCostBreakdown[
+                  category
+                ] || 0
+              ) +
+              rowCost
+            ) *
+            1000000
+          ) /
+          1000000;
+
+      } else if (
+        provider === "azure"
+      ) {
+
+        azureTtsCharacters +=
+          Number(
+            row.characters || 0
+          );
+
+        azureTtsGenerations +=
+          Number(
+            row.generations || 0
+          );
+
+        azureTtsCostUsd +=
+          rowCost;
+      }
+    }
+
+    const totalApiCostUsd =
+      openAiCostUsd +
+      azureTtsCostUsd;
+
+    return jsonResponse({
+      success: true,
+
+      organizationId,
+
+      organizationName:
+        organization.organization_name ||
+        "",
+
+      range: {
+        start:
+          Math.floor(start),
+        end:
+          Math.floor(end)
+      },
+
+      stats: {
+        azureTtsCharacters,
+        azureTtsGenerations,
+
+        azureTtsCostUsd:
+          Math.round(
+            azureTtsCostUsd *
+            1000000
+          ) /
+          1000000,
+
+        openAiInputTokens,
+        openAiCachedInputTokens,
+        openAiOutputTokens,
+        openAiRequests,
+
+        openAiCostUsd:
+          Math.round(
+            openAiCostUsd *
+            1000000
+          ) /
+          1000000,
+
+        openAiCostBreakdown,
+
+        apiCostUsd:
+          Math.round(
+            totalApiCostUsd *
+            1000000
+          ) /
+          1000000,
+
+        apiCostCurrency:
+          LIVEBRIDGE_API_COST_PRICING
+            .currency
+      }
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin API cost range failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load API cost range."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
+ADMIN - ORGANIZATION BROADCAST HISTORY RANGE
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/organization-broadcast-history"
+) {
+
+  try {
+
+    await ensureAnalyticsTables(
+      env
+    );
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const organizationId =
+      Number(
+        url.searchParams.get(
+          "organizationId"
+        ) || 0
+      );
+
+    if (
+      !Number.isInteger(
+        organizationId
+      ) ||
+      organizationId <= 0
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID is required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          room_name
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        organizationId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    const rawStart =
+      url.searchParams.get(
+        "start"
+      );
+
+    const rawEnd =
+      url.searchParams.get(
+        "end"
+      );
+
+    const hasStart =
+      rawStart !== null &&
+      String(rawStart).trim() !== "";
+
+    const hasEnd =
+      rawEnd !== null &&
+      String(rawEnd).trim() !== "";
+
+    const start =
+      hasStart
+        ? Number(rawStart)
+        : null;
+
+    const end =
+      hasEnd
+        ? Number(rawEnd)
+        : null;
+
+    if (
+      (
+        hasStart &&
+        (
+          !Number.isFinite(start) ||
+          start < 0
+        )
+      ) ||
+      (
+        hasEnd &&
+        (
+          !Number.isFinite(end) ||
+          end <= 0
+        )
+      ) ||
+      (
+        hasStart &&
+        hasEnd &&
+        end <= start
+      )
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "A valid broadcast history time range is required."
+        },
+        400
+      );
+    }
+
+    const requestedLimit =
+      Math.floor(
+        Number(
+          url.searchParams.get(
+            "limit"
+          ) || 250
+        )
+      );
+
+    const limit =
+      Math.min(
+        500,
+        Math.max(
+          1,
+          Number.isFinite(
+            requestedLimit
+          )
+            ? requestedLimit
+            : 250
+        )
+      );
+
+    const room =
+      normalizeRoom(
+        organization.room_name
+      );
+
+    let sql = `
+      SELECT
+        id,
+        room,
+        started_at,
+        ended_at,
+        peak_listeners
+      FROM broadcast_sessions
+      WHERE room = ?
+    `;
+
+    const bindings = [
+      room
+    ];
+
+    if (hasStart) {
+      sql += `
+        AND started_at >= ?
+      `;
+
+      bindings.push(
+        Math.floor(start)
+      );
+    }
+
+    if (hasEnd) {
+      sql += `
+        AND started_at < ?
+      `;
+
+      bindings.push(
+        Math.floor(end)
+      );
+    }
+
+    sql += `
+      ORDER BY started_at DESC
+      LIMIT ?
+    `;
+
+    bindings.push(
+      limit + 1
+    );
+
+    const historyResult =
+      await env.TRANSLATIONS_DB.prepare(
+        sql
+      )
+      .bind(
+        ...bindings
+      )
+      .all();
+
+    const rows =
+      historyResult.results ||
+      [];
+
+    const truncated =
+      rows.length > limit;
+
+    const broadcasts = [];
+
+    for (
+      const broadcast of
+      rows.slice(
+        0,
+        limit
+      )
+    ) {
+
+      const summary =
+        await buildBroadcastSummary(
+          env,
+          broadcast.id
+        );
+
+      if (summary) {
+        broadcasts.push(
+          summary
+        );
+      }
+    }
+
+    return jsonResponse({
+      success: true,
+
+      organizationId,
+
+      range: {
+        start:
+          hasStart
+            ? Math.floor(start)
+            : null,
+
+        end:
+          hasEnd
+            ? Math.floor(end)
+            : null
+      },
+
+      limit,
+      truncated,
+      broadcasts
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin organization broadcast history range failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load broadcast history."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
 ADMIN - GET ONE ORGANIZATION
 =======================================================
 */
@@ -14906,6 +15627,12 @@ if (
 
       env.TRANSLATIONS_DB.prepare(`
         DELETE FROM organization_return_messages
+        WHERE organization_id = ?
+      `)
+      .bind(organizationId),
+
+      env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_stats_reset
         WHERE organization_id = ?
       `)
       .bind(organizationId),
@@ -17534,6 +18261,497 @@ if (
             }
           : {})
       }
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/account-usage-stats"
+) {
+
+  try {
+
+    const auth =
+      await verifyClerkRequest(
+        request
+      );
+
+    await ensureAnalyticsTables(
+      env
+    );
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        auth.clerkUserId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "LiveBridge account not found."
+        },
+        404
+      );
+    }
+
+    const resetRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT reset_at
+        FROM organization_stats_reset
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    const resetAt =
+      Math.max(
+        0,
+        Number(
+          resetRow?.reset_at || 0
+        )
+      );
+
+    const requestedStart =
+      Number(
+        url.searchParams.get(
+          "start"
+        ) || 0
+      );
+
+    const requestedEnd =
+      Number(
+        url.searchParams.get(
+          "end"
+        ) || 0
+      );
+
+    const start =
+      Number.isFinite(
+        requestedStart
+      ) &&
+      requestedStart > 0
+        ? Math.floor(
+            requestedStart
+          )
+        : resetAt;
+
+    const end =
+      Number.isFinite(
+        requestedEnd
+      ) &&
+      requestedEnd > start
+        ? Math.floor(
+            requestedEnd
+          )
+        : Date.now() + 1;
+
+    if (
+      end <= start
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "A valid stats start and end time are required."
+        },
+        400
+      );
+    }
+
+    const baseRoom =
+      normalizeRoom(
+        organization.room_name
+      );
+
+    const roomLike =
+      baseRoom + "-%";
+
+    const now =
+      Date.now();
+
+    const broadcastStats =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS broadcast_count,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN ended_at IS NOT NULL
+                THEN MAX(
+                  0,
+                  ended_at - started_at
+                )
+                ELSE MAX(
+                  0,
+                  ? - started_at
+                )
+              END
+            ),
+            0
+          ) AS broadcast_time_ms,
+
+          COALESCE(
+            MAX(
+              peak_listeners
+            ),
+            0
+          ) AS highest_peak
+
+        FROM broadcast_sessions
+
+        WHERE
+          (
+            room = ?
+            OR room LIKE ?
+          )
+          AND started_at >= ?
+          AND started_at < ?
+      `)
+      .bind(
+        now,
+        baseRoom,
+        roomLike,
+        start,
+        end
+      )
+      .first();
+
+    const listenerStats =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS listener_sessions,
+
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms
+
+        FROM listener_sessions ls
+
+        INNER JOIN broadcast_sessions bs
+          ON bs.id =
+            ls.broadcast_id
+
+        WHERE
+          (
+            bs.room = ?
+            OR bs.room LIKE ?
+          )
+          AND bs.started_at >= ?
+          AND bs.started_at < ?
+      `)
+      .bind(
+        now,
+        baseRoom,
+        roomLike,
+        start,
+        end
+      )
+      .first();
+
+    const detailedAnalytics =
+      buildEffectivePlanEntitlements(
+        organization
+      ).detailedAnalytics ===
+      true;
+
+    let languageTotals = [];
+
+    if (
+      detailedAnalytics
+    ) {
+
+      const languageResult =
+        await env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            ls.language AS language,
+
+            COUNT(*) AS listeners,
+
+            COALESCE(
+              SUM(
+                MAX(
+                  0,
+                  COALESCE(
+                    ls.ended_at,
+                    ls.last_seen,
+                    ?
+                  ) -
+                  ls.joined_at
+                )
+              ),
+              0
+            ) AS total_listening_ms
+
+          FROM listener_sessions ls
+
+          INNER JOIN broadcast_sessions bs
+            ON bs.id =
+              ls.broadcast_id
+
+          WHERE
+            (
+              bs.room = ?
+              OR bs.room LIKE ?
+            )
+            AND bs.started_at >= ?
+            AND bs.started_at < ?
+
+          GROUP BY
+            ls.language
+
+          ORDER BY
+            listeners DESC,
+            ls.language ASC
+        `)
+        .bind(
+          now,
+          baseRoom,
+          roomLike,
+          start,
+          end
+        )
+        .all();
+
+      languageTotals =
+        (
+          languageResult.results ||
+          []
+        )
+        .map(
+          row => ({
+            language:
+              String(
+                row.language || ""
+              ),
+            listeners:
+              Number(
+                row.listeners || 0
+              ),
+            totalListeningMs:
+              Number(
+                row.total_listening_ms ||
+                0
+              )
+          })
+        );
+    }
+
+    const totalListeners =
+      Number(
+        listenerStats
+          ?.listener_sessions ||
+        0
+      );
+
+    const totalListeningMs =
+      detailedAnalytics
+        ? Number(
+            listenerStats
+              ?.total_listening_ms ||
+            0
+          )
+        : null;
+
+    return jsonResponse({
+      success: true,
+
+      range: {
+        start,
+        end
+      },
+
+      resetAt,
+
+      stats: {
+        broadcasts:
+          Number(
+            broadcastStats
+              ?.broadcast_count ||
+            0
+          ),
+
+        broadcastTimeMs:
+          Number(
+            broadcastStats
+              ?.broadcast_time_ms ||
+            0
+          ),
+
+        totalListenerSessions:
+          totalListeners,
+
+        highestPeakAudience:
+          Number(
+            broadcastStats
+              ?.highest_peak ||
+            0
+          ),
+
+        detailedAnalytics,
+
+        totalListeningMs,
+
+        averageListenerSessionMs:
+          detailedAnalytics &&
+          totalListeners > 0
+            ? Math.round(
+                Number(
+                  totalListeningMs ||
+                  0
+                ) /
+                totalListeners
+              )
+            : null,
+
+        uniqueLanguages:
+          detailedAnalytics
+            ? languageTotals.length
+            : null,
+
+        languages:
+          detailedAnalytics
+            ? languageTotals
+            : null
+      }
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Account usage stats failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load usage statistics."
+      },
+      403
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/account-usage-stats-reset"
+) {
+
+  try {
+
+    const auth =
+      await verifyClerkRequest(
+        request
+      );
+
+    await ensureAnalyticsTables(
+      env
+    );
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        auth.clerkUserId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "LiveBridge account not found."
+        },
+        404
+      );
+    }
+
+    const now =
+      Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO organization_stats_reset (
+        organization_id,
+        reset_at,
+        updated_at
+      )
+      VALUES (?, ?, ?)
+
+      ON CONFLICT(
+        organization_id
+      )
+      DO UPDATE SET
+        reset_at =
+          excluded.reset_at,
+        updated_at =
+          excluded.updated_at
+    `)
+    .bind(
+      Number(
+        organization.id
+      ),
+      now,
+      now
+    )
+    .run();
+
+    return jsonResponse({
+      success: true,
+      resetAt:
+        now
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Account usage stats reset failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to reset usage statistics."
+      },
+      403
     );
   }
 }

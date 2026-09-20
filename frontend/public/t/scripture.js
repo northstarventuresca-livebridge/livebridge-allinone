@@ -65,6 +65,41 @@
         flex-wrap:wrap;
         margin-bottom:10px;
       }
+
+      .lb-live-notes-head{
+        margin-bottom:0;
+      }
+
+      .lb-live-notes-head-actions{
+        display:flex;
+        align-items:center;
+        gap:9px;
+        margin-left:auto;
+      }
+
+      .lb-live-notes-toggle{
+        border:1px solid rgba(120,183,255,.25);
+        background:rgba(45,151,255,.08);
+        color:#a8d0ff;
+        border-radius:8px;
+        padding:6px 9px;
+        font-size:10px;
+        font-weight:900;
+        cursor:pointer;
+      }
+
+      .lb-live-notes-toggle:hover{
+        background:rgba(45,151,255,.14);
+      }
+
+      .lb-live-notes-body{
+        margin-top:10px;
+      }
+
+      .lb-live-notes-panel.is-collapsed
+      .lb-live-notes-body{
+        display:none;
+      }
       .lb-live-notes-title,
       .lb-scripture-title{
         font-size:14px;
@@ -86,6 +121,23 @@
         font-size:13px;
         line-height:1.6;
         white-space:pre-wrap;
+        max-height:240px;
+        overflow-y:auto;
+        overscroll-behavior:contain;
+        padding-right:6px;
+      }
+
+      .lb-live-notes-copy::-webkit-scrollbar{
+        width:7px;
+      }
+
+      .lb-live-notes-copy::-webkit-scrollbar-thumb{
+        background:rgba(120,183,255,.28);
+        border-radius:999px;
+      }
+
+      .lb-live-notes-copy::-webkit-scrollbar-track{
+        background:rgba(255,255,255,.03);
       }
       .lb-live-notes-empty,
       .lb-scripture-empty{
@@ -170,15 +222,65 @@
 
       notesPanel.hidden = true;
 
+      notesPanel.classList.add(
+        "is-collapsed"
+      );
+
       notesPanel.innerHTML = `
         <div class="lb-live-notes-head">
           <div class="lb-live-notes-title">✨ AI Live Notes</div>
-          <div id="listenerLiveNotesStatus" class="lb-live-notes-status">Updates automatically</div>
+
+          <div class="lb-live-notes-head-actions">
+            <div id="listenerLiveNotesStatus" class="lb-live-notes-status">Updates automatically</div>
+
+            <button
+              type="button"
+              id="listenerLiveNotesToggle"
+              class="lb-live-notes-toggle"
+              aria-expanded="false"
+              aria-controls="listenerLiveNotesBody"
+            >
+              Show Summary
+            </button>
+          </div>
         </div>
-        <div id="listenerLiveNotesCopy" class="lb-live-notes-copy">
-          <div class="lb-live-notes-empty">Live summary notes will appear here as the message develops.</div>
+
+        <div
+          id="listenerLiveNotesBody"
+          class="lb-live-notes-body"
+        >
+          <div id="listenerLiveNotesCopy" class="lb-live-notes-copy">
+            <div class="lb-live-notes-empty">Live summary notes will appear here as the message develops.</div>
+          </div>
         </div>
       `;
+
+      const notesToggle =
+        notesPanel.querySelector(
+          "#listenerLiveNotesToggle"
+        );
+
+      notesToggle?.addEventListener(
+        "click",
+        () => {
+          const collapsed =
+            notesPanel.classList.toggle(
+              "is-collapsed"
+            );
+
+          notesToggle.setAttribute(
+            "aria-expanded",
+            collapsed
+              ? "false"
+              : "true"
+          );
+
+          notesToggle.textContent =
+            collapsed
+              ? "Show Summary"
+              : "Hide Summary";
+        }
+      );
 
       output.insertAdjacentElement(
         "afterend",
