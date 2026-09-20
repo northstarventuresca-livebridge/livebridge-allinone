@@ -6141,18 +6141,60 @@ return url.toString();
     {code:"yue",flag:"🇭🇰",native:"撳呢度用廣東話收聽",english:"Cantonese"}
   ];
 
+  const changeLanguageLabels = {
+    en:"Change Language",
+    fr:"Changer de langue",
+    es:"Cambiar idioma",
+    de:"Sprache ändern",
+    pt:"Mudar idioma",
+    it:"Cambia lingua",
+    pl:"Zmień język",
+    ru:"Сменить язык",
+    uk:"Змінити мову",
+    nl:"Taal wijzigen",
+    cs:"Změnit jazyk",
+    fil:"Palitan ang wika",
+    he:"שינוי שפה",
+    yo:"Yí èdè padà",
+    ig:"Gbanwee asụsụ",
+    ha:"Canja harshe",
+    zh:"更改语言",
+    yue:"更改語言"
+  };
+
+  let autoJoinStarted =
+    false;
+
   function params(){
     return new URLSearchParams(window.location.search);
   }
 
-  function applyLanguageFromURL(){
+  function selectedLanguageFromURL(){
     const requested =
       String(params().get("lang") || "")
         .trim()
         .toLowerCase();
 
     if(!requested){
-      return false;
+      return null;
+    }
+
+    return (
+      languages.find(
+        item =>
+          item.code ===
+          requested
+      ) ||
+      null
+    );
+  }
+
+  function applyLanguageFromURL(){
+    const selected =
+      selectedLanguageFromURL();
+
+    if(!selected){
+      return null;
     }
 
     const select =
@@ -6163,7 +6205,7 @@ return url.toString();
         Array.from(select.options).find(item =>
           String(item.value)
             .split("|")[0]
-            .toLowerCase() === requested
+            .toLowerCase() === selected.code
         );
 
       if(option){
@@ -6174,7 +6216,7 @@ return url.toString();
       }
     }
 
-    return true;
+    return selected;
   }
 
   function chooseLanguage(code){
@@ -6185,6 +6227,116 @@ return url.toString();
       window.location.pathname +
       "?" +
       p.toString();
+  }
+
+  function returnToLanguageSelector(){
+    const p =
+      params();
+
+    p.delete("lang");
+
+    window.location.href =
+      window.location.pathname +
+      (
+        p.toString()
+          ? "?" + p.toString()
+          : ""
+      );
+  }
+
+  function updateActiveSessionSummary(
+    selected
+  ){
+    const p =
+      params();
+
+    const room =
+      String(
+        p.get("room") ||
+        document.getElementById(
+          "listenerRoom"
+        )?.value ||
+        ""
+      )
+      .trim()
+      .toUpperCase();
+
+    const roomName =
+      document.getElementById(
+        "activeListenerRoomName"
+      );
+
+    if(roomName){
+      roomName.textContent =
+        room
+          ? "Room: " + room
+          : "Live room";
+    }
+
+    const languageName =
+      document.getElementById(
+        "activeListenerLanguageName"
+      );
+
+    if(languageName){
+      languageName.textContent =
+        selected?.english ||
+        "Language";
+    }
+
+    const changeButton =
+      document.getElementById(
+        "changeLanguageButton"
+      );
+
+    if(changeButton){
+      changeButton.textContent =
+        "🌐 " +
+        (
+          changeLanguageLabels[
+            selected?.code
+          ] ||
+          changeLanguageLabels.en
+        );
+
+      if(
+        changeButton.dataset
+          .lbLanguageBound !==
+        "1"
+      ){
+        changeButton.dataset
+          .lbLanguageBound =
+          "1";
+
+        changeButton.addEventListener(
+          "click",
+          returnToLanguageSelector
+        );
+      }
+    }
+  }
+
+  function startAutomaticJoin(){
+    if(autoJoinStarted){
+      return;
+    }
+
+    autoJoinStarted =
+      true;
+
+    setTimeout(
+      async () => {
+        try{
+          await joinLiveRoom();
+        }catch(error){
+          console.error(
+            "LiveBridge automatic listener join failed:",
+            error
+          );
+        }
+      },
+      80
+    );
   }
 
   function renderGate(){
@@ -6202,16 +6354,30 @@ return url.toString();
     }
 
     const p = params();
-    const hasLanguage =
-      String(p.get("lang") || "").trim() !== "";
+    const selected =
+      selectedLanguageFromURL();
 
-    if(hasLanguage){
+    if(selected){
       gate.classList.remove("show");
       page.style.display = "";
-      applyLanguageFromURL();
+
+      const applied =
+        applyLanguageFromURL();
+
+      updateActiveSessionSummary(
+        applied
+      );
+
+      startAutomaticJoin();
+
       return;
     }
 
+    /*
+      Invalid / stale language codes should never
+      open the live listener with an unknown state.
+      Show the language selector instead.
+    */
     page.style.display = "none";
     gate.classList.add("show");
 
