@@ -1578,6 +1578,107 @@ body{
 
 <section id="panel-usage" class="lb-panel">
 
+  <div
+    class="lb-card"
+    style="margin-bottom:16px;"
+  >
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+      <div>
+        <div class="lb-card-title">
+          Stats Range
+        </div>
+
+        <div class="lb-muted" style="margin-top:5px;line-height:1.5;">
+          View your analytics for a service, day, week or custom time period.
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="lb-secondary-button"
+        id="resetUsageStatsButton"
+        style="border-color:rgba(248,113,113,.35);color:#fca5a5;"
+      >
+        Reset Stats
+      </button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:minmax(170px,230px) minmax(0,1fr);gap:10px;margin-top:14px;align-items:end;">
+      <label style="display:block;">
+        <span class="lb-muted" style="display:block;font-size:10px;font-weight:800;margin-bottom:5px;">
+          RANGE
+        </span>
+
+        <select
+          id="usageStatsRangePreset"
+          class="lb-live-select"
+          style="width:100%;"
+        >
+          <option value="since-reset">Since Reset</option>
+          <option value="today">Today</option>
+          <option value="24h">Last 24 Hours</option>
+          <option value="7d">Last 7 Days</option>
+          <option value="30d">Last 30 Days</option>
+          <option value="month">This Month</option>
+          <option value="all">All Time</option>
+          <option value="custom">Custom Date / Time</option>
+        </select>
+      </label>
+
+      <div
+        id="usageStatsRangeStatus"
+        class="lb-muted"
+        style="padding-bottom:9px;font-size:11px;"
+      >
+        Loading stats...
+      </div>
+    </div>
+
+    <div
+      id="usageStatsCustomRange"
+      style="display:none;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:9px;align-items:end;margin-top:12px;"
+    >
+      <label style="display:block;">
+        <span class="lb-muted" style="display:block;font-size:10px;font-weight:800;margin-bottom:5px;">
+          START
+        </span>
+        <input
+          id="usageStatsCustomStart"
+          type="datetime-local"
+          class="lb-live-input"
+          style="width:100%;box-sizing:border-box;"
+        >
+      </label>
+
+      <label style="display:block;">
+        <span class="lb-muted" style="display:block;font-size:10px;font-weight:800;margin-bottom:5px;">
+          END
+        </span>
+        <input
+          id="usageStatsCustomEnd"
+          type="datetime-local"
+          class="lb-live-input"
+          style="width:100%;box-sizing:border-box;"
+        >
+      </label>
+
+      <button
+        type="button"
+        class="lb-primary-button"
+        id="applyUsageStatsRange"
+        style="min-height:43px;padding:10px 15px;"
+      >
+        Apply
+      </button>
+    </div>
+
+    <div
+      id="usageStatsResetNote"
+      class="lb-muted"
+      style="margin-top:10px;font-size:10px;line-height:1.5;"
+    ></div>
+  </div>
+
   <div class="lb-grid-4">
 
     <div class="lb-card">
@@ -2399,10 +2500,6 @@ async function loadBroadcastHistory(
     window.liveBridgeBroadcastHistory =
       broadcasts;
 
-    renderAccountStats(
-      broadcasts
-    );
-
     renderBroadcastHistory(
       broadcasts
     );
@@ -2420,6 +2517,813 @@ async function loadBroadcastHistory(
       '<div class="lb-empty">Broadcast history could not be loaded.</div>';
   }
 }
+
+let usageStatsResetAt =
+  0;
+
+
+function usageStatsDateTimeLocalValue(
+  value
+){
+
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  const pad =
+    number =>
+      String(number)
+        .padStart(2,"0");
+
+  return (
+    date.getFullYear() +
+    "-" +
+    pad(date.getMonth() + 1) +
+    "-" +
+    pad(date.getDate()) +
+    "T" +
+    pad(date.getHours()) +
+    ":" +
+    pad(date.getMinutes())
+  );
+}
+
+
+function usageStatsRangeLabel(
+  start,
+  end
+){
+
+  const options = {
+    month:"short",
+    day:"numeric",
+    hour:"numeric",
+    minute:"2-digit"
+  };
+
+  return (
+    new Date(start)
+      .toLocaleString(
+        [],
+        options
+      ) +
+    " – " +
+    new Date(end)
+      .toLocaleString(
+        [],
+        options
+      )
+  );
+}
+
+
+function usageStatsPresetRange(
+  preset
+){
+
+  const now =
+    new Date();
+
+  let start =
+    new Date(now);
+
+  if(
+    preset ===
+    "today"
+  ){
+    start.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+  }else if(
+    preset ===
+    "24h"
+  ){
+    start =
+      new Date(
+        now.getTime() -
+        24 * 60 * 60 * 1000
+      );
+
+  }else if(
+    preset ===
+    "7d"
+  ){
+    start =
+      new Date(
+        now.getTime() -
+        7 * 24 * 60 * 60 * 1000
+      );
+
+  }else if(
+    preset ===
+    "30d"
+  ){
+    start =
+      new Date(
+        now.getTime() -
+        30 * 24 * 60 * 60 * 1000
+      );
+
+  }else if(
+    preset ===
+    "month"
+  ){
+    start =
+      new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+        0,
+        0,
+        0,
+        0
+      );
+
+  }else if(
+    preset ===
+    "all"
+  ){
+    return {
+      start:1,
+      end:now.getTime()
+    };
+  }
+
+  return {
+    start:
+      start.getTime(),
+    end:
+      now.getTime()
+  };
+}
+
+
+function renderCustomerUsageStats(
+  stats,
+  rangeLabel,
+  updateOverview = false
+){
+
+  stats =
+    stats || {};
+
+  const totalBroadcasts =
+    Number(
+      stats.broadcasts || 0
+    );
+
+  const totalListeners =
+    Number(
+      stats.totalListenerSessions ||
+      0
+    );
+
+  const peak =
+    Number(
+      stats.highestPeakAudience ||
+      0
+    );
+
+  document.getElementById(
+    "usageBroadcasts"
+  ).textContent =
+    totalBroadcasts;
+
+  document.getElementById(
+    "usageListeners"
+  ).textContent =
+    totalListeners;
+
+  document.getElementById(
+    "usagePeak"
+  ).textContent =
+    peak;
+
+  if(
+    updateOverview
+  ){
+    document.getElementById(
+      "overviewBroadcasts"
+    ).textContent =
+      totalBroadcasts;
+
+    document.getElementById(
+      "overviewListeners"
+    ).textContent =
+      totalListeners;
+  }
+
+  const detailed =
+    stats.detailedAnalytics ===
+      true;
+
+  if(
+    !detailed
+  ){
+
+    if(
+      updateOverview
+    ){
+      document.getElementById(
+        "overviewListening"
+      ).innerHTML =
+        '🔒 <span style="font-size:12px;">Growth</span>';
+    }
+
+    document.getElementById(
+      "usageLanguages"
+    ).innerHTML =
+      '🔒';
+
+    document.getElementById(
+      "usageListeningTime"
+    ).innerHTML =
+      '🔒 Growth';
+
+    document.getElementById(
+      "usageAverageListen"
+    ).innerHTML =
+      '🔒 Growth';
+
+    document.getElementById(
+      "usageLanguageList"
+    ).innerHTML = `
+      <div style="
+        padding:16px;
+        border-radius:12px;
+        border:1px solid rgba(255,193,7,.18);
+        background:rgba(255,193,7,.06);
+      ">
+        <strong style="color:#ffd978;">
+          🔒 Detailed Listener & Language Analytics
+        </strong>
+
+        <div style="
+          margin-top:7px;
+          line-height:1.55;
+          color:#9fb2c6;
+        ">
+          Growth and Pro unlock total listening time,
+          average listener duration and language-by-language
+          audience reporting.
+        </div>
+
+        <a
+          class="lb-upgrade-link"
+          href="/plans/index.html"
+          style="margin-top:12px;"
+        >
+          Compare Plans & Upgrade
+        </a>
+      </div>
+    `;
+
+  }else{
+
+    const totalListening =
+      Number(
+        stats.totalListeningMs ||
+        0
+      );
+
+    const averageListen =
+      Number(
+        stats.averageListenerSessionMs ||
+        0
+      );
+
+    const languages =
+      Array.isArray(
+        stats.languages
+      )
+        ? stats.languages
+        : [];
+
+    if(
+      updateOverview
+    ){
+      document.getElementById(
+        "overviewListening"
+      ).textContent =
+        formatDuration(
+          totalListening
+        );
+    }
+
+    document.getElementById(
+      "usageLanguages"
+    ).textContent =
+      Number(
+        stats.uniqueLanguages ||
+        languages.length ||
+        0
+      );
+
+    document.getElementById(
+      "usageListeningTime"
+    ).textContent =
+      formatDuration(
+        totalListening
+      );
+
+    document.getElementById(
+      "usageAverageListen"
+    ).textContent =
+      formatDuration(
+        averageListen
+      );
+
+    const languageList =
+      document.getElementById(
+        "usageLanguageList"
+      );
+
+    if(
+      !languages.length
+    ){
+      languageList.textContent =
+        "No listener languages recorded in this range.";
+
+    }else{
+      languageList.innerHTML =
+        languages
+          .map(
+            item => `
+              <div style="
+                display:flex;
+                justify-content:space-between;
+                gap:12px;
+                padding:10px 0;
+                border-bottom:1px solid rgba(255,255,255,.08);
+              ">
+                <span>
+                  🌎 ${String(
+                    item.language ||
+                    ""
+                  ).toUpperCase()}
+                </span>
+                <strong>
+                  ${Number(
+                    item.listeners ||
+                    0
+                  )} listener sessions
+                </strong>
+              </div>
+            `
+          )
+          .join("");
+    }
+  }
+
+  const status =
+    document.getElementById(
+      "usageStatsRangeStatus"
+    );
+
+  if(status){
+    status.textContent =
+      rangeLabel ||
+      "Stats loaded";
+  }
+
+  const note =
+    document.getElementById(
+      "usageStatsResetNote"
+    );
+
+  if(note){
+    note.textContent =
+      usageStatsResetAt
+        ? "Stats were last reset " +
+          new Date(
+            usageStatsResetAt
+          ).toLocaleString() +
+          ". Historical data is still available through All Time or Custom."
+        : "Stats have not been reset. Since Reset currently shows all recorded history.";
+  }
+}
+
+
+async function fetchCustomerUsageStats(
+  start = null,
+  end = null
+){
+
+  const token =
+    await getLiveBridgeSessionToken();
+
+  if(!token){
+    throw new Error(
+      "Please sign in again."
+    );
+  }
+
+  const url =
+    new URL(
+      LB_WORKER +
+      "/account-usage-stats"
+    );
+
+  if(
+    start !== null &&
+    start !== undefined
+  ){
+    url.searchParams.set(
+      "start",
+      String(
+        Math.floor(start)
+      )
+    );
+  }
+
+  if(
+    end !== null &&
+    end !== undefined
+  ){
+    url.searchParams.set(
+      "end",
+      String(
+        Math.floor(end)
+      )
+    );
+  }
+
+  const response =
+    await fetch(
+      url.toString(),
+      {
+        headers:{
+          "Authorization":
+            "Bearer " +
+            token
+        }
+      }
+    );
+
+  const data =
+    await response.json();
+
+  if(
+    !response.ok ||
+    !data.success
+  ){
+    throw new Error(
+      data.error ||
+      "Usage statistics could not be loaded."
+    );
+  }
+
+  usageStatsResetAt =
+    Number(
+      data.resetAt || 0
+    );
+
+  return data;
+}
+
+
+async function loadCustomerUsageStats(
+  preset = "since-reset",
+  options = {}
+){
+
+  const status =
+    document.getElementById(
+      "usageStatsRangeStatus"
+    );
+
+  if(status){
+    status.textContent =
+      "Loading stats...";
+  }
+
+  try{
+
+    let data;
+    let label;
+
+    if(
+      preset ===
+      "since-reset"
+    ){
+      data =
+        await fetchCustomerUsageStats();
+
+      label =
+        data.resetAt
+          ? "Since reset · " +
+            new Date(
+              data.resetAt
+            ).toLocaleString()
+          : "All recorded history";
+
+    }else{
+
+      const range =
+        usageStatsPresetRange(
+          preset
+        );
+
+      data =
+        await fetchCustomerUsageStats(
+          range.start,
+          range.end
+        );
+
+      const labels = {
+        today:"Today",
+        "24h":"Last 24 Hours",
+        "7d":"Last 7 Days",
+        "30d":"Last 30 Days",
+        month:"This Month",
+        all:"All Time"
+      };
+
+      label =
+        labels[preset] ||
+        usageStatsRangeLabel(
+          range.start,
+          range.end
+        );
+    }
+
+    renderCustomerUsageStats(
+      data.stats,
+      label,
+      options.updateOverview ===
+        true
+    );
+
+  }catch(error){
+
+    console.error(
+      "LiveBridge usage stats failed:",
+      error
+    );
+
+    if(status){
+      status.textContent =
+        error.message ||
+        "Unable to load stats.";
+    }
+  }
+}
+
+
+function initializeUsageStatsControls(){
+
+  const preset =
+    document.getElementById(
+      "usageStatsRangePreset"
+    );
+
+  const custom =
+    document.getElementById(
+      "usageStatsCustomRange"
+    );
+
+  const now =
+    new Date();
+
+  const todayStart =
+    new Date(now);
+
+  todayStart.setHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  const customStart =
+    document.getElementById(
+      "usageStatsCustomStart"
+    );
+
+  const customEnd =
+    document.getElementById(
+      "usageStatsCustomEnd"
+    );
+
+  if(customStart){
+    customStart.value =
+      usageStatsDateTimeLocalValue(
+        todayStart
+      );
+  }
+
+  if(customEnd){
+    customEnd.value =
+      usageStatsDateTimeLocalValue(
+        now
+      );
+  }
+
+  preset?.addEventListener(
+    "change",
+    function(){
+
+      if(custom){
+        custom.style.display =
+          this.value ===
+            "custom"
+            ? "grid"
+            : "none";
+      }
+
+      if(
+        this.value !==
+        "custom"
+      ){
+        loadCustomerUsageStats(
+          this.value
+        );
+      }
+    }
+  );
+
+  document.getElementById(
+    "applyUsageStatsRange"
+  )?.addEventListener(
+    "click",
+    async function(){
+
+      const start =
+        new Date(
+          customStart?.value ||
+          ""
+        ).getTime();
+
+      const end =
+        new Date(
+          customEnd?.value ||
+          ""
+        ).getTime();
+
+      if(
+        !Number.isFinite(start) ||
+        !Number.isFinite(end) ||
+        end <= start
+      ){
+        alert(
+          "Choose a valid stats start and end time."
+        );
+
+        return;
+      }
+
+      const status =
+        document.getElementById(
+          "usageStatsRangeStatus"
+        );
+
+      if(status){
+        status.textContent =
+          "Loading stats...";
+      }
+
+      try{
+        const data =
+          await fetchCustomerUsageStats(
+            start,
+            end
+          );
+
+        renderCustomerUsageStats(
+          data.stats,
+          usageStatsRangeLabel(
+            start,
+            end
+          ),
+          false
+        );
+
+      }catch(error){
+        if(status){
+          status.textContent =
+            error.message ||
+            "Unable to load stats.";
+        }
+      }
+    }
+  );
+
+  document.getElementById(
+    "resetUsageStatsButton"
+  )?.addEventListener(
+    "click",
+    async function(){
+
+      const confirmed =
+        window.confirm(
+          "Reset your displayed Usage & Stats numbers starting now?\n\nThis does NOT delete broadcast history, transcripts, billing usage, plan minutes or API cost records. Historical analytics will still be available using All Time or Custom."
+        );
+
+      if(!confirmed){
+        return;
+      }
+
+      const button =
+        this;
+
+      button.disabled =
+        true;
+
+      const oldText =
+        button.textContent;
+
+      button.textContent =
+        "Resetting...";
+
+      try{
+
+        const token =
+          await getLiveBridgeSessionToken();
+
+        if(!token){
+          throw new Error(
+            "Please sign in again."
+          );
+        }
+
+        const response =
+          await fetch(
+            LB_WORKER +
+            "/account-usage-stats-reset",
+            {
+              method:"POST",
+              headers:{
+                "Authorization":
+                  "Bearer " +
+                  token,
+                "Content-Type":
+                  "application/json"
+              },
+              body:
+                JSON.stringify({})
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if(
+          !response.ok ||
+          !data.success
+        ){
+          throw new Error(
+            data.error ||
+            "Unable to reset stats."
+          );
+        }
+
+        usageStatsResetAt =
+          Number(
+            data.resetAt ||
+            Date.now()
+          );
+
+        if(preset){
+          preset.value =
+            "since-reset";
+        }
+
+        if(custom){
+          custom.style.display =
+            "none";
+        }
+
+        await loadCustomerUsageStats(
+          "since-reset",
+          {
+            updateOverview:true
+          }
+        );
+
+      }catch(error){
+
+        alert(
+          error.message ||
+          "Unable to reset stats."
+        );
+
+      }finally{
+
+        button.disabled =
+          false;
+
+        button.textContent =
+          oldText;
+      }
+    }
+  );
+}
+
 
 function renderAccountStats(
   broadcasts
@@ -4106,6 +5010,8 @@ async function renderDashboard(
 
   loadOrganizationStatsApi();
 
+  initializeUsageStatsControls();
+
   document.getElementById(
     "sidebarOrganization"
   ).textContent =
@@ -4178,6 +5084,13 @@ async function renderDashboard(
   renderProReportingExport();
 
   loadMarketingCreditBilling();
+
+  loadCustomerUsageStats(
+    "since-reset",
+    {
+      updateOverview:true
+    }
+  );
 
   loadBroadcastHistory(
     account
