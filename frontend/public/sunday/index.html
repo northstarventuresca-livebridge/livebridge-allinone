@@ -1315,11 +1315,23 @@ body{
 
 <script>
 
+const BROADCASTER_HOST =
+  String(
+    window.location.hostname || ""
+  ).toLowerCase();
+
+const BROADCASTER_PREVIEW =
+  BROADCASTER_HOST.includes("dev-v1-3-0") ||
+  BROADCASTER_HOST.includes("livebridge-allinone-frontend-test") ||
+  BROADCASTER_HOST.includes("livebridge-promoter-frontend-test");
+
 const WORKER_URL =
-  "https://livebridge.northstarventures-ca.workers.dev";
+  BROADCASTER_PREVIEW
+    ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+    : "https://livebridge.northstarventures-ca.workers.dev";
 
 const LISTENER_BASE_URL =
-  "https://livebridge.ca/t/";
+  window.location.origin + "/t/";
 
 let ROOM_ID = "";
 let broadcastHeartbeat = null;
@@ -6779,7 +6791,18 @@ window.addEventListener(
 (function(){
 
   const WORKER =
-    "https://livebridge.northstarventures-ca.workers.dev";
+    typeof WORKER_URL === "string"
+      ? WORKER_URL
+      : (
+          String(
+            window.location.hostname || ""
+          ).toLowerCase()
+            .includes(
+              "livebridge-allinone-frontend-test"
+            )
+            ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+            : "https://livebridge.northstarventures-ca.workers.dev"
+        );
 
   let adminVerified =
     false;
