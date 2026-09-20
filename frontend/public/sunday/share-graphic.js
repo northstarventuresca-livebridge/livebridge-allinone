@@ -301,6 +301,14 @@
       qr.onerror = reject;
     });
 
+    const brandLogo = new Image();
+    brandLogo.src = "/assets/livebridge-logo.jpg";
+
+    await new Promise((resolve, reject) => {
+      brandLogo.onload = resolve;
+      brandLogo.onerror = reject;
+    });
+
     const canvas = document.createElement("canvas");
     canvas.width = 1600;
     canvas.height = 900;
@@ -308,18 +316,20 @@
     const ctx = canvas.getContext("2d");
     drawBackground(ctx, canvas.width, canvas.height);
 
-    drawBridgeMark(ctx, 286, 48, 245);
+    ctx.save();
+    roundedRect(ctx, 72, 48, 126, 126, 24);
+    ctx.clip();
+    ctx.drawImage(brandLogo, 72, 48, 126, 126);
+    ctx.restore();
 
     ctx.textAlign = "left";
     ctx.fillStyle = "#ffffff";
-    ctx.font = "900 76px Arial,Helvetica,sans-serif";
-    ctx.fillText("Live", 72, 165);
-    ctx.fillStyle = "#40dfff";
-    ctx.fillText("Bridge", 220, 165);
+    ctx.font = "900 62px Arial,Helvetica,sans-serif";
+    ctx.fillText("LiveBridge", 220, 122);
 
     ctx.fillStyle = "rgba(220,239,255,.82)";
     ctx.font = "700 22px Arial,Helvetica,sans-serif";
-    ctx.fillText(org, 74, 202);
+    ctx.fillText(org, 222, 160);
 
     const leftWidth = 790;
     let y = 340;

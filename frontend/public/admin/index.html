@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
 <body>
+<!-- LIVEBRIDGE V1.3 CLOUDFLARE RESYNC 2026-09-19 -->
 <style>
 *{box-sizing:border-box}
 
@@ -61,6 +62,17 @@ body{
 .lb-logo{
   font-size:27px;
   font-weight:900;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.lb-logo img{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  object-fit:cover;
+  flex:0 0 auto;
 }
 
 .lb-logo span{
@@ -790,7 +802,8 @@ body{
     <aside class="lb-sidebar">
 
       <div class="lb-logo">
-        Live<span>Bridge</span>
+        <img src="/assets/livebridge-logo.jpg" alt="LiveBridge logo">
+        <div>Live<span>Bridge</span></div>
       </div>
 
       <div class="lb-admin-label">
@@ -930,6 +943,13 @@ body{
               placeholder="Search clients..."
             >
 
+          </div>
+
+          <div
+            id="organizationOrderHint"
+            class="lb-org-order-hint"
+          >
+            Drag the ⋮⋮ handle to arrange organizations. Order saves automatically.
           </div>
 
 
@@ -1649,6 +1669,16 @@ body{
                   <input type="checkbox" id="overrideCustomOnboarding">
                   <span><strong>Custom Onboarding / Configuration</strong><small>Marks this organization for custom setup support.</small></span>
                 </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideMarketingCampaigns">
+                  <span><strong>Marketing Campaign Generator</strong><small>Enables local language research, outreach strategy, AI graphics and printable campaign tools for this organization.</small></span>
+                </label>
+
+                <label class="lb-feature-override-item">
+                  <input type="checkbox" id="overrideOrganizationStatsApi">
+                  <span><strong>Organization Stats API</strong><small>Growth/Pro include API access by plan. This switch is the final admin control and can also grant Starter access or disable API access for any organization.</small></span>
+                </label>
               </div>
 
               <div
@@ -1661,6 +1691,73 @@ body{
                 "
               >
                 No additional feature overrides enabled.
+              </div>
+            </div>
+
+
+            <div
+              style="
+                margin-top:18px;
+                padding:16px;
+                border-radius:14px;
+                border:1px solid rgba(111,67,223,.24);
+                background:rgba(111,67,223,.07);
+              "
+            >
+              <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
+                Marketing Generation Credits
+              </div>
+
+              <div style="color:#8fa8bf;font-size:11px;line-height:1.5;margin-bottom:12px;">
+                1 credit = 1 complete new 4-graphic marketing campaign. Set the exact balance here or use the quick-add buttons below.
+              </div>
+
+              <div class="lb-field">
+                <label>Current Credit Balance</label>
+                <input
+                  id="editMarketingCredits"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value="0"
+                >
+              </div>
+
+              <div class="lb-quick-buttons" style="margin-top:10px;">
+                <button class="lb-button secondary marketing-credit-btn" type="button" data-credits="1">+1</button>
+                <button class="lb-button secondary marketing-credit-btn" type="button" data-credits="5">+5</button>
+                <button class="lb-button secondary marketing-credit-btn" type="button" data-credits="10">+10</button>
+                <button class="lb-button secondary marketing-credit-btn" type="button" data-credits="25">+25</button>
+                <button class="lb-button secondary" type="button" id="clearMarketingCredits">Set 0</button>
+              </div>
+
+              <div style="color:#71869b;font-size:10px;line-height:1.45;margin-top:9px;">
+                Admin overrides do not charge the organization and do not expire.
+              </div>
+            </div>
+
+
+            <div
+              style="
+                margin-top:18px;
+                padding:16px;
+                border-radius:14px;
+                border:1px solid rgba(52,212,189,.18);
+                background:rgba(52,212,189,.045);
+              "
+            >
+              <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
+                Marketing Credit Analytics
+              </div>
+
+              <div style="color:#8fa8bf;font-size:11px;line-height:1.5;margin-bottom:12px;">
+                Generation usage, returned credits, languages and creative combinations for this organization.
+              </div>
+
+              <div id="marketingCreditAnalytics">
+                <div class="lb-muted">
+                  Loading marketing analytics...
+                </div>
               </div>
             </div>
 
@@ -2030,8 +2127,20 @@ body{
 
 <script>
 
+const ADMIN_HOST =
+  String(
+    window.location.hostname || ""
+  ).toLowerCase();
+
+const ADMIN_PREVIEW =
+  ADMIN_HOST.includes("dev-v1-3-0") ||
+  ADMIN_HOST.includes("livebridge-allinone-frontend-test") ||
+  ADMIN_HOST.includes("livebridge-promoter-frontend-test");
+
 const ADMIN_WORKER =
-  "https://livebridge.northstarventures-ca.workers.dev";
+  ADMIN_PREVIEW
+    ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+    : "https://livebridge.northstarventures-ca.workers.dev";
 
 let adminOrganizations = [];
 let selectedOrganization = null;
@@ -3262,6 +3371,19 @@ async function downloadOfferGraphic(){
   const offer = data.offer;
   const plan = offer.plan || {};
 
+  const brandLogo =
+    new Image();
+
+  brandLogo.src =
+    "/assets/livebridge-logo.jpg";
+
+  await new Promise(
+    (resolve,reject) => {
+      brandLogo.onload = resolve;
+      brandLogo.onerror = reject;
+    }
+  );
+
   const canvas =
     document.createElement("canvas");
 
@@ -3436,15 +3558,34 @@ async function downloadOfferGraphic(){
   =====================================================
   */
 
+  ctx.save();
+  roundedRect(
+    100,
+    62,
+    92,
+    92,
+    18,
+    null
+  );
+  ctx.clip();
+  ctx.drawImage(
+    brandLogo,
+    100,
+    62,
+    92,
+    92
+  );
+  ctx.restore();
+
   ctx.fillStyle = "#ffffff";
   ctx.font = "900 54px Arial";
-  ctx.fillText("LiveBridge",100,118);
+  ctx.fillText("LiveBridge",216,118);
 
   ctx.fillStyle = "#66d8f5";
   ctx.font = "900 16px Arial";
   ctx.fillText(
     "REAL-TIME MULTILINGUAL COMMUNICATION",
-    102,
+    218,
     158
   );
 
@@ -3929,6 +4070,277 @@ function renderAdminStats(){
 }
 
 
+let draggedOrganizationRow = null;
+let organizationOrderChanged = false;
+
+function organizationReorderEnabled(){
+  const search =
+    document.getElementById(
+      "clientSearch"
+    );
+
+  return !String(
+    search?.value || ""
+  ).trim();
+}
+
+
+async function saveOrganizationOrder(){
+
+  const rows =
+    Array.from(
+      document.querySelectorAll(
+        "#clientRows .lb-client-row[data-organization-id]"
+      )
+    );
+
+  const organizationIds =
+    rows
+      .map(
+        row =>
+          Number(
+            row.dataset.organizationId ||
+            0
+          )
+      )
+      .filter(Boolean);
+
+  if(
+    organizationIds.length !==
+    adminOrganizations.length
+  ){
+    return;
+  }
+
+  const hint =
+    document.getElementById(
+      "organizationOrderHint"
+    );
+
+  if(hint){
+    hint.textContent =
+      "Saving organization order...";
+  }
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/organization-order",
+        {
+          method:"POST",
+          body:JSON.stringify({
+            organizationIds
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to save organization order."
+      );
+    }
+
+    const byId =
+      new Map(
+        adminOrganizations.map(
+          item => [
+            Number(item.id),
+            item
+          ]
+        )
+      );
+
+    adminOrganizations =
+      organizationIds
+        .map(id => byId.get(id))
+        .filter(Boolean);
+
+    if(hint){
+      hint.textContent =
+        "✓ Custom organization order saved. Drag the ⋮⋮ handle anytime to rearrange.";
+    }
+
+  }catch(error){
+
+    if(hint){
+      hint.textContent =
+        "Could not save order: " +
+        String(
+          error.message ||
+          "Please refresh and try again."
+        );
+    }
+
+    await loadOrganizations();
+  }
+}
+
+
+function initializeOrganizationReorder(){
+
+  const enabled =
+    organizationReorderEnabled();
+
+  const hint =
+    document.getElementById(
+      "organizationOrderHint"
+    );
+
+  if(hint){
+    hint.textContent =
+      enabled
+        ? "Drag the ⋮⋮ handle to arrange organizations. Order saves automatically."
+        : "Clear the search box to reorder organizations.";
+  }
+
+  document
+    .querySelectorAll(
+      "#clientRows .lb-org-drag-handle"
+    )
+    .forEach(
+      handle => {
+
+        handle.draggable =
+          enabled;
+
+        if(!enabled){
+          return;
+        }
+
+        handle.addEventListener(
+          "dragstart",
+          event => {
+
+            draggedOrganizationRow =
+              handle.closest(
+                ".lb-client-row"
+              );
+
+            organizationOrderChanged =
+              false;
+
+            draggedOrganizationRow
+              ?.classList
+              .add(
+                "lb-org-dragging"
+              );
+
+            try{
+              event.dataTransfer.effectAllowed =
+                "move";
+
+              event.dataTransfer.setData(
+                "text/plain",
+                String(
+                  draggedOrganizationRow
+                    ?.dataset
+                    ?.organizationId ||
+                  ""
+                )
+              );
+            }catch{}
+          }
+        );
+
+        handle.addEventListener(
+          "dragend",
+          async () => {
+
+            draggedOrganizationRow
+              ?.classList
+              .remove(
+                "lb-org-dragging"
+              );
+
+            draggedOrganizationRow =
+              null;
+
+            if(
+              organizationOrderChanged
+            ){
+              organizationOrderChanged =
+                false;
+
+              await saveOrganizationOrder();
+            }
+          }
+        );
+      }
+    );
+
+  document
+    .querySelectorAll(
+      "#clientRows .lb-client-row[data-organization-id]"
+    )
+    .forEach(
+      row => {
+
+        if(!enabled){
+          return;
+        }
+
+        row.addEventListener(
+          "dragover",
+          event => {
+
+            if(
+              !draggedOrganizationRow ||
+              draggedOrganizationRow ===
+                row
+            ){
+              return;
+            }
+
+            event.preventDefault();
+
+            const rectangle =
+              row.getBoundingClientRect();
+
+            const insertAfter =
+              event.clientY >
+              rectangle.top +
+              rectangle.height / 2;
+
+            const parent =
+              row.parentElement;
+
+            if(!parent){
+              return;
+            }
+
+            if(insertAfter){
+              parent.insertBefore(
+                draggedOrganizationRow,
+                row.nextSibling
+              );
+            }else{
+              parent.insertBefore(
+                draggedOrganizationRow,
+                row
+              );
+            }
+
+            organizationOrderChanged =
+              true;
+          }
+        );
+
+        row.addEventListener(
+          "drop",
+          event => {
+            event.preventDefault();
+          }
+        );
+      }
+    );
+}
+
+
 function renderOrganizations(list){
 
   const rows =
@@ -3941,8 +4353,15 @@ function renderOrganizations(list){
     rows.innerHTML =
       '<div class="lb-empty">No organizations found.</div>';
 
+    initializeOrganizationReorder();
+
     return;
   }
+
+  const canReorder =
+    organizationReorderEnabled() &&
+    list.length ===
+      adminOrganizations.length;
 
 
   rows.innerHTML =
@@ -3953,9 +4372,18 @@ function renderOrganizations(list){
         "active";
 
       return `
-        <div class="lb-client-row">
+        <div
+          class="lb-client-row ${canReorder ? "lb-org-reorder-row" : ""}"
+          data-organization-id="${Number(item.id)}"
+        >
 
-          <div>
+          <div style="position:relative;">
+            <span
+              class="lb-org-drag-handle"
+              title="${canReorder ? "Drag to reorder" : "Clear search to reorder"}"
+              aria-label="Drag organization to reorder"
+            >⋮⋮</span>
+
             <div class="lb-org-name">
               ${escapeHtml(item.organizationName)}
             </div>
@@ -4004,6 +4432,8 @@ function renderOrganizations(list){
       `;
 
     }).join("");
+
+  initializeOrganizationReorder();
 }
 
 
@@ -4014,6 +4444,273 @@ function escapeHtml(value){
     .replace(/</g,"&lt;")
     .replace(/>/g,"&gt;")
     .replace(/"/g,"&quot;");
+}
+
+
+function marketingAnalyticsLabel(value){
+  return String(value || "Unknown")
+    .replace(/[_-]+/g," ")
+    .replace(/\b\w/g,function(letter){
+      return letter.toUpperCase();
+    });
+}
+
+
+function renderMarketingCreditAnalytics(analytics){
+
+  const root =
+    document.getElementById(
+      "marketingCreditAnalytics"
+    );
+
+  if(!root){
+    return;
+  }
+
+  analytics =
+    analytics || {};
+
+  const periods =
+    analytics.periods || {};
+
+  const periodRows = [
+    ["Last 24 Hours", periods.last24Hours],
+    ["Last 7 Days", periods.last7Days],
+    ["Last 30 Days", periods.last30Days],
+    ["Last 365 Days", periods.last365Days],
+    ["Lifetime", periods.lifetime]
+  ];
+
+  function periodCard(label,row){
+    row = row || {};
+    return (
+      '<div style="padding:11px;border-radius:10px;background:#0b1726;border:1px solid rgba(255,255,255,.08);">' +
+        '<div style="font-size:10px;color:#8299b0;font-weight:900;text-transform:uppercase;letter-spacing:.04em;">' +
+          escapeHtml(label) +
+        '</div>' +
+        '<div style="font-size:24px;font-weight:900;color:white;margin-top:5px;">' +
+          Number(row.generated || 0) +
+        '</div>' +
+        '<div style="font-size:10px;color:#9db0c3;margin-top:2px;">Generated</div>' +
+        '<div style="font-size:10px;color:#72ead4;margin-top:6px;">' +
+          Number(row.creditsReturned || 0) +
+          ' returned · ' +
+          Number(row.netCredits || 0) +
+          ' net used' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function breakdownTable(title,rows,labelBuilder){
+    rows =
+      Array.isArray(rows)
+        ? rows
+        : [];
+
+    if(!rows.length){
+      return (
+        '<div style="padding:12px;border-radius:10px;background:#0b1726;border:1px solid rgba(255,255,255,.08);">' +
+          '<div style="font-weight:900;color:white;font-size:12px;">' +
+            escapeHtml(title) +
+          '</div>' +
+          '<div class="lb-muted" style="margin-top:7px;">No usage yet.</div>' +
+        '</div>'
+      );
+    }
+
+    return (
+      '<div style="padding:12px;border-radius:10px;background:#0b1726;border:1px solid rgba(255,255,255,.08);min-width:0;">' +
+        '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">' +
+          escapeHtml(title) +
+        '</div>' +
+        '<div style="display:grid;gap:6px;">' +
+          rows.slice(0,12).map(function(row){
+            const label =
+              labelBuilder
+                ? labelBuilder(row)
+                : (
+                    row.label ||
+                    row.key ||
+                    "Unknown"
+                  );
+
+            return (
+              '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 8px;border-radius:8px;background:#0e1c2d;">' +
+                '<div style="min-width:0;font-size:10px;color:#dce8f4;line-height:1.35;overflow-wrap:anywhere;">' +
+                  escapeHtml(label) +
+                '</div>' +
+                '<div style="text-align:right;font-size:10px;color:#8fa6bf;white-space:nowrap;">' +
+                  '<strong style="color:white;">' +
+                    Number(row.generated || 0) +
+                  '</strong> gen · ' +
+                  Number(row.creditsReturned || 0) +
+                  ' returned' +
+                '</div>' +
+              '</div>'
+            );
+          }).join("") +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  const recent =
+    Array.isArray(
+      analytics.recentActivity
+    )
+      ? analytics.recentActivity
+      : [];
+
+  const recentHtml =
+    recent.length
+      ? recent.slice(0,15).map(function(item){
+          const date =
+            item.at
+              ? new Date(
+                  Number(item.at)
+                ).toLocaleString()
+              : "—";
+
+          const isRefund =
+            item.type === "refund";
+
+          const combo = [
+            item.languageName,
+            marketingAnalyticsLabel(
+              item.visualStyle
+            ),
+            marketingAnalyticsLabel(
+              item.audienceFocus
+            ),
+            marketingAnalyticsLabel(
+              item.imageryTone
+            )
+          ]
+          .filter(Boolean)
+          .join(" · ");
+
+          return (
+            '<div style="padding:9px 10px;border-radius:9px;background:#0b1726;border:1px solid rgba(255,255,255,.07);">' +
+              '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">' +
+                '<div style="font-size:10px;font-weight:900;color:' +
+                  (isRefund ? '#72ead4' : '#78b7ff') +
+                ';">' +
+                  (isRefund ? '↩ Credit returned' : '✨ Campaign generated') +
+                '</div>' +
+                '<div style="font-size:9px;color:#71869b;white-space:nowrap;">' +
+                  escapeHtml(date) +
+                '</div>' +
+              '</div>' +
+              '<div style="font-size:10px;color:#dce8f4;margin-top:4px;line-height:1.4;">' +
+                escapeHtml(
+                  item.campaignName ||
+                  combo ||
+                  "Marketing campaign"
+                ) +
+              '</div>' +
+              (combo
+                ? '<div style="font-size:9px;color:#8198af;margin-top:3px;">' +
+                    escapeHtml(combo) +
+                  '</div>'
+                : '') +
+              (isRefund && item.reason
+                ? '<div style="font-size:9px;color:#9fb2c5;margin-top:5px;line-height:1.4;">Reason: ' +
+                    escapeHtml(item.reason) +
+                  '</div>'
+                : '') +
+            '</div>'
+          );
+        }).join("")
+      : '<div class="lb-muted">No Marketing Credit activity yet.</div>';
+
+  root.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:8px;">' +
+      periodRows.map(function(item){
+        return periodCard(
+          item[0],
+          item[1]
+        );
+      }).join("") +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px;">' +
+      '<div style="padding:10px 11px;border-radius:9px;background:#0b1726;border:1px solid rgba(255,255,255,.08);"><div class="lb-muted">Current Balance</div><div style="font-size:20px;font-weight:900;color:white;margin-top:3px;">' +
+        Number(analytics.balance || 0) +
+      '</div></div>' +
+      '<div style="padding:10px 11px;border-radius:9px;background:#0b1726;border:1px solid rgba(255,255,255,.08);"><div class="lb-muted">Lifetime Purchased</div><div style="font-size:20px;font-weight:900;color:white;margin-top:3px;">' +
+        Number(analytics.lifetimePurchased || 0) +
+      '</div></div>' +
+      '<div style="padding:10px 11px;border-radius:9px;background:#0b1726;border:1px solid rgba(255,255,255,.08);"><div class="lb-muted">Lifetime Net Used</div><div style="font-size:20px;font-weight:900;color:white;margin-top:3px;">' +
+        Number(analytics.lifetimeNetUsed || 0) +
+      '</div></div>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:12px;">' +
+      breakdownTable(
+        "Languages",
+        analytics.languages
+      ) +
+      breakdownTable(
+        "Top Combinations",
+        analytics.combinations,
+        function(row){
+          return [
+            row.languageName,
+            marketingAnalyticsLabel(
+              row.visualStyle
+            ),
+            marketingAnalyticsLabel(
+              row.audienceFocus
+            ),
+            marketingAnalyticsLabel(
+              row.imageryTone
+            )
+          ]
+          .filter(Boolean)
+          .join(" · ");
+        }
+      ) +
+      breakdownTable(
+        "Graphic Styles",
+        analytics.visualStyles,
+        function(row){
+          return marketingAnalyticsLabel(
+            row.label ||
+            row.key
+          );
+        }
+      ) +
+      breakdownTable(
+        "Audience Focus",
+        analytics.audienceFocus,
+        function(row){
+          return marketingAnalyticsLabel(
+            row.label ||
+            row.key
+          );
+        }
+      ) +
+      breakdownTable(
+        "Imagery Tones",
+        analytics.imageryTones,
+        function(row){
+          return marketingAnalyticsLabel(
+            row.label ||
+            row.key
+          );
+        }
+      ) +
+    '</div>' +
+
+    '<div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);">' +
+      '<div style="font-weight:900;color:white;font-size:12px;margin-bottom:8px;">Recent Marketing Credit Activity</div>' +
+      '<div style="display:grid;gap:6px;">' +
+        recentHtml +
+      '</div>' +
+    '</div>' +
+
+    '<div style="font-size:9px;color:#667d93;margin-top:8px;line-height:1.4;">Usage windows are rolling periods: 24 hours, 7 days, 30 days and 365 days. Analytics count only campaigns that actually consumed a Marketing Credit.</div>';
 }
 
 
@@ -4204,6 +4901,21 @@ async function openOrganization(id){
     account.bonusMinutes;
 
   document.getElementById(
+    "editMarketingCredits"
+  ).value =
+    Math.max(
+      0,
+      Number(
+        account.marketingCredits ||
+        0
+      )
+    );
+
+  renderMarketingCreditAnalytics(
+    data.marketingAnalytics || {}
+  );
+
+  document.getElementById(
     "editViewerLimit"
   ).value =
     account.viewerLimit;
@@ -4258,6 +4970,12 @@ async function openOrganization(id){
 
   document.getElementById("overrideCustomOnboarding").checked =
     !!featureOverrides.customOnboarding;
+
+  document.getElementById("overrideMarketingCampaigns").checked =
+    !!featureOverrides.marketingCampaigns;
+
+  document.getElementById("overrideOrganizationStatsApi").checked =
+    account.entitlements?.organizationStatsApi === true;
 
   renderFeatureOverrideSummary();
 
@@ -4667,7 +5385,26 @@ function collectFeatureOverrides(){
       document.getElementById("overridePrioritySupport")?.checked === true,
 
     customOnboarding:
-      document.getElementById("overrideCustomOnboarding")?.checked === true
+      document.getElementById("overrideCustomOnboarding")?.checked === true,
+
+    marketingCampaigns:
+      document.getElementById("overrideMarketingCampaigns")?.checked === true,
+
+    organizationStatsApi:
+      (
+        document.getElementById("overrideOrganizationStatsApi")?.checked === true &&
+        String(
+          document.getElementById("editPlan")?.value || ""
+        ).trim().toLowerCase() === "starter"
+      ),
+
+    organizationStatsApiDisabled:
+      (
+        document.getElementById("overrideOrganizationStatsApi")?.checked !== true &&
+        String(
+          document.getElementById("editPlan")?.value || ""
+        ).trim().toLowerCase() !== "starter"
+      )
   };
 }
 
@@ -4695,12 +5432,18 @@ function renderFeatureOverrideSummary(){
     reportExport:"Report Export",
     scriptureDetection:"Scripture Detection",
     prioritySupport:"Priority Support",
-    customOnboarding:"Custom Onboarding"
+    customOnboarding:"Custom Onboarding",
+    marketingCampaigns:"Marketing Campaign Generator",
+    organizationStatsApi:"Organization Stats API"
   };
 
   const enabled =
     Object.keys(overrides)
-      .filter(key => overrides[key])
+      .filter(
+        key =>
+          overrides[key] &&
+          labels[key]
+      )
       .map(key => labels[key]);
 
   box.innerHTML =
@@ -5056,6 +5799,18 @@ async function saveOrganization(){
                 document.getElementById(
                   "editBonusMinutes"
                 ).value
+              ),
+
+            marketingCredits:
+              Math.max(
+                0,
+                Math.floor(
+                  Number(
+                    document.getElementById(
+                      "editMarketingCredits"
+                    ).value || 0
+                  )
+                )
               ),
 
             viewerLimit:
@@ -5603,6 +6358,52 @@ document.getElementById(
     renderOrganizations(
       filtered
     );
+  }
+);
+
+
+document.querySelectorAll(
+  ".marketing-credit-btn"
+).forEach(button => {
+  button.addEventListener(
+    "click",
+    function(){
+      const add =
+        Math.max(
+          0,
+          Number(
+            this.dataset.credits ||
+            0
+          )
+        );
+
+      const input =
+        document.getElementById(
+          "editMarketingCredits"
+        );
+
+      input.value =
+        Math.max(
+          0,
+          Math.floor(
+            Number(
+              input.value ||
+              0
+            ) + add
+          )
+        );
+    }
+  );
+});
+
+document.getElementById(
+  "clearMarketingCredits"
+)?.addEventListener(
+  "click",
+  function(){
+    document.getElementById(
+      "editMarketingCredits"
+    ).value = 0;
   }
 );
 
@@ -6519,12 +7320,53 @@ Keeps the existing admin Embed unchanged.
 </script>
 
 <!-- =====================================================
-LIVEBRIDGE /admin AZURE TTS USAGE COLUMN
+LIVEBRIDGE /admin API COST COLUMN
 ADD AS THIRD Embed on /admin.
 Keeps existing admin + speech-rate embeds unchanged.
 ===================================================== -->
 
 <style>
+  .lb-org-order-hint{
+    margin:0 0 10px;
+    color:#7890a8;
+    font-size:10px;
+    line-height:1.4;
+  }
+
+  .lb-org-reorder-row{
+    transition:
+      transform .12s ease,
+      opacity .12s ease,
+      background .12s ease;
+  }
+
+  .lb-org-dragging{
+    opacity:.48;
+    background:rgba(45,151,255,.08);
+  }
+
+  #clientRows .lb-client-row > div:first-child{
+    padding-left:22px;
+  }
+
+  .lb-org-drag-handle{
+    position:absolute;
+    left:0;
+    top:50%;
+    transform:translateY(-50%);
+    color:#64809b;
+    font-size:17px;
+    font-weight:900;
+    letter-spacing:-4px;
+    cursor:grab;
+    user-select:none;
+    touch-action:none;
+  }
+
+  .lb-org-drag-handle:active{
+    cursor:grabbing;
+  }
+
   /* Keep every header/body column on the exact same grid. */
   .lb-client-row{
     grid-template-columns:
@@ -6622,9 +7464,6 @@ Keeps existing admin + speech-rate embeds unchanged.
 <script>
 (function(){
 
-  const AZURE_FREE_CHARACTERS =
-    500000;
-
 
   function formatAzureCharacters(
     value
@@ -6662,54 +7501,334 @@ Keeps existing admin + speech-rate embeds unchanged.
   }
 
 
-  function azureUsageMarkup(
+  function formatApiCost(
+    value
+  ){
+
+    const number =
+      Math.max(
+        0,
+        Number(value || 0)
+      );
+
+    if(
+      number > 0 &&
+      number < 0.01
+    ){
+      return (
+        "$" +
+        number.toFixed(4)
+      );
+    }
+
+    return (
+      "$" +
+      number.toFixed(2)
+    );
+  }
+
+
+  function apiCostMarkup(
     item
   ){
 
-    const characters =
+    const stats =
+      item?.stats || {};
+
+    const totalCost =
       Number(
-        item?.stats
-          ?.azureTtsCharacters ||
-        0
+        stats.apiCostUsd || 0
       );
 
-    const generations =
+    const openAiCost =
       Number(
-        item?.stats
-          ?.azureTtsGenerations ||
-        0
+        stats.openAiCostUsd || 0
       );
 
-    const percent =
-      Math.min(
-        999,
-        (
-          characters /
-          AZURE_FREE_CHARACTERS
-        ) * 100
+    const azureCost =
+      Number(
+        stats.azureTtsCostUsd || 0
       );
-
-    const percentText =
-      percent < 0.1 &&
-      characters > 0
-        ? "<0.1%"
-        : percent.toFixed(1) + "%";
 
     return `
       <div class="lb-azure-usage">
         <strong>
-          ${formatAzureCharacters(characters)}
+          ${formatApiCost(totalCost)}
         </strong>
 
         <span>
-          ${percentText} of 500K
+          OpenAI ${formatApiCost(openAiCost)}
         </span>
 
         <span>
-          ${generations} new audio
+          Azure ${formatApiCost(azureCost)}
         </span>
       </div>
     `;
+  }
+
+
+  function apiCostStatsForOrganization(
+    organizationId
+  ){
+
+    try{
+
+      const list =
+        Array.isArray(
+          adminOrganizations
+        )
+          ? adminOrganizations
+          : [];
+
+      return (
+        list.find(
+          item =>
+            Number(item?.id || 0) ===
+            Number(organizationId || 0)
+        )?.stats ||
+        {}
+      );
+
+    }catch(error){
+
+      return {};
+    }
+  }
+
+
+  function apiCostCategoryLabel(
+    key
+  ){
+
+    const labels = {
+      transcription:
+        "Transcription",
+      translation:
+        "Live translation",
+      live_notes:
+        "Live notes",
+      scripture_translation:
+        "Scripture translation",
+      transcript_notes:
+        "Transcript / AI notes"
+    };
+
+    return (
+      labels[key] ||
+      String(key || "")
+        .replace(/_/g," ")
+    );
+  }
+
+
+  function ensureApiCostDetailCard(){
+
+    let card =
+      document.getElementById(
+        "apiCostAnalyticsCard"
+      );
+
+    if(card){
+      return card;
+    }
+
+    const marketingAnalytics =
+      document.getElementById(
+        "marketingCreditAnalytics"
+      );
+
+    const marketingCard =
+      marketingAnalytics
+        ?.parentElement;
+
+    if(
+      !marketingCard ||
+      !marketingCard.parentElement
+    ){
+      return null;
+    }
+
+    card =
+      document.createElement(
+        "div"
+      );
+
+    card.id =
+      "apiCostAnalyticsCard";
+
+    card.style.cssText =
+      "margin-top:18px;padding:16px;border-radius:14px;border:1px solid rgba(83,165,255,.22);background:rgba(83,165,255,.055);";
+
+    card.innerHTML = `
+      <div style="font-weight:900;color:white;font-size:14px;margin-bottom:5px;">
+        Monthly API Cost
+      </div>
+
+      <div style="color:#8fa8bf;font-size:11px;line-height:1.5;margin-bottom:12px;">
+        Estimated LiveBridge service-delivery cost for this organization.
+      </div>
+
+      <div id="apiCostAnalytics">
+        <div class="lb-muted">
+          Loading API cost...
+        </div>
+      </div>
+    `;
+
+    marketingCard.parentElement
+      .insertBefore(
+        card,
+        marketingCard
+      );
+
+    return card;
+  }
+
+
+  function renderApiCostDetail(
+    organizationId
+  ){
+
+    ensureApiCostDetailCard();
+
+    const target =
+      document.getElementById(
+        "apiCostAnalytics"
+      );
+
+    if(!target){
+      return;
+    }
+
+    const stats =
+      apiCostStatsForOrganization(
+        organizationId
+      );
+
+    const breakdown =
+      stats.openAiCostBreakdown ||
+      {};
+
+    const categories =
+      Object.keys(
+        breakdown
+      )
+      .filter(
+        key =>
+          Number(
+            breakdown[key] || 0
+          ) > 0
+      );
+
+    const categoryMarkup =
+      categories.length
+        ? categories
+            .map(
+              key => `
+                <div style="display:flex;justify-content:space-between;gap:14px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+                  <span style="color:#8fa8bf;">
+                    ${apiCostCategoryLabel(key)}
+                  </span>
+                  <strong style="color:#dfeaff;">
+                    ${formatApiCost(breakdown[key])}
+                  </strong>
+                </div>
+              `
+            )
+            .join("")
+        : `
+            <div style="color:#71869b;font-size:10px;">
+              No OpenAI usage recorded yet this month.
+            </div>
+          `;
+
+    target.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:12px;">
+        <div style="padding:11px;border-radius:10px;background:rgba(255,255,255,.035);">
+          <div style="color:#7890a8;font-size:9px;text-transform:uppercase;font-weight:800;">Total</div>
+          <div style="color:white;font-size:18px;font-weight:900;margin-top:3px;">
+            ${formatApiCost(stats.apiCostUsd)}
+          </div>
+        </div>
+
+        <div style="padding:11px;border-radius:10px;background:rgba(255,255,255,.035);">
+          <div style="color:#7890a8;font-size:9px;text-transform:uppercase;font-weight:800;">OpenAI</div>
+          <div style="color:white;font-size:18px;font-weight:900;margin-top:3px;">
+            ${formatApiCost(stats.openAiCostUsd)}
+          </div>
+        </div>
+
+        <div style="padding:11px;border-radius:10px;background:rgba(255,255,255,.035);">
+          <div style="color:#7890a8;font-size:9px;text-transform:uppercase;font-weight:800;">Azure S0 TTS</div>
+          <div style="color:white;font-size:18px;font-weight:900;margin-top:3px;">
+            ${formatApiCost(stats.azureTtsCostUsd)}
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;color:#8fa8bf;font-size:10px;">
+        <div>
+          <strong style="color:#dfeaff;">${Number(stats.openAiRequests || 0).toLocaleString()}</strong>
+          OpenAI requests
+        </div>
+        <div>
+          <strong style="color:#dfeaff;">${formatAzureCharacters(stats.azureTtsCharacters || 0)}</strong>
+          Azure billable characters
+        </div>
+      </div>
+
+      <div style="margin-top:8px;">
+        ${categoryMarkup}
+      </div>
+
+      <div style="font-size:9px;color:#667d93;margin-top:9px;line-height:1.4;">
+        ${String(stats.apiCostUsageMonth || stats.azureTtsUsageMonth || "")}
+        · USD estimate · Azure S0 Standard Neural + recorded OpenAI token usage
+      </div>
+    `;
+  }
+
+
+  function wrapOpenOrganizationForApiCost(){
+
+    if(
+      typeof window.openOrganization !==
+      "function"
+    ){
+      return false;
+    }
+
+    if(
+      window.openOrganization
+        .__lbApiCostWrapped
+    ){
+      return true;
+    }
+
+    const original =
+      window.openOrganization;
+
+    const wrapped =
+      async function(id){
+
+        const result =
+          await original(id);
+
+        renderApiCostDetail(
+          id
+        );
+
+        return result;
+      };
+
+    wrapped.__lbApiCostWrapped =
+      true;
+
+    window.openOrganization =
+      wrapped;
+
+    return true;
   }
 
 
@@ -6741,7 +7860,7 @@ Keeps existing admin + speech-rate embeds unchanged.
       "lb-azure-head lb-azure-mobile-hide";
 
     column.textContent =
-      "Azure TTS";
+      "API Cost";
 
     head.insertBefore(
       column,
@@ -6803,7 +7922,7 @@ Keeps existing admin + speech-rate embeds unchanged.
           "lb-azure-column lb-azure-mobile-hide";
 
         column.innerHTML =
-          azureUsageMarkup(
+          apiCostMarkup(
             item
           );
 
@@ -6864,6 +7983,8 @@ Keeps existing admin + speech-rate embeds unchanged.
 
     installAzureHeader();
 
+    wrapOpenOrganizationForApiCost();
+
     let attempts = 0;
 
     const timer =
@@ -6873,6 +7994,8 @@ Keeps existing admin + speech-rate embeds unchanged.
           attempts += 1;
 
           installAzureHeader();
+
+          wrapOpenOrganizationForApiCost();
 
           if(
             wrapRenderOrganizations()

@@ -3,13 +3,15 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // src/index.js
 var OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+var OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+var OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations";
 var OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions";
 var AZURE_TTS_INFLIGHT = /* @__PURE__ */ new Map();
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Expose-Headers": "X-LiveBridge-TTS-Cache"
+  "Access-Control-Expose-Headers": "X-LiveBridge-TTS-Cache, Retry-After, X-LiveBridge-Stats-Cache, X-LiveBridge-Stats-Rate-Limit, X-LiveBridge-Stats-Rate-Remaining"
 };
 function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -127,6 +129,972 @@ async function resolveCanonicalRoom(env, room) {
   };
 }
 __name(resolveCanonicalRoom, "resolveCanonicalRoom");
+
+let adminOrganizationOrderSchemaReady = false;
+
+async function ensureAdminOrganizationOrderSchema(env) {
+  if (adminOrganizationOrderSchemaReady) {
+    return;
+  }
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_admin_order (
+      organization_id INTEGER PRIMARY KEY,
+      sort_order INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
+  adminOrganizationOrderSchemaReady = true;
+}
+__name(
+  ensureAdminOrganizationOrderSchema,
+  "ensureAdminOrganizationOrderSchema"
+);
+
+const LIVEBRIDGE_MARKETING_LANGUAGES = {
+  fr: "French",
+  es: "Spanish",
+  de: "German",
+  pt: "Portuguese",
+  it: "Italian",
+  pl: "Polish",
+  ru: "Russian",
+  uk: "Ukrainian",
+  nl: "Dutch",
+  cs: "Czech",
+  fil: "Filipino (Tagalog)",
+  he: "Hebrew",
+  yo: "Yoruba",
+  ig: "Igbo",
+  ha: "Hausa",
+  zh: "Mandarin Chinese",
+  yue: "Cantonese"
+};
+
+async function ensureMarketingSchema(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_profiles (
+      organization_id INTEGER PRIMARY KEY,
+      website_url TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      region TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT 'Canada',
+      logo_url TEXT NOT NULL DEFAULT '',
+      primary_color TEXT NOT NULL DEFAULT '#2588ff',
+      secondary_color TEXT NOT NULL DEFAULT '#6f43df',
+      service_details TEXT NOT NULL DEFAULT '',
+      last_analysis_json TEXT NOT NULL DEFAULT '',
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_campaigns (
+      id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      language_code TEXT NOT NULL,
+      language_name TEXT NOT NULL,
+      campaign_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_campaigns_org
+    ON marketing_campaigns (organization_id, created_at DESC)
+  `).run();
+}
+
+const LIVEBRIDGE_MARKETING_CREDIT_PACKAGES = {
+  "1": { credits: 1, priceCents: 500, label: "1 Marketing Credit" },
+  "5": { credits: 5, priceCents: 2000, label: "5 Marketing Credits" },
+  "10": { credits: 10, priceCents: 3500, label: "10 Marketing Credits" },
+  "25": { credits: 25, priceCents: 7500, label: "25 Marketing Credits" }
+};
+
+async function ensureMarketingCreditsSchema(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_credit_accounts (
+      organization_id INTEGER PRIMARY KEY,
+      balance INTEGER NOT NULL DEFAULT 0,
+      lifetime_purchased INTEGER NOT NULL DEFAULT 0,
+      lifetime_used INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_credit_transactions (
+      id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      delta INTEGER NOT NULL,
+      balance_after INTEGER NOT NULL,
+      transaction_type TEXT NOT NULL,
+      reference_id TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_credit_transactions_org
+    ON marketing_credit_transactions (organization_id, created_at DESC)
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_credit_purchases (
+      checkout_session_id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      credits INTEGER NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'CAD',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS marketing_generation_refunds (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL UNIQUE,
+      organization_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      campaign_created_at INTEGER NOT NULL,
+      requested_at INTEGER NOT NULL,
+      refunded_at INTEGER NOT NULL,
+      credit_delta INTEGER NOT NULL DEFAULT 1,
+      balance_after INTEGER NOT NULL DEFAULT 0,
+      email_sent INTEGER NOT NULL DEFAULT 0
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_marketing_generation_refunds_org
+    ON marketing_generation_refunds (
+      organization_id,
+      requested_at DESC
+    )
+  `).run();
+}
+
+async function marketingCreditBalance(env, organizationId) {
+  await ensureMarketingCreditsSchema(env);
+
+  const id = Number(organizationId || 0);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_accounts (
+      organization_id,
+      balance,
+      lifetime_purchased,
+      lifetime_used,
+      updated_at
+    )
+    VALUES (?, 0, 0, 0, ?)
+    ON CONFLICT(organization_id) DO NOTHING
+  `)
+  .bind(id, Date.now())
+  .run();
+
+  const row = await env.TRANSLATIONS_DB.prepare(`
+    SELECT balance
+    FROM marketing_credit_accounts
+    WHERE organization_id = ?
+    LIMIT 1
+  `)
+  .bind(id)
+  .first();
+
+  return Math.max(0, Number(row?.balance || 0));
+}
+
+async function setMarketingCreditBalance(
+  env,
+  organizationId,
+  requestedBalance,
+  transactionType = "admin_override",
+  note = ""
+) {
+  await ensureMarketingCreditsSchema(env);
+
+  const id = Number(organizationId || 0);
+  const balance = Math.max(0, Math.floor(Number(requestedBalance || 0)));
+  const current = await marketingCreditBalance(env, id);
+  const delta = balance - current;
+  const now = Date.now();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    UPDATE marketing_credit_accounts
+    SET balance = ?, updated_at = ?
+    WHERE organization_id = ?
+  `)
+  .bind(balance, now, id)
+  .run();
+
+  if (delta !== 0) {
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_credit_transactions (
+        id,
+        organization_id,
+        delta,
+        balance_after,
+        transaction_type,
+        reference_id,
+        note,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, '', ?, ?)
+    `)
+    .bind(
+      crypto.randomUUID(),
+      id,
+      delta,
+      balance,
+      transactionType,
+      String(note || "").trim().slice(0, 500),
+      now
+    )
+    .run();
+  }
+
+  return balance;
+}
+
+async function addMarketingCredits(
+  env,
+  organizationId,
+  credits,
+  {
+    transactionType = "purchase",
+    referenceId = "",
+    note = "",
+    countAsPurchased = false
+  } = {}
+) {
+  await ensureMarketingCreditsSchema(env);
+
+  const id = Number(organizationId || 0);
+  const add = Math.max(0, Math.floor(Number(credits || 0)));
+  if (!id || !add) {
+    return marketingCreditBalance(env, id);
+  }
+
+  await marketingCreditBalance(env, id);
+  const now = Date.now();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    UPDATE marketing_credit_accounts
+    SET
+      balance = balance + ?,
+      lifetime_purchased = lifetime_purchased + ?,
+      updated_at = ?
+    WHERE organization_id = ?
+  `)
+  .bind(
+    add,
+    countAsPurchased ? add : 0,
+    now,
+    id
+  )
+  .run();
+
+  const balance = await marketingCreditBalance(env, id);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_transactions (
+      id,
+      organization_id,
+      delta,
+      balance_after,
+      transaction_type,
+      reference_id,
+      note,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  .bind(
+    crypto.randomUUID(),
+    id,
+    add,
+    balance,
+    transactionType,
+    String(referenceId || "").trim().slice(0, 220),
+    String(note || "").trim().slice(0, 500),
+    now
+  )
+  .run();
+
+  return balance;
+}
+
+async function consumeMarketingCredit(
+  env,
+  organizationId,
+  referenceId = ""
+) {
+  await ensureMarketingCreditsSchema(env);
+  const id = Number(organizationId || 0);
+  await marketingCreditBalance(env, id);
+  const now = Date.now();
+
+  const result = await env.TRANSLATIONS_DB.prepare(`
+    UPDATE marketing_credit_accounts
+    SET
+      balance = balance - 1,
+      lifetime_used = lifetime_used + 1,
+      updated_at = ?
+    WHERE organization_id = ?
+      AND balance > 0
+  `)
+  .bind(now, id)
+  .run();
+
+  if (Number(result?.meta?.changes || 0) < 1) {
+    const error = new Error("You need a Marketing Credit to generate a new campaign.");
+    error.code = "MARKETING_CREDITS_REQUIRED";
+    throw error;
+  }
+
+  const balance = await marketingCreditBalance(env, id);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_transactions (
+      id,
+      organization_id,
+      delta,
+      balance_after,
+      transaction_type,
+      reference_id,
+      note,
+      created_at
+    )
+    VALUES (?, ?, -1, ?, 'generation', ?, 'Generated marketing campaign', ?)
+  `)
+  .bind(
+    crypto.randomUUID(),
+    id,
+    balance,
+    String(referenceId || "").trim().slice(0, 220),
+    now
+  )
+  .run();
+
+  return balance;
+}
+
+async function refundMarketingCredit(
+  env,
+  organizationId,
+  referenceId = ""
+) {
+  await ensureMarketingCreditsSchema(env);
+  const id = Number(organizationId || 0);
+  const now = Date.now();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    UPDATE marketing_credit_accounts
+    SET
+      balance = balance + 1,
+      lifetime_used = CASE
+        WHEN lifetime_used > 0 THEN lifetime_used - 1
+        ELSE 0
+      END,
+      updated_at = ?
+    WHERE organization_id = ?
+  `)
+  .bind(now, id)
+  .run();
+
+  const balance = await marketingCreditBalance(env, id);
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_transactions (
+      id,
+      organization_id,
+      delta,
+      balance_after,
+      transaction_type,
+      reference_id,
+      note,
+      created_at
+    )
+    VALUES (?, ?, 1, ?, 'generation_refund', ?, 'Generation failed; credit restored', ?)
+  `)
+  .bind(
+    crypto.randomUUID(),
+    id,
+    balance,
+    String(referenceId || "").trim().slice(0, 220),
+    now
+  )
+  .run();
+
+  return balance;
+}
+
+function marketingRefundEscapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function sendMarketingRefundAdminEmail(
+  env,
+  organization,
+  campaign,
+  reason,
+  balanceAfter,
+  requestedAt
+) {
+  if (!env.GMAIL_WEB_APP_URL) {
+    return false;
+  }
+
+  const adminsResult =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT email
+      FROM admin_users
+      WHERE active = 1
+        AND TRIM(COALESCE(email, '')) != ''
+      ORDER BY id ASC
+    `)
+    .all();
+
+  const emails = [
+    ...new Set(
+      (adminsResult.results || [])
+        .map(item =>
+          String(item?.email || "")
+            .trim()
+            .toLowerCase()
+        )
+        .filter(email =>
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+            email
+          )
+        )
+    )
+  ];
+
+  if (!emails.length) {
+    return false;
+  }
+
+  const organizationName =
+    String(
+      organization?.organization_name ||
+      "LiveBridge Organization"
+    ).trim();
+
+  const campaignName =
+    String(
+      campaign?.campaignName ||
+      campaign?.languageName ||
+      "Marketing Campaign"
+    ).trim();
+
+  const languageName =
+    String(
+      campaign?.languageName || ""
+    ).trim();
+
+  const requestedDate =
+    new Date(
+      Number(requestedAt || Date.now())
+    ).toISOString();
+
+  const text =
+    "LIVEBRIDGE MARKETING GENERATION REPORT\n\n" +
+    "A customer reported a marketing generation and requested their credit back.\n" +
+    "The credit was automatically returned under the 24-hour customer guarantee.\n\n" +
+    "Organization: " +
+    organizationName +
+    "\nCampaign: " +
+    campaignName +
+    "\nLanguage: " +
+    languageName +
+    "\nRequested: " +
+    requestedDate +
+    "\nNew credit balance: " +
+    Number(balanceAfter || 0) +
+    "\n\nCustomer reason:\n" +
+    reason;
+
+  const htmlReason =
+    marketingRefundEscapeHtml(reason)
+      .replace(/\n/g, "<br>");
+
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:720px;margin:auto;color:#172033;line-height:1.6;">
+      <h1 style="margin-bottom:4px;">LiveBridge</h1>
+      <h2 style="margin-top:0;">Marketing Generation Report</h2>
+      <p>A customer reported a marketing generation within the 24-hour guarantee window. <strong>1 Marketing Credit was automatically returned.</strong></p>
+      <p><strong>Organization:</strong> ${marketingRefundEscapeHtml(organizationName)}<br>
+      <strong>Campaign:</strong> ${marketingRefundEscapeHtml(campaignName)}<br>
+      <strong>Language:</strong> ${marketingRefundEscapeHtml(languageName)}<br>
+      <strong>Requested:</strong> ${marketingRefundEscapeHtml(requestedDate)}<br>
+      <strong>New credit balance:</strong> ${Number(balanceAfter || 0)}</p>
+      <div style="margin-top:18px;padding:14px;border-radius:10px;background:#f3f6fa;border:1px solid #dce5ef;">
+        <strong>Customer reason</strong><br>
+        ${htmlReason}
+      </div>
+    </div>
+  `;
+
+  let sent = false;
+
+  for (const email of emails) {
+    try {
+      const response =
+        await fetch(
+          env.GMAIL_WEB_APP_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json"
+            },
+            body: JSON.stringify({
+              email,
+              subject:
+                "LiveBridge Marketing Credit Refund — " +
+                organizationName,
+              text,
+              html
+            })
+          }
+        );
+
+      if (response.ok) {
+        sent = true;
+      }
+    } catch (error) {
+      console.error(
+        "Marketing refund admin email failed:",
+        error
+      );
+    }
+  }
+
+  return sent;
+}
+
+async function completeMarketingCreditPurchase(env, session) {
+  await ensureMarketingCreditsSchema(env);
+
+  const sessionId = String(session?.id || "").trim();
+  const purchaseType = String(
+    session?.metadata?.livebridge_purchase_type || ""
+  ).trim();
+
+  if (
+    !sessionId ||
+    purchaseType !== "marketing_credits"
+  ) {
+    return {
+      matched: false,
+      ignored: true
+    };
+  }
+
+  const organizationId = Number(
+    session?.metadata?.livebridge_organization_id || 0
+  );
+  const credits = Math.max(
+    0,
+    Math.floor(
+      Number(
+        session?.metadata?.livebridge_marketing_credits || 0
+      )
+    )
+  );
+
+  if (!organizationId || !credits) {
+    throw new Error("Marketing credit purchase metadata is invalid.");
+  }
+
+  const purchase = await env.TRANSLATIONS_DB.prepare(`
+    SELECT *
+    FROM marketing_credit_purchases
+    WHERE checkout_session_id = ?
+    LIMIT 1
+  `)
+  .bind(sessionId)
+  .first();
+
+  if (purchase?.status === "completed") {
+    return {
+      matched: true,
+      alreadyCompleted: true,
+      organizationId,
+      credits,
+      balance:
+        await marketingCreditBalance(
+          env,
+          organizationId
+        )
+    };
+  }
+
+  const paymentStatus = String(
+    session?.payment_status || ""
+  ).trim();
+
+  const checkoutStatus = String(
+    session?.status || ""
+  ).trim();
+
+  if (
+    checkoutStatus !== "complete" ||
+    paymentStatus !== "paid"
+  ) {
+    return {
+      matched: true,
+      paid: false,
+      organizationId,
+      credits
+    };
+  }
+
+  const balance = await addMarketingCredits(
+    env,
+    organizationId,
+    credits,
+    {
+      transactionType: "purchase",
+      referenceId: sessionId,
+      note: "Stripe marketing credit purchase",
+      countAsPurchased: true
+    }
+  );
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO marketing_credit_purchases (
+      checkout_session_id,
+      organization_id,
+      credits,
+      amount_cents,
+      currency,
+      status,
+      created_at,
+      completed_at
+    )
+    VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)
+    ON CONFLICT(checkout_session_id)
+    DO UPDATE SET
+      status = 'completed',
+      completed_at = excluded.completed_at
+  `)
+  .bind(
+    sessionId,
+    organizationId,
+    credits,
+    Math.max(
+      0,
+      Number(session?.amount_total || purchase?.amount_cents || 0)
+    ),
+    String(session?.currency || purchase?.currency || "cad").toUpperCase(),
+    Number(purchase?.created_at || Date.now()),
+    Date.now()
+  )
+  .run();
+
+  return {
+    matched: true,
+    paid: true,
+    organizationId,
+    credits,
+    balance
+  };
+}
+
+function marketingColor(value, fallback) {
+  const cleaned = String(value || "").trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(cleaned) ? cleaned : fallback;
+}
+
+function safeJson(value, fallback = null) {
+  if (!value) return fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+function openAIResponseText(payload) {
+  if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
+    return payload.output_text.trim();
+  }
+  const parts = [];
+  for (const item of payload?.output || []) {
+    for (const content of item?.content || []) {
+      if (typeof content?.text === "string" && content.text.trim()) {
+        parts.push(content.text.trim());
+      }
+    }
+  }
+  return parts.join("\n").trim();
+}
+
+function openAISearchSources(payload) {
+  const found = [];
+  const seen = new Set();
+
+  function add(title, url) {
+    const cleanUrl = String(url || "").trim();
+    if (!/^https?:\/\//i.test(cleanUrl) || seen.has(cleanUrl)) return;
+    seen.add(cleanUrl);
+    found.push({
+      title: String(title || "Source").trim().slice(0, 180),
+      url: cleanUrl.slice(0, 800)
+    });
+  }
+
+  for (const item of payload?.output || []) {
+    for (const source of item?.action?.sources || []) {
+      add(source?.title, source?.url);
+    }
+
+    for (const content of item?.content || []) {
+      for (const annotation of content?.annotations || []) {
+        add(
+          annotation?.title || annotation?.url_citation?.title,
+          annotation?.url || annotation?.url_citation?.url
+        );
+      }
+    }
+  }
+
+  return found.slice(0, 20);
+}
+
+function parseAIJson(text) {
+  const raw = String(text || "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+
+  try { return JSON.parse(raw); } catch {}
+
+  const first = raw.indexOf("{");
+  const last = raw.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    return JSON.parse(raw.slice(first, last + 1));
+  }
+  throw new Error("AI response could not be parsed.");
+}
+
+async function marketingOrganization(request, env) {
+  const auth = await verifyClerkRequest(request);
+  const organization = await env.TRANSLATIONS_DB.prepare(`
+    SELECT *
+    FROM organizations
+    WHERE clerk_user_id = ?
+    LIMIT 1
+  `).bind(auth.clerkUserId).first();
+
+  if (!organization) {
+    throw new Error("LiveBridge account not found.");
+  }
+
+  const marketingEnabled =
+    parseFeatureOverrides(
+      organization.feature_overrides_json
+    ).marketingCampaigns === true;
+
+  if (!marketingEnabled) {
+    throw new Error(
+      "Marketing campaigns are not enabled for this organization."
+    );
+  }
+
+  return organization;
+}
+
+async function marketingProfileRow(env, organizationId) {
+  await ensureMarketingSchema(env);
+  return env.TRANSLATIONS_DB.prepare(`
+    SELECT *
+    FROM marketing_profiles
+    WHERE organization_id = ?
+    LIMIT 1
+  `).bind(Number(organizationId)).first();
+}
+
+function marketingProfile(organization, row) {
+  return {
+    organizationId: Number(organization.id),
+    organizationName: String(organization.organization_name || ""),
+    roomName: String(organization.room_name || "").trim().toUpperCase(),
+    websiteUrl: String(row?.website_url || ""),
+    address: String(row?.address || ""),
+    city: String(row?.city || ""),
+    region: String(row?.region || ""),
+    country: String(row?.country || "Canada"),
+    logoUrl: String(row?.logo_url || ""),
+    primaryColor: marketingColor(row?.primary_color, "#2588ff"),
+    secondaryColor: marketingColor(row?.secondary_color, "#6f43df"),
+    serviceDetails: String(row?.service_details || ""),
+    analysis: safeJson(row?.last_analysis_json, null),
+    updatedAt: Number(row?.updated_at || 0)
+  };
+}
+
+function marketingCampaign(row) {
+  const data = safeJson(row?.campaign_json, {}) || {};
+  return {
+    id: String(row?.id || ""),
+    languageCode: String(row?.language_code || ""),
+    languageName: String(row?.language_name || ""),
+    ...data,
+    createdAt: Number(row?.created_at || data.createdAt || 0),
+    updatedAt: Number(row?.updated_at || data.updatedAt || 0)
+  };
+}
+
+function normalizeMarketingAnalysis(value) {
+  const rawLanguages = Array.isArray(value?.languages) ? value.languages : [];
+
+  function numericCount(value) {
+    const match = String(value || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+
+  const languages = rawLanguages.map(item => {
+    const code = String(item?.code || "").trim().toLowerCase();
+    const sources = Array.isArray(item?.sources) ? item.sources : [];
+    return {
+      language: String(item?.language || LIVEBRIDGE_MARKETING_LANGUAGES[code] || "").trim().slice(0, 100),
+      code,
+      estimatedShare: String(item?.estimatedShare || "").trim().slice(0, 100),
+      estimatedPeople: String(item?.estimatedPeople || "").trim().slice(0, 100),
+      why: String(item?.why || "").trim().slice(0, 700),
+      supportedByLiveBridge: Object.prototype.hasOwnProperty.call(LIVEBRIDGE_MARKETING_LANGUAGES, code),
+      sources: sources.slice(0, 4).map(source => ({
+        title: String(source?.title || "").trim().slice(0, 180),
+        url: String(source?.url || "").trim().slice(0, 800)
+      })).filter(source => /^https?:\/\//i.test(source.url))
+    };
+  }).filter(item => item.language);
+
+  languages.sort((a, b) => {
+    const aCount = numericCount(a.estimatedPeople);
+    const bCount = numericCount(b.estimatedPeople);
+
+    if (aCount !== null && bCount !== null && aCount !== bCount) {
+      return bCount - aCount;
+    }
+
+    if (aCount !== null && bCount === null) return -1;
+    if (aCount === null && bCount !== null) return 1;
+
+    return 0;
+  });
+
+  return {
+    areaSummary: String(value?.areaSummary || "").trim().slice(0, 1500),
+    methodology: String(value?.methodology || "").trim().slice(0, 1200),
+    languages: languages.slice(0, 8)
+  };
+}
+
+function cleanMarketingChoice(value, allowed, fallback) {
+  const clean = String(value || "").trim().toLowerCase();
+  return allowed.includes(clean) ? clean : fallback;
+}
+
+function marketingArtworkPrompt(campaign, kind) {
+  const portrait = kind === "portrait";
+  const style = String(campaign?.visualStyle || "people").trim();
+  const audience = String(campaign?.audienceFocus || "general").trim();
+  const tone = String(campaign?.imageryTone || "warm").trim();
+  const languageName = String(campaign?.languageName || "the selected language").trim();
+
+  const styleText =
+    style === "balanced"
+      ? "People should be clearly present but balanced with a polished modern community setting."
+      : "People should be the emotional focus of the image, candid, relational, welcoming and natural.";
+
+  return `Create a professional photorealistic background image for a community outreach invitation.
+
+Audience language/community: ${languageName}-speaking community.
+Audience focus: ${audience}.
+Creative tone: ${tone}.
+${styleText}
+
+Representation:
+Show a natural contemporary group of people who would feel familiar and welcoming to people from communities where ${languageName} is commonly spoken. Use everyday modern clothing and authentic, warm human interaction. Avoid stereotypes, costumes, flags, caricatures, exaggerated cultural symbols, tokenism, or making assumptions about religion. The scene should feel like genuine neighbours, friends and families being welcomed into a community gathering.
+
+Setting:
+A warm, modern community or church gathering environment in Canada. Friendly, hopeful, relational, inclusive and suitable for a real printed community-centre poster.
+
+Composition:
+${portrait
+  ? "Portrait composition. Keep the people mainly on the right and/or lower half. Leave the upper-left and left-centre visually calm enough for text by using natural dark background, wall, depth-of-field blur, shadow, or open room space."
+  : "Square composition. Keep the people mainly on the right side and centre-right. Leave the left side visually calm enough for text by using natural dark background, wall, depth-of-field blur, shadow, or open room space."}
+
+The image must remain a continuous edge-to-edge photographic scene. The negative space must look like a real part of the environment — never like a graphic-design placeholder.
+
+Critical:
+Do NOT render any words, letters, numbers, logos, QR codes, signs, posters, banners, blank cards, white panels, white boxes, speech bubbles, rounded rectangles, abstract white shapes, empty billboards, frames, overlays, watermarks or readable text. Do not create a blank area by inserting a solid white or light-coloured object. LiveBridge will overlay all exact typography, branding and QR information afterward.`;
+}
+
+async function generateMarketingArtworkBase64(env, campaign, kind) {
+  const size = kind === "portrait" ? "1024x1536" : "1024x1024";
+  const prompt = marketingArtworkPrompt(campaign, kind);
+  const models = [
+    "gpt-image-2.5-sunburst",
+    "gpt-image-1.5",
+    "gpt-image-1"
+  ];
+
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      const response = await fetch(
+        OPENAI_IMAGES_URL,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model,
+            prompt,
+            size,
+            quality: "medium",
+            n: 1
+          })
+        }
+      );
+
+      const data = await response.json();
+
+      if (
+        response.ok &&
+        data?.data?.[0]?.b64_json
+      ) {
+        return String(data.data[0].b64_json);
+      }
+
+      lastError = new Error(
+        data?.error?.message ||
+        ("Artwork generation failed with " + model + ".")
+      );
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Unable to generate campaign artwork.");
+}
+
 
 /*
 =======================================================
@@ -552,10 +1520,391 @@ function countAzureTextCharacters(
 }
 
 
+function countAzureSsmlBillableCharacters(
+  ssml
+) {
+
+  const billable =
+    String(ssml || "")
+      .replace(
+        /<\/?speak\b[^>]*>/gi,
+        ""
+      )
+      .replace(
+        /<\/?voice\b[^>]*>/gi,
+        ""
+      );
+
+  let total = 0;
+
+  for (const character of billable) {
+
+    total +=
+      /\p{Script=Han}/u.test(
+        character
+      )
+        ? 2
+        : 1;
+  }
+
+  return total;
+}
+
+
+const LIVEBRIDGE_API_COST_PRICING = {
+  currency:
+    "USD",
+
+  azureTtsStandardNeuralPerMillionCharacters:
+    16,
+
+  gpt41MiniInputPerMillionTokens:
+    0.40,
+
+  gpt41MiniCachedInputPerMillionTokens:
+    0.10,
+
+  gpt41MiniOutputPerMillionTokens:
+    1.60,
+
+  gpt4oMiniTranscribeInputPerMillionTokens:
+    1.25,
+
+  gpt4oMiniTranscribeOutputPerMillionTokens:
+    5.00
+};
+
+
+let apiCostSchemaReady = false;
+
+
+async function ensureApiCostSchema(
+  env
+) {
+
+  if (apiCostSchemaReady) {
+    return;
+  }
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS azure_tts_usage (
+      organization_id INTEGER NOT NULL,
+      usage_month TEXT NOT NULL,
+      characters INTEGER NOT NULL DEFAULT 0,
+      generations INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (
+        organization_id,
+        usage_month
+      )
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS openai_usage (
+      organization_id INTEGER NOT NULL,
+      usage_month TEXT NOT NULL,
+      category TEXT NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      requests INTEGER NOT NULL DEFAULT 0,
+      cost_usd REAL NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (
+        organization_id,
+        usage_month,
+        category,
+        model
+      )
+    )
+  `).run();
+
+  apiCostSchemaReady = true;
+}
+
+
+function normalizedOpenAiUsage(
+  usage
+) {
+
+  const source =
+    usage || {};
+
+  const inputTokens =
+    Math.max(
+      0,
+      Number(
+        source.input_tokens ??
+        source.prompt_tokens ??
+        0
+      ) || 0
+    );
+
+  const cachedInputTokens =
+    Math.min(
+      inputTokens,
+      Math.max(
+        0,
+        Number(
+          source.input_token_details
+            ?.cached_tokens ??
+          source.prompt_tokens_details
+            ?.cached_tokens ??
+          0
+        ) || 0
+      )
+    );
+
+  const outputTokens =
+    Math.max(
+      0,
+      Number(
+        source.output_tokens ??
+        source.completion_tokens ??
+        0
+      ) || 0
+    );
+
+  return {
+    inputTokens:
+      Math.round(inputTokens),
+
+    cachedInputTokens:
+      Math.round(cachedInputTokens),
+
+    outputTokens:
+      Math.round(outputTokens)
+  };
+}
+
+
+function calculateOpenAiCostUsd(
+  model,
+  usage
+) {
+
+  const normalized =
+    normalizedOpenAiUsage(
+      usage
+    );
+
+  const modelName =
+    String(
+      model || ""
+    ).toLowerCase();
+
+  if (
+    modelName.startsWith(
+      "gpt-4.1-mini"
+    )
+  ) {
+
+    const uncachedInput =
+      Math.max(
+        0,
+        normalized.inputTokens -
+        normalized.cachedInputTokens
+      );
+
+    return (
+      (
+        uncachedInput *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt41MiniInputPerMillionTokens
+      ) +
+      (
+        normalized.cachedInputTokens *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt41MiniCachedInputPerMillionTokens
+      ) +
+      (
+        normalized.outputTokens *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt41MiniOutputPerMillionTokens
+      )
+    ) / 1000000;
+  }
+
+  if (
+    modelName.startsWith(
+      "gpt-4o-mini-transcribe"
+    )
+  ) {
+
+    return (
+      (
+        normalized.inputTokens *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt4oMiniTranscribeInputPerMillionTokens
+      ) +
+      (
+        normalized.outputTokens *
+        LIVEBRIDGE_API_COST_PRICING
+          .gpt4oMiniTranscribeOutputPerMillionTokens
+      )
+    ) / 1000000;
+  }
+
+  return 0;
+}
+
+
+async function recordOpenAiUsageByOrganization(
+  env,
+  organizationId,
+  category,
+  model,
+  usage
+) {
+
+  const id =
+    Number(
+      organizationId || 0
+    );
+
+  if (!id) {
+    return;
+  }
+
+  const normalized =
+    normalizedOpenAiUsage(
+      usage
+    );
+
+  if (
+    normalized.inputTokens <= 0 &&
+    normalized.outputTokens <= 0
+  ) {
+    return;
+  }
+
+  await ensureApiCostSchema(
+    env
+  );
+
+  const costUsd =
+    calculateOpenAiCostUsd(
+      model,
+      usage
+    );
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO openai_usage (
+      organization_id,
+      usage_month,
+      category,
+      model,
+      input_tokens,
+      cached_input_tokens,
+      output_tokens,
+      requests,
+      cost_usd,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+
+    ON CONFLICT(
+      organization_id,
+      usage_month,
+      category,
+      model
+    )
+    DO UPDATE SET
+      input_tokens =
+        input_tokens +
+        excluded.input_tokens,
+
+      cached_input_tokens =
+        cached_input_tokens +
+        excluded.cached_input_tokens,
+
+      output_tokens =
+        output_tokens +
+        excluded.output_tokens,
+
+      requests =
+        requests + 1,
+
+      cost_usd =
+        cost_usd +
+        excluded.cost_usd,
+
+      updated_at =
+        excluded.updated_at
+  `)
+  .bind(
+    id,
+    currentUsageMonth(),
+    String(category || "other"),
+    String(model || "unknown"),
+    normalized.inputTokens,
+    normalized.cachedInputTokens,
+    normalized.outputTokens,
+    costUsd,
+    Date.now()
+  )
+  .run();
+}
+
+
+async function recordOpenAiUsageForRoom(
+  env,
+  room,
+  category,
+  model,
+  usage
+) {
+
+  const organization =
+    await getOrganizationForRoom(
+      env,
+      room
+    );
+
+  if (!organization) {
+
+    console.warn(
+      "OpenAI usage could not be matched to organization:",
+      normalizeRoom(room)
+    );
+
+    return;
+  }
+
+  await recordOpenAiUsageByOrganization(
+    env,
+    organization.id,
+    category,
+    model,
+    usage
+  );
+}
+
+
+function calculateAzureTtsCostUsd(
+  characters
+) {
+
+  return (
+    Math.max(
+      0,
+      Number(
+        characters || 0
+      )
+    ) *
+    LIVEBRIDGE_API_COST_PRICING
+      .azureTtsStandardNeuralPerMillionCharacters
+  ) / 1000000;
+}
+
+
 async function recordAzureTtsUsage(
   env,
   room,
-  text
+  text,
+  billableCharacters = null
 ) {
 
   const normalizedRoom =
@@ -598,13 +1947,29 @@ async function recordAzureTtsUsage(
     return;
   }
 
+  await ensureApiCostSchema(
+    env
+  );
+
   const usageMonth =
     currentUsageMonth();
 
-  const characters =
-    countAzureTextCharacters(
-      text
+  const suppliedCharacters =
+    Number(
+      billableCharacters
     );
+
+  const characters =
+    Number.isFinite(
+      suppliedCharacters
+    ) &&
+    suppliedCharacters > 0
+      ? Math.round(
+          suppliedCharacters
+        )
+      : countAzureTextCharacters(
+          text
+        );
 
   await env.TRANSLATIONS_DB.prepare(`
     INSERT INTO azure_tts_usage (
@@ -1584,6 +2949,17 @@ async function processStripeWebhookEvent(
 
     case "checkout.session.completed": {
 
+      if (
+        String(
+          object?.metadata?.livebridge_purchase_type || ""
+        ) === "marketing_credits"
+      ) {
+        return completeMarketingCreditPurchase(
+          env,
+          object
+        );
+      }
+
       const subscriptionId =
         stripeEntityId(
           object?.subscription
@@ -2152,7 +3528,10 @@ const LIVEBRIDGE_FEATURE_OVERRIDE_KEYS = [
   "scriptureDetection",
   "prioritySupport",
   "customOnboarding",
-  "listenerDataDisplay"
+  "listenerDataDisplay",
+  "marketingCampaigns",
+  "organizationStatsApi",
+  "organizationStatsApiDisabled"
 ];
 
 
@@ -2241,6 +3620,16 @@ function buildEffectivePlanEntitlements(
     effective.transcriptRetentionDays = 30;
   }
 
+  if (
+    overrides.organizationStatsApiDisabled === true
+  ) {
+    effective.organizationStatsApi = false;
+  } else if (
+    overrides.organizationStatsApi === true
+  ) {
+    effective.organizationStatsApi = true;
+  }
+
   return effective;
 }
 
@@ -2263,7 +3652,8 @@ function buildPlanEntitlements(
     scriptureDetection: false,
     reportExport: false,
     prioritySupport: false,
-    customOnboarding: false
+    customOnboarding: false,
+    organizationStatsApi: false
   };
 
   const growth = {
@@ -2275,7 +3665,8 @@ function buildPlanEntitlements(
     scriptureDetection: true,
     reportExport: false,
     prioritySupport: true,
-    customOnboarding: false
+    customOnboarding: false,
+    organizationStatsApi: true
   };
 
   const pro = {
@@ -2287,7 +3678,8 @@ function buildPlanEntitlements(
     scriptureDetection: true,
     reportExport: true,
     prioritySupport: true,
-    customOnboarding: true
+    customOnboarding: true,
+    organizationStatsApi: true
   };
 
   if (code === "starter") {
@@ -3162,6 +4554,2150 @@ async function buildBroadcastSummary(env, broadcastId) {
 }
 __name(buildBroadcastSummary, "buildBroadcastSummary");
 
+const LIVEBRIDGE_STATS_API_SCOPES = {
+  overview: "Overview totals",
+  broadcasts: "Broadcast history",
+  listeners: "Listener analytics",
+  languages: "Language analytics",
+  technicalUsage: "Technical / usage metrics",
+  returnVisitors: "Return visitor analytics",
+  marketing: "Marketing analytics"
+};
+
+function defaultOrganizationStatsApiScopes() {
+  return Object.fromEntries(
+    Object.keys(
+      LIVEBRIDGE_STATS_API_SCOPES
+    ).map(key => [key, true])
+  );
+}
+
+function normalizeOrganizationStatsApiScopes(value) {
+  const source =
+    value &&
+    typeof value === "object"
+      ? value
+      : {};
+
+  const normalized = {};
+
+  for (
+    const key of
+      Object.keys(
+        LIVEBRIDGE_STATS_API_SCOPES
+      )
+  ) {
+    normalized[key] =
+      source[key] !== false;
+  }
+
+  return normalized;
+}
+
+async function ensureOrganizationStatsApiSchema(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_stats_api_access (
+      organization_id INTEGER PRIMARY KEY,
+      api_key_hash TEXT NOT NULL DEFAULT '',
+      key_prefix TEXT NOT NULL DEFAULT '',
+      scopes_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      rotated_at INTEGER,
+      revoked_at INTEGER,
+      last_used_at INTEGER
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_organization_stats_api_hash
+    ON organization_stats_api_access (api_key_hash)
+    WHERE api_key_hash != ''
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS organization_stats_api_rate_state (
+      organization_id INTEGER PRIMARY KEY,
+      window_started_at INTEGER NOT NULL DEFAULT 0,
+      window_count INTEGER NOT NULL DEFAULT 0,
+      last_request_at INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
+    )
+  `).run();
+}
+
+function generateOrganizationStatsApiKey() {
+  const bytes =
+    crypto.getRandomValues(
+      new Uint8Array(32)
+    );
+
+  const secret =
+    Array.from(bytes)
+      .map(byte =>
+        byte.toString(16)
+          .padStart(2, "0")
+      )
+      .join("");
+
+  return "lb_org_" + secret;
+}
+
+function organizationStatsApiPolicy(
+  organization
+) {
+  const planCode =
+    normalizePlanCode(
+      organization?.plan_code ||
+      organization?.planCode ||
+      ""
+    );
+
+  const overrides =
+    parseFeatureOverrides(
+      organization?.feature_overrides_json ??
+      organization?.featureOverrides
+    );
+
+  const planAllows =
+    buildPlanEntitlements(
+      planCode || "legacy"
+    ).organizationStatsApi === true;
+
+  let enabled =
+    planAllows;
+
+  let accessSource =
+    planAllows
+      ? "plan"
+      : "not_in_plan";
+
+  if (
+    overrides.organizationStatsApiDisabled === true
+  ) {
+    enabled = false;
+    accessSource = "admin_disabled";
+  } else if (
+    overrides.organizationStatsApi === true
+  ) {
+    enabled = true;
+    accessSource = "admin_enabled";
+  }
+
+  const proStyle =
+    (
+      planCode === "pro" ||
+      (
+        planCode !== "starter" &&
+        planCode !== "growth"
+      )
+    );
+
+  const minIntervalSeconds =
+    proStyle
+      ? 15
+      : 60;
+
+  return {
+    enabled,
+    accessSource,
+    planCode:
+      planCode || "legacy",
+    minIntervalSeconds,
+    cacheSeconds: 60,
+    hardLimitPerMinute: 60
+  };
+}
+
+
+async function organizationForStatsApiAccount(
+  request,
+  env
+) {
+  const auth =
+    await verifyClerkRequest(
+      request
+    );
+
+  const organization =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM organizations
+      WHERE clerk_user_id = ?
+      LIMIT 1
+    `)
+    .bind(
+      auth.clerkUserId
+    )
+    .first();
+
+  if (!organization) {
+    throw new Error(
+      "LiveBridge account not found."
+    );
+  }
+
+  const policy =
+    organizationStatsApiPolicy(
+      organization
+    );
+
+  if (!policy.enabled) {
+    const error =
+      new Error(
+        "Organization Stats API is not enabled for this account."
+      );
+
+    error.code =
+      "STATS_API_DISABLED";
+
+    throw error;
+  }
+
+  return organization;
+}
+
+async function authenticateOrganizationStatsApi(
+  request,
+  env
+) {
+  await ensureOrganizationStatsApiSchema(
+    env
+  );
+
+  const authorization =
+    String(
+      request.headers.get(
+        "Authorization"
+      ) || ""
+    ).trim();
+
+  const apiKey =
+    authorization
+      .replace(
+        /^Bearer\s+/i,
+        ""
+      )
+      .trim();
+
+  if (
+    !apiKey ||
+    !apiKey.startsWith(
+      "lb_org_"
+    )
+  ) {
+    const error =
+      new Error(
+        "A valid LiveBridge organization API key is required."
+      );
+
+    error.code =
+      "API_KEY_REQUIRED";
+
+    throw error;
+  }
+
+  const keyHash =
+    await sha256(apiKey);
+
+  const access =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM organization_stats_api_access
+      WHERE api_key_hash = ?
+        AND api_key_hash != ''
+      LIMIT 1
+    `)
+    .bind(
+      keyHash
+    )
+    .first();
+
+  if (!access) {
+    const error =
+      new Error(
+        "The LiveBridge organization API key is invalid or revoked."
+      );
+
+    error.code =
+      "API_KEY_INVALID";
+
+    throw error;
+  }
+
+  const organization =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM organizations
+      WHERE id = ?
+      LIMIT 1
+    `)
+    .bind(
+      Number(
+        access.organization_id
+      )
+    )
+    .first();
+
+  if (!organization) {
+    throw new Error(
+      "LiveBridge organization not found."
+    );
+  }
+
+  const policy =
+    organizationStatsApiPolicy(
+      organization
+    );
+
+  if (!policy.enabled) {
+    const error =
+      new Error(
+        "Organization Stats API access is disabled."
+      );
+
+    error.code =
+      "STATS_API_DISABLED";
+
+    throw error;
+  }
+
+  await env.TRANSLATIONS_DB.prepare(`
+    UPDATE organization_stats_api_access
+    SET last_used_at = ?, updated_at = ?
+    WHERE organization_id = ?
+  `)
+  .bind(
+    Date.now(),
+    Date.now(),
+    Number(
+      organization.id
+    )
+  )
+  .run();
+
+  return {
+    organization,
+    access,
+    policy,
+    scopes:
+      normalizeOrganizationStatsApiScopes(
+        safeJson(
+          access.scopes_json,
+          {}
+        )
+      )
+  };
+}
+
+async function enforceOrganizationStatsApiRateLimit(
+  env,
+  organizationId,
+  policy
+) {
+  await ensureOrganizationStatsApiSchema(
+    env
+  );
+
+  const id =
+    Number(
+      organizationId || 0
+    );
+
+  const now =
+    Date.now();
+
+  const minIntervalMs =
+    Math.max(
+      1,
+      Number(
+        policy?.minIntervalSeconds ||
+        60
+      )
+    ) * 1000;
+
+  const hardLimit =
+    Math.max(
+      1,
+      Number(
+        policy?.hardLimitPerMinute ||
+        60
+      )
+    );
+
+  const row =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM organization_stats_api_rate_state
+      WHERE organization_id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first();
+
+  const lastRequestAt =
+    Number(
+      row?.last_request_at ||
+      0
+    );
+
+  if (
+    lastRequestAt > 0 &&
+    now - lastRequestAt <
+      minIntervalMs
+  ) {
+    const retryAfterSeconds =
+      Math.max(
+        1,
+        Math.ceil(
+          (
+            minIntervalMs -
+            (
+              now -
+              lastRequestAt
+            )
+          ) / 1000
+        )
+      );
+
+    const error =
+      new Error(
+        "Stats API rate limit reached. Try again in " +
+        retryAfterSeconds +
+        " seconds."
+      );
+
+    error.code =
+      "STATS_API_RATE_LIMITED";
+
+    error.retryAfterSeconds =
+      retryAfterSeconds;
+
+    error.rateLimit =
+      Math.max(
+        1,
+        Math.floor(
+          60 /
+          Number(
+            policy?.minIntervalSeconds ||
+            60
+          )
+        )
+      );
+
+    throw error;
+  }
+
+  let windowStartedAt =
+    Number(
+      row?.window_started_at ||
+      0
+    );
+
+  let windowCount =
+    Number(
+      row?.window_count ||
+      0
+    );
+
+  if (
+    !windowStartedAt ||
+    now -
+      windowStartedAt >=
+      60000
+  ) {
+    windowStartedAt = now;
+    windowCount = 0;
+  }
+
+  if (
+    windowCount >=
+    hardLimit
+  ) {
+    const retryAfterSeconds =
+      Math.max(
+        1,
+        Math.ceil(
+          (
+            60000 -
+            (
+              now -
+              windowStartedAt
+            )
+          ) / 1000
+        )
+      );
+
+    const error =
+      new Error(
+        "Stats API safety limit reached. Try again in " +
+        retryAfterSeconds +
+        " seconds."
+      );
+
+    error.code =
+      "STATS_API_RATE_LIMITED";
+
+    error.retryAfterSeconds =
+      retryAfterSeconds;
+
+    error.rateLimit =
+      hardLimit;
+
+    throw error;
+  }
+
+  const nextCount =
+    windowCount + 1;
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO organization_stats_api_rate_state (
+      organization_id,
+      window_started_at,
+      window_count,
+      last_request_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(organization_id)
+    DO UPDATE SET
+      window_started_at =
+        excluded.window_started_at,
+      window_count =
+        excluded.window_count,
+      last_request_at =
+        excluded.last_request_at,
+      updated_at =
+        excluded.updated_at
+  `)
+  .bind(
+    id,
+    windowStartedAt,
+    nextCount,
+    now,
+    now
+  )
+  .run();
+
+  return {
+    limitPerMinute:
+      Math.max(
+        1,
+        Math.floor(
+          60 /
+          Number(
+            policy?.minIntervalSeconds ||
+            60
+          )
+        )
+      ),
+    hardLimitPerMinute:
+      hardLimit,
+    remaining:
+      Math.max(
+        0,
+        hardLimit -
+        nextCount
+      )
+  };
+}
+
+
+function organizationStatsApiCacheRequest(
+  organizationId,
+  scopes,
+  url
+) {
+  const enabledScopeKey =
+    Object.keys(
+      scopes || {}
+    )
+    .filter(
+      key =>
+        scopes[key] === true
+    )
+    .sort()
+    .join(",");
+
+  const source =
+    new URL(url.toString());
+
+  const cacheUrl =
+    new URL(
+      source.origin +
+      "/__livebridge_stats_api_cache/v1/" +
+      Number(
+        organizationId || 0
+      )
+    );
+
+  const params =
+    new URLSearchParams(
+      source.search
+    );
+
+  const sortedKeys =
+    Array.from(
+      new Set(
+        Array.from(
+          params.keys()
+        )
+      )
+    ).sort();
+
+  for (
+    const key of
+      sortedKeys
+  ) {
+    const values =
+      params.getAll(key)
+        .sort();
+
+    for (
+      const value of
+        values
+    ) {
+      cacheUrl.searchParams.append(
+        key,
+        value
+      );
+    }
+  }
+
+  cacheUrl.searchParams.set(
+    "_scopes",
+    enabledScopeKey
+  );
+
+  return new Request(
+    cacheUrl.toString(),
+    {
+      method: "GET"
+    }
+  );
+}
+
+
+async function organizationStatsApiPayloadWithCache(
+  env,
+  organization,
+  scopes,
+  url,
+  cacheSeconds = 60
+) {
+  const ttl =
+    Math.max(
+      0,
+      Math.floor(
+        Number(
+          cacheSeconds || 0
+        )
+      )
+    );
+
+  const cacheRequest =
+    organizationStatsApiCacheRequest(
+      organization.id,
+      scopes,
+      url
+    );
+
+  if (
+    ttl > 0 &&
+    typeof caches !== "undefined" &&
+    caches.default
+  ) {
+    const cached =
+      await caches.default.match(
+        cacheRequest
+      );
+
+    if (cached) {
+      try {
+        return {
+          payload:
+            await cached.json(),
+          cacheStatus:
+            "HIT"
+        };
+      } catch {
+        // Ignore a malformed cache entry.
+      }
+    }
+  }
+
+  const payload =
+    await buildOrganizationStatsApiPayload(
+      env,
+      organization,
+      scopes,
+      url
+    );
+
+  if (
+    ttl > 0 &&
+    typeof caches !== "undefined" &&
+    caches.default
+  ) {
+    const cacheResponse =
+      new Response(
+        JSON.stringify(payload),
+        {
+          status: 200,
+          headers: {
+            "Content-Type":
+              "application/json",
+            "Cache-Control":
+              "public, max-age=" +
+              ttl
+          }
+        }
+      );
+
+    await caches.default.put(
+      cacheRequest,
+      cacheResponse
+    );
+  }
+
+  return {
+    payload,
+    cacheStatus:
+      "MISS"
+  };
+}
+
+
+function parseStatsApiTime(
+  value,
+  fallback
+) {
+  const raw =
+    String(
+      value == null
+        ? ""
+        : value
+    ).trim();
+
+  if (!raw) {
+    return fallback;
+  }
+
+  const numeric =
+    Number(raw);
+
+  if (
+    Number.isFinite(numeric) &&
+    numeric > 0
+  ) {
+    return Math.floor(numeric);
+  }
+
+  const parsed =
+    Date.parse(raw);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : fallback;
+}
+
+async function buildMarketingStatsApiAnalytics(
+  env,
+  organizationId
+) {
+  await ensureMarketingSchema(env);
+  await ensureMarketingCreditsSchema(env);
+
+  const id =
+    Number(
+      organizationId || 0
+    );
+
+  const now =
+    Date.now();
+
+  const [
+    campaignsResult,
+    refundsResult,
+    creditAccount
+  ] =
+    await Promise.all([
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          language_code,
+          language_name,
+          campaign_json,
+          created_at
+        FROM marketing_campaigns
+        WHERE organization_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5000
+      `)
+      .bind(id)
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          campaign_id,
+          requested_at
+        FROM marketing_generation_refunds
+        WHERE organization_id = ?
+        ORDER BY requested_at DESC
+        LIMIT 5000
+      `)
+      .bind(id)
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          balance,
+          lifetime_purchased,
+          lifetime_used
+        FROM marketing_credit_accounts
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(id)
+      .first()
+    ]);
+
+  const refunds =
+    refundsResult.results || [];
+
+  const refundedCampaignIds =
+    new Set(
+      refunds.map(item =>
+        String(
+          item.campaign_id || ""
+        )
+      )
+    );
+
+  const campaigns =
+    (campaignsResult.results || [])
+      .map(row => {
+        const campaign =
+          safeJson(
+            row.campaign_json,
+            {}
+          ) || {};
+
+        return {
+          id:
+            String(
+              row.id || ""
+            ),
+          createdAt:
+            Number(
+              row.created_at ||
+              campaign.createdAt ||
+              0
+            ),
+          languageCode:
+            String(
+              row.language_code ||
+              campaign.languageCode ||
+              ""
+            ),
+          languageName:
+            String(
+              row.language_name ||
+              campaign.languageName ||
+              LIVEBRIDGE_MARKETING_LANGUAGES[
+                row.language_code ||
+                campaign.languageCode
+              ] ||
+              "Unknown"
+            ),
+          visualStyle:
+            String(
+              campaign.visualStyle ||
+              "unknown"
+            ),
+          audienceFocus:
+            String(
+              campaign.audienceFocus ||
+              "unknown"
+            ),
+          imageryTone:
+            String(
+              campaign.imageryTone ||
+              "unknown"
+            ),
+          includeTearOff:
+            campaign.includeTearOff !== false,
+          includeQr:
+            campaign.includeQr !== false,
+          creditCharged:
+            campaign.creditCharged === true
+        };
+      })
+      .filter(item =>
+        item.creditCharged === true
+      );
+
+  function periodStats(
+    startTimestamp
+  ) {
+    const generated =
+      campaigns.filter(item =>
+        item.createdAt >=
+        startTimestamp
+      ).length;
+
+    const creditsReturned =
+      refunds.filter(item =>
+        Number(
+          item.requested_at ||
+          0
+        ) >= startTimestamp
+      ).length;
+
+    return {
+      generated,
+      creditsReturned,
+      netCredits:
+        Math.max(
+          0,
+          generated -
+          creditsReturned
+        )
+    };
+  }
+
+  function breakdownBy(
+    key,
+    labelKey = key
+  ) {
+    const map =
+      new Map();
+
+    for (
+      const item of
+        campaigns
+    ) {
+      const value =
+        String(
+          item[key] ||
+          "unknown"
+        );
+
+      if (
+        !map.has(value)
+      ) {
+        map.set(
+          value,
+          {
+            key:
+              value,
+            label:
+              String(
+                item[labelKey] ||
+                value
+              ),
+            generated:
+              0,
+            creditsReturned:
+              0
+          }
+        );
+      }
+
+      const row =
+        map.get(value);
+
+      row.generated += 1;
+
+      if (
+        refundedCampaignIds.has(
+          item.id
+        )
+      ) {
+        row.creditsReturned +=
+          1;
+      }
+    }
+
+    return Array.from(
+      map.values()
+    )
+    .map(item => ({
+      ...item,
+      netCredits:
+        Math.max(
+          0,
+          item.generated -
+          item.creditsReturned
+        )
+    }))
+    .sort(
+      (a, b) =>
+        b.generated -
+        a.generated ||
+        String(a.label)
+          .localeCompare(
+            String(b.label)
+          )
+    );
+  }
+
+  const combinationsMap =
+    new Map();
+
+  for (
+    const item of
+      campaigns
+  ) {
+    const key = [
+      item.languageCode ||
+        item.languageName,
+      item.visualStyle,
+      item.audienceFocus,
+      item.imageryTone
+    ].join("|");
+
+    if (
+      !combinationsMap.has(
+        key
+      )
+    ) {
+      combinationsMap.set(
+        key,
+        {
+          languageCode:
+            item.languageCode,
+          languageName:
+            item.languageName,
+          visualStyle:
+            item.visualStyle,
+          audienceFocus:
+            item.audienceFocus,
+          imageryTone:
+            item.imageryTone,
+          generated:
+            0,
+          creditsReturned:
+            0
+        }
+      );
+    }
+
+    const combo =
+      combinationsMap.get(
+        key
+      );
+
+    combo.generated += 1;
+
+    if (
+      refundedCampaignIds.has(
+        item.id
+      )
+    ) {
+      combo.creditsReturned +=
+        1;
+    }
+  }
+
+  const combinations =
+    Array.from(
+      combinationsMap.values()
+    )
+    .map(item => ({
+      ...item,
+      netCredits:
+        Math.max(
+          0,
+          item.generated -
+          item.creditsReturned
+        )
+    }))
+    .sort(
+      (a, b) =>
+        b.generated -
+        a.generated
+    )
+    .slice(
+      0,
+      50
+    );
+
+  const recentGenerations =
+    campaigns
+      .slice(0, 50)
+      .map(item => ({
+        campaignId:
+          item.id,
+        createdAt:
+          item.createdAt,
+        languageCode:
+          item.languageCode,
+        languageName:
+          item.languageName,
+        visualStyle:
+          item.visualStyle,
+        audienceFocus:
+          item.audienceFocus,
+        imageryTone:
+          item.imageryTone,
+        includeTearOff:
+          item.includeTearOff,
+        includeQr:
+          item.includeQr,
+        creditReturned:
+          refundedCampaignIds.has(
+            item.id
+          )
+      }));
+
+  return {
+    currentCreditBalance:
+      Math.max(
+        0,
+        Number(
+          creditAccount?.balance ||
+          0
+        )
+      ),
+    lifetimeCreditsPurchased:
+      Math.max(
+        0,
+        Number(
+          creditAccount
+            ?.lifetime_purchased ||
+          0
+        )
+      ),
+    lifetimeNetCreditsUsed:
+      Math.max(
+        0,
+        Number(
+          creditAccount
+            ?.lifetime_used ||
+          0
+        )
+      ),
+    periods: {
+      last24Hours:
+        periodStats(
+          now -
+          24 * 60 * 60 * 1000
+        ),
+      last7Days:
+        periodStats(
+          now -
+          7 * 24 * 60 * 60 * 1000
+        ),
+      last30Days:
+        periodStats(
+          now -
+          30 * 24 * 60 * 60 * 1000
+        ),
+      last365Days:
+        periodStats(
+          now -
+          365 * 24 * 60 * 60 * 1000
+        ),
+      lifetime:
+        periodStats(0)
+    },
+    languages:
+      breakdownBy(
+        "languageCode",
+        "languageName"
+      ),
+    visualStyles:
+      breakdownBy(
+        "visualStyle"
+      ),
+    audienceFocus:
+      breakdownBy(
+        "audienceFocus"
+      ),
+    imageryTones:
+      breakdownBy(
+        "imageryTone"
+      ),
+    combinations,
+    recentGenerations
+  };
+}
+
+
+async function buildOrganizationStatsApiPayload(
+  env,
+  organization,
+  scopes,
+  url
+) {
+  await ensureAnalyticsTables(env);
+
+  const now =
+    Date.now();
+
+  const from =
+    parseStatsApiTime(
+      url.searchParams.get("from"),
+      0
+    );
+
+  const to =
+    parseStatsApiTime(
+      url.searchParams.get("to"),
+      now
+    );
+
+  const limit =
+    Math.min(
+      500,
+      Math.max(
+        1,
+        Math.floor(
+          Number(
+            url.searchParams.get(
+              "limit"
+            ) || 100
+          )
+        )
+      )
+    );
+
+  const requestedScope =
+    String(
+      url.searchParams.get(
+        "scope"
+      ) || "all"
+    ).trim();
+
+  const allowedScopeKeys =
+    Object.keys(
+      LIVEBRIDGE_STATS_API_SCOPES
+    );
+
+  if (
+    requestedScope !== "all" &&
+    !allowedScopeKeys.includes(
+      requestedScope
+    )
+  ) {
+    const error =
+      new Error(
+        "Unknown Stats API scope."
+      );
+
+    error.code =
+      "UNKNOWN_SCOPE";
+
+    throw error;
+  }
+
+  if (
+    requestedScope !== "all" &&
+    scopes[requestedScope] !== true
+  ) {
+    const error =
+      new Error(
+        "That Stats API category is disabled by the organization."
+      );
+
+    error.code =
+      "SCOPE_DISABLED";
+
+    throw error;
+  }
+
+  const include =
+    key =>
+      scopes[key] === true &&
+      (
+        requestedScope === "all" ||
+        requestedScope === key
+      );
+
+  const baseRoom =
+    normalizeRoom(
+      organization.room_name
+    );
+
+  const rangeFrom =
+    Math.max(0, from);
+
+  const rangeTo =
+    Math.max(
+      rangeFrom,
+      to
+    );
+
+  const roomPattern =
+    baseRoom + "-%";
+
+  const [
+    broadcastAggregate,
+    listenerAggregate,
+    languageTotalsResult,
+    detailBroadcastResult,
+    detailListenerResult,
+    detailLanguageResult
+  ] =
+    await Promise.all([
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS broadcasts,
+          COALESCE(
+            MAX(peak_listeners),
+            0
+          ) AS highest_peak_audience,
+          COALESCE(
+            SUM(heartbeat_requests),
+            0
+          ) AS heartbeat_requests,
+          COALESCE(
+            SUM(status_polls),
+            0
+          ) AS status_polls,
+          COALESCE(
+            SUM(analytics_requests),
+            0
+          ) AS analytics_requests,
+          COALESCE(
+            SUM(audio_chunks),
+            0
+          ) AS audio_chunks,
+          COALESCE(
+            SUM(source_final_requests),
+            0
+          ) AS source_final_requests,
+          COALESCE(
+            SUM(listener_heartbeats),
+            0
+          ) AS listener_heartbeats,
+          COALESCE(
+            SUM(tts_requests),
+            0
+          ) AS tts_requests
+        FROM broadcast_sessions
+        WHERE
+          (
+            room = ?
+            OR room LIKE ?
+          )
+          AND started_at >= ?
+          AND started_at <= ?
+      `)
+      .bind(
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo
+      )
+      .first(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS total_listeners,
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms,
+          COALESCE(
+            AVG(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS average_listening_ms,
+          COUNT(
+            DISTINCT ls.language
+          ) AS unique_languages
+        FROM listener_sessions ls
+        INNER JOIN broadcast_sessions bs
+          ON bs.id = ls.broadcast_id
+        WHERE
+          (
+            bs.room = ?
+            OR bs.room LIKE ?
+          )
+          AND bs.started_at >= ?
+          AND bs.started_at <= ?
+      `)
+      .bind(
+        now,
+        now,
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo
+      )
+      .first(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          ls.language AS language,
+          COUNT(*) AS listeners,
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms,
+          COALESCE(
+            AVG(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS average_listening_ms
+        FROM listener_sessions ls
+        INNER JOIN broadcast_sessions bs
+          ON bs.id = ls.broadcast_id
+        WHERE
+          (
+            bs.room = ?
+            OR bs.room LIKE ?
+          )
+          AND bs.started_at >= ?
+          AND bs.started_at <= ?
+        GROUP BY ls.language
+        ORDER BY listeners DESC, language ASC
+      `)
+      .bind(
+        now,
+        now,
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo
+      )
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          room,
+          started_at,
+          ended_at,
+          peak_listeners,
+          heartbeat_requests,
+          status_polls,
+          analytics_requests,
+          audio_chunks,
+          source_final_requests,
+          listener_heartbeats,
+          tts_requests,
+          auto_end_reason
+        FROM broadcast_sessions
+        WHERE
+          (
+            room = ?
+            OR room LIKE ?
+          )
+          AND started_at >= ?
+          AND started_at <= ?
+        ORDER BY started_at DESC
+        LIMIT ?
+      `)
+      .bind(
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo,
+        limit
+      )
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        WITH selected AS (
+          SELECT id
+          FROM broadcast_sessions
+          WHERE
+            (
+              room = ?
+              OR room LIKE ?
+            )
+            AND started_at >= ?
+            AND started_at <= ?
+          ORDER BY started_at DESC
+          LIMIT ?
+        )
+        SELECT
+          ls.broadcast_id AS broadcast_id,
+          COUNT(*) AS total_listeners,
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms,
+          COALESCE(
+            AVG(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS average_listening_ms
+        FROM listener_sessions ls
+        INNER JOIN selected s
+          ON s.id = ls.broadcast_id
+        INNER JOIN broadcast_sessions bs
+          ON bs.id = ls.broadcast_id
+        GROUP BY ls.broadcast_id
+      `)
+      .bind(
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo,
+        limit,
+        now,
+        now
+      )
+      .all(),
+
+      env.TRANSLATIONS_DB.prepare(`
+        WITH selected AS (
+          SELECT id
+          FROM broadcast_sessions
+          WHERE
+            (
+              room = ?
+              OR room LIKE ?
+            )
+            AND started_at >= ?
+            AND started_at <= ?
+          ORDER BY started_at DESC
+          LIMIT ?
+        )
+        SELECT
+          ls.broadcast_id AS broadcast_id,
+          ls.language AS language,
+          COUNT(*) AS listeners,
+          COALESCE(
+            SUM(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS total_listening_ms,
+          COALESCE(
+            AVG(
+              MAX(
+                0,
+                COALESCE(
+                  ls.ended_at,
+                  ls.last_seen,
+                  bs.ended_at,
+                  ?
+                ) -
+                ls.joined_at
+              )
+            ),
+            0
+          ) AS average_listening_ms
+        FROM listener_sessions ls
+        INNER JOIN selected s
+          ON s.id = ls.broadcast_id
+        INNER JOIN broadcast_sessions bs
+          ON bs.id = ls.broadcast_id
+        GROUP BY
+          ls.broadcast_id,
+          ls.language
+        ORDER BY
+          ls.broadcast_id,
+          listeners DESC,
+          language ASC
+      `)
+      .bind(
+        baseRoom,
+        roomPattern,
+        rangeFrom,
+        rangeTo,
+        limit,
+        now,
+        now
+      )
+      .all()
+    ]);
+
+  const listenerByBroadcast =
+    new Map(
+      (detailListenerResult.results || [])
+        .map(row => [
+          String(
+            row.broadcast_id || ""
+          ),
+          row
+        ])
+    );
+
+  const languagesByBroadcast =
+    new Map();
+
+  for (
+    const row of
+      detailLanguageResult.results || []
+  ) {
+    const broadcastId =
+      String(
+        row.broadcast_id || ""
+      );
+
+    if (
+      !languagesByBroadcast.has(
+        broadcastId
+      )
+    ) {
+      languagesByBroadcast.set(
+        broadcastId,
+        []
+      );
+    }
+
+    languagesByBroadcast
+      .get(broadcastId)
+      .push({
+        language:
+          String(
+            row.language || ""
+          ),
+        listeners:
+          Number(
+            row.listeners || 0
+          ),
+        totalListeningMs:
+          Number(
+            row.total_listening_ms ||
+            0
+          ),
+        averageListeningMs:
+          Math.round(
+            Number(
+              row.average_listening_ms ||
+              0
+            )
+          )
+      });
+  }
+
+  const summaries =
+    (detailBroadcastResult.results || [])
+      .map(broadcast => {
+        const broadcastId =
+          String(
+            broadcast.id || ""
+          );
+
+        const listener =
+          listenerByBroadcast.get(
+            broadcastId
+          ) || {};
+
+        const effectiveEnd =
+          Number(
+            broadcast.ended_at ||
+            now
+          );
+
+        return {
+          success: true,
+          broadcastId,
+          room:
+            String(
+              broadcast.room || ""
+            ),
+          startedAt:
+            Number(
+              broadcast.started_at ||
+              0
+            ),
+          endedAt:
+            broadcast.ended_at
+              ? Number(
+                  broadcast.ended_at
+                )
+              : null,
+          durationMs:
+            Math.max(
+              0,
+              effectiveEnd -
+              Number(
+                broadcast.started_at ||
+                0
+              )
+            ),
+          totalListeners:
+            Number(
+              listener.total_listeners ||
+              0
+            ),
+          peakListeners:
+            Number(
+              broadcast.peak_listeners ||
+              0
+            ),
+          totalListeningMs:
+            Number(
+              listener.total_listening_ms ||
+              0
+            ),
+          averageListeningMs:
+            Math.round(
+              Number(
+                listener.average_listening_ms ||
+                0
+              )
+            ),
+          requestMetrics: {
+            heartbeatRequests:
+              Number(
+                broadcast.heartbeat_requests ||
+                0
+              ),
+            statusPolls:
+              Number(
+                broadcast.status_polls ||
+                0
+              ),
+            analyticsRequests:
+              Number(
+                broadcast.analytics_requests ||
+                0
+              ),
+            audioChunks:
+              Number(
+                broadcast.audio_chunks ||
+                0
+              ),
+            sourceFinalRequests:
+              Number(
+                broadcast.source_final_requests ||
+                0
+              ),
+            listenerHeartbeats:
+              Number(
+                broadcast.listener_heartbeats ||
+                0
+              ),
+            ttsRequests:
+              Number(
+                broadcast.tts_requests ||
+                0
+              ),
+            totalWorkerRequests:
+              Number(
+                broadcast.heartbeat_requests ||
+                0
+              ) +
+              Number(
+                broadcast.status_polls ||
+                0
+              ) +
+              Number(
+                broadcast.analytics_requests ||
+                0
+              ) +
+              Number(
+                broadcast.audio_chunks ||
+                0
+              ) +
+              Number(
+                broadcast.source_final_requests ||
+                0
+              ) +
+              Number(
+                broadcast.listener_heartbeats ||
+                0
+              ) +
+              Number(
+                broadcast.tts_requests ||
+                0
+              )
+          },
+          autoEndReason:
+            String(
+              broadcast.auto_end_reason ||
+              ""
+            ),
+          languages:
+            languagesByBroadcast.get(
+              broadcastId
+            ) || []
+        };
+      });
+
+  const aggregateBroadcasts =
+    Number(
+      broadcastAggregate?.broadcasts ||
+      0
+    );
+
+  const aggregatePeakAudience =
+    Number(
+      broadcastAggregate
+        ?.highest_peak_audience ||
+      0
+    );
+
+  const totalListeners =
+    Number(
+      listenerAggregate
+        ?.total_listeners ||
+      0
+    );
+
+  const totalListeningMs =
+    Number(
+      listenerAggregate
+        ?.total_listening_ms ||
+      0
+    );
+
+  const aggregateAverageListeningMs =
+    Math.round(
+      Number(
+        listenerAggregate
+          ?.average_listening_ms ||
+        0
+      )
+    );
+
+  const languages =
+    (languageTotalsResult.results || [])
+      .map(row => ({
+        language:
+          String(
+            row.language || ""
+          ),
+        listeners:
+          Number(
+            row.listeners || 0
+          ),
+        totalListeningMs:
+          Number(
+            row.total_listening_ms ||
+            0
+          ),
+        averageListeningMs:
+          Math.round(
+            Number(
+              row.average_listening_ms ||
+              0
+            )
+          )
+      }));
+
+  const technicalTotals = {
+    heartbeatRequests:
+      Number(
+        broadcastAggregate
+          ?.heartbeat_requests ||
+        0
+      ),
+    statusPolls:
+      Number(
+        broadcastAggregate
+          ?.status_polls ||
+        0
+      ),
+    analyticsRequests:
+      Number(
+        broadcastAggregate
+          ?.analytics_requests ||
+        0
+      ),
+    audioChunks:
+      Number(
+        broadcastAggregate
+          ?.audio_chunks ||
+        0
+      ),
+    sourceFinalRequests:
+      Number(
+        broadcastAggregate
+          ?.source_final_requests ||
+        0
+      ),
+    listenerHeartbeats:
+      Number(
+        broadcastAggregate
+          ?.listener_heartbeats ||
+        0
+      ),
+    ttsRequests:
+      Number(
+        broadcastAggregate
+          ?.tts_requests ||
+        0
+      )
+  };
+
+  technicalTotals.totalWorkerRequests =
+    technicalTotals.heartbeatRequests +
+    technicalTotals.statusPolls +
+    technicalTotals.analyticsRequests +
+    technicalTotals.audioChunks +
+    technicalTotals.sourceFinalRequests +
+    technicalTotals.listenerHeartbeats +
+    technicalTotals.ttsRequests;
+
+  const data = {};
+
+  if (include("overview")) {
+    data.overview = {
+      broadcasts:
+        aggregateBroadcasts,
+      totalListenerSessions:
+        totalListeners,
+      highestPeakAudience:
+        aggregatePeakAudience,
+      totalListeningMs,
+      averageListenerSessionMs:
+        aggregateAverageListeningMs,
+      uniqueLanguages:
+        Number(
+          listenerAggregate
+            ?.unique_languages ||
+          languages.length
+        )
+    };
+  }
+
+  if (include("broadcasts")) {
+    data.broadcasts =
+      summaries.map(item => ({
+        broadcastId:
+          item.broadcastId,
+        room:
+          item.room,
+        startedAt:
+          item.startedAt,
+        endedAt:
+          item.endedAt,
+        durationMs:
+          item.durationMs,
+        autoEndReason:
+          item.autoEndReason || ""
+      }));
+  }
+
+  if (include("listeners")) {
+    data.listeners = {
+      totalSessions:
+        totalListeners,
+      totalListeningMs,
+      averageSessionMs:
+        aggregateAverageListeningMs,
+      broadcasts:
+        summaries.map(item => ({
+          broadcastId:
+            item.broadcastId,
+          startedAt:
+            item.startedAt,
+          totalListeners:
+            item.totalListeners,
+          peakListeners:
+            item.peakListeners,
+          totalListeningMs:
+            item.totalListeningMs,
+          averageListeningMs:
+            item.averageListeningMs
+        }))
+    };
+  }
+
+  if (include("languages")) {
+    data.languages = {
+      uniqueLanguages:
+        languages.length,
+      totals:
+        languages,
+      broadcasts:
+        summaries.map(item => ({
+          broadcastId:
+            item.broadcastId,
+          startedAt:
+            item.startedAt,
+          languages:
+            item.languages || []
+        }))
+    };
+  }
+
+  if (include("technicalUsage")) {
+    data.technicalUsage = {
+      totals:
+        technicalTotals,
+      broadcasts:
+        summaries.map(item => ({
+          broadcastId:
+            item.broadcastId,
+          startedAt:
+            item.startedAt,
+          requestMetrics:
+            item.requestMetrics || {}
+        }))
+    };
+  }
+
+  if (include("returnVisitors")) {
+    await ensureReturnVisitorSchema(env);
+
+    const visitorStats =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          COUNT(*) AS unique_visitors,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN visit_days > 1
+                THEN 1
+                ELSE 0
+              END
+            ),
+            0
+          ) AS returning_visitors,
+          COALESCE(
+            SUM(visit_days),
+            0
+          ) AS total_visit_days
+        FROM organization_visitors
+        WHERE organization_id = ?
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    data.returnVisitors = {
+      uniqueVisitors:
+        Number(
+          visitorStats
+            ?.unique_visitors ||
+          0
+        ),
+      returningVisitors:
+        Number(
+          visitorStats
+            ?.returning_visitors ||
+          0
+        ),
+      totalVisitDays:
+        Number(
+          visitorStats
+            ?.total_visit_days ||
+          0
+        )
+    };
+  }
+
+  if (include("marketing")) {
+    data.marketing =
+      await buildMarketingStatsApiAnalytics(
+        env,
+        organization.id
+      );
+  }
+
+  return {
+    success: true,
+    apiVersion:
+      "v1",
+    generatedAt:
+      now,
+    organization: {
+      id:
+        Number(
+          organization.id
+        ),
+      name:
+        String(
+          organization.organization_name ||
+          ""
+        ),
+      room:
+        baseRoom
+    },
+    query: {
+      scope:
+        requestedScope,
+      from:
+        Math.max(0, from),
+      to:
+        Math.max(
+          Math.max(0, from),
+          to
+        ),
+      limit
+    },
+    enabledScopes:
+      scopes,
+    data
+  };
+}
+
 /*
   v1.0.9
   Deterministic explicit Scripture-reference detection.
@@ -3488,6 +7024,12 @@ var LiveBridgeRoom = class {
         );
       }
       const text = String(body.text || "").trim();
+
+      const room =
+        normalizeRoom(
+          body.room
+        );
+
       if (!text) {
         return jsonResponse(
           {
@@ -3528,7 +7070,8 @@ var LiveBridgeRoom = class {
               text,
               chunkId,
               sourceLanguage,
-              targetLanguage: language
+              targetLanguage: language,
+              room
             });
             translations.push({
               language,
@@ -3700,6 +7243,9 @@ var LiveBridgeRoom = class {
 
         let audio;
 
+        let azureBillableCharacters =
+          0;
+
         await this.state.blockConcurrencyWhile(
           async () => {
 
@@ -3763,6 +7309,11 @@ var LiveBridgeRoom = class {
               </speak>
             `;
 
+
+            azureBillableCharacters =
+              countAzureSsmlBillableCharacters(
+                ssml
+              );
 
             const azureResponse =
               await fetch(
@@ -3858,7 +7409,14 @@ var LiveBridgeRoom = class {
               "X-LiveBridge-TTS-Cache":
                 generatedByThisRequest
                   ? "MISS"
-                  : "HIT"
+                  : "HIT",
+
+              "X-LiveBridge-TTS-Billable-Characters":
+                generatedByThisRequest
+                  ? String(
+                      azureBillableCharacters
+                    )
+                  : "0"
             }
           }
         );
@@ -4087,7 +7645,8 @@ var LiveBridgeRoom = class {
         const verse =
           await this.lookupBibleVerse({
             reference,
-            language
+            language,
+            room
           });
 
         if (!verse) {
@@ -5003,6 +8562,21 @@ Scripture rules:
     const summaryData =
       await summaryResponse.json();
 
+    try {
+      await recordOpenAiUsageForRoom(
+        this.env,
+        room,
+        "live_notes",
+        "gpt-4.1-mini",
+        summaryData.usage
+      );
+    } catch (usageError) {
+      console.error(
+        "Live notes OpenAI usage tracking failed:",
+        usageError
+      );
+    }
+
     const rawContent =
       summaryData.choices?.[0]
         ?.message
@@ -5211,7 +8785,8 @@ Scripture rules:
 
   async lookupBibleVerse({
     reference,
-    language
+    language,
+    room
   }) {
 
     /*
@@ -5341,6 +8916,21 @@ Scripture rules:
     const translationData =
       await translationResponse.json();
 
+    try {
+      await recordOpenAiUsageForRoom(
+        this.env,
+        room,
+        "scripture_translation",
+        "gpt-4.1-mini",
+        translationData.usage
+      );
+    } catch (usageError) {
+      console.error(
+        "Scripture OpenAI usage tracking failed:",
+        usageError
+      );
+    }
+
     const translated =
       translationData.choices?.[0]
         ?.message
@@ -5370,7 +8960,8 @@ Scripture rules:
     text,
     chunkId,
     sourceLanguage,
-    targetLanguage
+    targetLanguage,
+    room
   }) {
     if (sourceLanguage === targetLanguage) {
       return text;
@@ -5385,7 +8976,8 @@ Scripture rules:
     }
     const translationPromise = this.translateWithOpenAI(
       text,
-      targetLanguage
+      targetLanguage,
+      room
     );
     this.inFlightTranslations.set(
       cacheKey,
@@ -5402,7 +8994,11 @@ Scripture rules:
       this.inFlightTranslations.delete(cacheKey);
     }
   }
-  async translateWithOpenAI(text, targetLanguage) {
+  async translateWithOpenAI(
+    text,
+    targetLanguage,
+    room
+  ) {
     if (!this.env.OPENAI_API_KEY) {
       throw new Error(
         "OPENAI_API_KEY is not configured."
@@ -5446,6 +9042,22 @@ Scripture rules:
       );
     }
     const data = await response.json();
+
+    try {
+      await recordOpenAiUsageForRoom(
+        this.env,
+        room,
+        "translation",
+        "gpt-4.1-mini",
+        data.usage
+      );
+    } catch (usageError) {
+      console.error(
+        "Translation OpenAI usage tracking failed:",
+        usageError
+      );
+    }
+
     const translatedText = data.choices?.[0]?.message?.content?.trim();
     if (!translatedText) {
       throw new Error(
@@ -6410,10 +10022,16 @@ if (
 
     return jsonResponse({
       success: true,
-      account:
-        buildOrganizationAccount(
+      account: {
+        ...buildOrganizationAccount(
           row
-        )
+        ),
+        marketingCredits:
+          await marketingCreditBalance(
+            env,
+            row.id
+          )
+      }
     });
 
   } catch (error) {
@@ -8688,7 +12306,15 @@ if (
       env
     );
 
+    await ensureApiCostSchema(
+      env
+    );
+
     await ensureRoomAliasSchema(
+      env
+    );
+
+    await ensureAdminOrganizationOrderSchema(
       env
     );
 
@@ -8699,9 +12325,20 @@ if (
 
     const result =
       await env.TRANSLATIONS_DB.prepare(`
-        SELECT *
-        FROM organizations
-        ORDER BY created_at DESC
+        SELECT
+          o.*,
+          ao.sort_order AS admin_sort_order
+        FROM organizations o
+        LEFT JOIN organization_admin_order ao
+          ON ao.organization_id = o.id
+        ORDER BY
+          CASE
+            WHEN ao.sort_order IS NULL
+            THEN 1
+            ELSE 0
+          END,
+          ao.sort_order ASC,
+          o.created_at DESC
       `)
       .all();
 
@@ -8789,6 +12426,123 @@ if (
         .first();
 
 
+      const openAiUsageResult =
+        await env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            category,
+
+            COALESCE(
+              SUM(input_tokens),
+              0
+            ) AS input_tokens,
+
+            COALESCE(
+              SUM(cached_input_tokens),
+              0
+            ) AS cached_input_tokens,
+
+            COALESCE(
+              SUM(output_tokens),
+              0
+            ) AS output_tokens,
+
+            COALESCE(
+              SUM(requests),
+              0
+            ) AS requests,
+
+            COALESCE(
+              SUM(cost_usd),
+              0
+            ) AS cost_usd
+
+          FROM openai_usage
+
+          WHERE
+            organization_id = ?
+            AND usage_month = ?
+
+          GROUP BY category
+        `)
+        .bind(
+          Number(
+            row.id
+          ),
+          currentUsageMonth()
+        )
+        .all();
+
+
+      const openAiCostBreakdown = {};
+
+      let openAiInputTokens = 0;
+      let openAiCachedInputTokens = 0;
+      let openAiOutputTokens = 0;
+      let openAiRequests = 0;
+      let openAiCostUsd = 0;
+
+      for (
+        const usageRow of
+        openAiUsageResult.results || []
+      ) {
+
+        const category =
+          String(
+            usageRow.category ||
+            "other"
+          );
+
+        const categoryCost =
+          Number(
+            usageRow.cost_usd || 0
+          );
+
+        openAiCostBreakdown[
+          category
+        ] =
+          Math.round(
+            categoryCost *
+            1000000
+          ) / 1000000;
+
+        openAiInputTokens +=
+          Number(
+            usageRow.input_tokens || 0
+          );
+
+        openAiCachedInputTokens +=
+          Number(
+            usageRow.cached_input_tokens || 0
+          );
+
+        openAiOutputTokens +=
+          Number(
+            usageRow.output_tokens || 0
+          );
+
+        openAiRequests +=
+          Number(
+            usageRow.requests || 0
+          );
+
+        openAiCostUsd +=
+          categoryCost;
+      }
+
+
+      const azureTtsCostUsd =
+        calculateAzureTtsCostUsd(
+          azureUsage
+            ?.characters ||
+          0
+        );
+
+
+      const totalApiCostUsd =
+        openAiCostUsd +
+        azureTtsCostUsd;
+
+
       organizations.push({
 
         ...account,
@@ -8851,6 +12605,38 @@ if (
             ),
 
           azureTtsUsageMonth:
+            currentUsageMonth(),
+
+          azureTtsCostUsd:
+            Math.round(
+              azureTtsCostUsd *
+              1000000
+            ) / 1000000,
+
+          openAiInputTokens,
+          openAiCachedInputTokens,
+          openAiOutputTokens,
+          openAiRequests,
+
+          openAiCostUsd:
+            Math.round(
+              openAiCostUsd *
+              1000000
+            ) / 1000000,
+
+          openAiCostBreakdown,
+
+          apiCostUsd:
+            Math.round(
+              totalApiCostUsd *
+              1000000
+            ) / 1000000,
+
+          apiCostCurrency:
+            LIVEBRIDGE_API_COST_PRICING
+              .currency,
+
+          apiCostUsageMonth:
             currentUsageMonth()
         }
       });
@@ -8875,6 +12661,622 @@ if (
         error:
           error.message ||
           "Admin access denied."
+      },
+      403
+    );
+  }
+}
+
+
+async function buildMarketingAdminAnalytics(
+  env,
+  organizationId
+) {
+  await ensureMarketingSchema(env);
+  await ensureMarketingCreditsSchema(env);
+
+  const id = Number(organizationId || 0);
+  const now = Date.now();
+
+  const [
+    campaignsResult,
+    refundsResult,
+    creditAccount
+  ] = await Promise.all([
+    env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        id,
+        campaign_json,
+        created_at
+      FROM marketing_campaigns
+      WHERE organization_id = ?
+      ORDER BY created_at DESC
+      LIMIT 5000
+    `)
+    .bind(id)
+    .all(),
+
+    env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        campaign_id,
+        reason,
+        requested_at,
+        refunded_at,
+        balance_after
+      FROM marketing_generation_refunds
+      WHERE organization_id = ?
+      ORDER BY requested_at DESC
+      LIMIT 5000
+    `)
+    .bind(id)
+    .all(),
+
+    env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        balance,
+        lifetime_purchased,
+        lifetime_used,
+        updated_at
+      FROM marketing_credit_accounts
+      WHERE organization_id = ?
+      LIMIT 1
+    `)
+    .bind(id)
+    .first()
+  ]);
+
+  const refunds =
+    refundsResult.results || [];
+
+  const refundByCampaign =
+    new Map(
+      refunds.map(item => [
+        String(item.campaign_id || ""),
+        item
+      ])
+    );
+
+  const campaigns =
+    (campaignsResult.results || [])
+      .map(row => {
+        const campaign =
+          safeJson(
+            row.campaign_json,
+            {}
+          ) || {};
+
+        return {
+          id:
+            String(row.id || ""),
+          createdAt:
+            Number(
+              row.created_at ||
+              campaign.createdAt ||
+              0
+            ),
+          campaignName:
+            String(
+              campaign.campaignName ||
+              ""
+            ),
+          languageCode:
+            String(
+              campaign.languageCode ||
+              ""
+            ),
+          languageName:
+            String(
+              campaign.languageName ||
+              LIVEBRIDGE_MARKETING_LANGUAGES[
+                campaign.languageCode
+              ] ||
+              "Unknown"
+            ),
+          visualStyle:
+            String(
+              campaign.visualStyle ||
+              "unknown"
+            ),
+          audienceFocus:
+            String(
+              campaign.audienceFocus ||
+              "unknown"
+            ),
+          imageryTone:
+            String(
+              campaign.imageryTone ||
+              "unknown"
+            ),
+          includeTearOff:
+            campaign.includeTearOff !== false,
+          includeQr:
+            campaign.includeQr !== false,
+          creditCharged:
+            campaign.creditCharged === true
+        };
+      })
+      .filter(item =>
+        item.creditCharged === true
+      );
+
+  function periodStats(
+    startTimestamp
+  ) {
+    const generated =
+      campaigns.filter(item =>
+        item.createdAt >= startTimestamp
+      ).length;
+
+    const creditsReturned =
+      refunds.filter(item =>
+        Number(
+          item.requested_at ||
+          0
+        ) >= startTimestamp
+      ).length;
+
+    return {
+      generated,
+      creditsReturned,
+      netCredits:
+        generated -
+        creditsReturned
+    };
+  }
+
+  const periods = {
+    last24Hours:
+      periodStats(
+        now -
+        24 * 60 * 60 * 1000
+      ),
+    last7Days:
+      periodStats(
+        now -
+        7 * 24 * 60 * 60 * 1000
+      ),
+    last30Days:
+      periodStats(
+        now -
+        30 * 24 * 60 * 60 * 1000
+      ),
+    last365Days:
+      periodStats(
+        now -
+        365 * 24 * 60 * 60 * 1000
+      ),
+    lifetime:
+      periodStats(0)
+  };
+
+  function breakdownBy(
+    key,
+    labelKey = key
+  ) {
+    const map = new Map();
+
+    for (const item of campaigns) {
+      const value =
+        String(
+          item[key] ||
+          "unknown"
+        );
+
+      if (!map.has(value)) {
+        map.set(
+          value,
+          {
+            key:
+              value,
+            label:
+              String(
+                item[labelKey] ||
+                value
+              ),
+            generated:
+              0,
+            creditsReturned:
+              0
+          }
+        );
+      }
+
+      const row =
+        map.get(value);
+
+      row.generated += 1;
+
+      if (
+        refundByCampaign.has(
+          item.id
+        )
+      ) {
+        row.creditsReturned += 1;
+      }
+    }
+
+    return Array.from(
+      map.values()
+    )
+    .map(item => ({
+      ...item,
+      netCredits:
+        item.generated -
+        item.creditsReturned
+    }))
+    .sort(
+      (a, b) =>
+        b.generated -
+        a.generated ||
+        String(a.label)
+          .localeCompare(
+            String(b.label)
+          )
+    );
+  }
+
+  const combinationMap =
+    new Map();
+
+  for (const item of campaigns) {
+    const comboKey = [
+      item.languageCode ||
+        item.languageName,
+      item.visualStyle,
+      item.audienceFocus,
+      item.imageryTone
+    ].join("|");
+
+    if (
+      !combinationMap.has(
+        comboKey
+      )
+    ) {
+      combinationMap.set(
+        comboKey,
+        {
+          key:
+            comboKey,
+          languageName:
+            item.languageName,
+          visualStyle:
+            item.visualStyle,
+          audienceFocus:
+            item.audienceFocus,
+          imageryTone:
+            item.imageryTone,
+          generated:
+            0,
+          creditsReturned:
+            0
+        }
+      );
+    }
+
+    const combo =
+      combinationMap.get(
+        comboKey
+      );
+
+    combo.generated += 1;
+
+    if (
+      refundByCampaign.has(
+        item.id
+      )
+    ) {
+      combo.creditsReturned += 1;
+    }
+  }
+
+  const combinations =
+    Array.from(
+      combinationMap.values()
+    )
+    .map(item => ({
+      ...item,
+      netCredits:
+        item.generated -
+        item.creditsReturned
+    }))
+    .sort(
+      (a, b) =>
+        b.generated -
+        a.generated
+    )
+    .slice(
+      0,
+      25
+    );
+
+  const campaignById =
+    new Map(
+      campaigns.map(item => [
+        item.id,
+        item
+      ])
+    );
+
+  const recentActivity = [];
+
+  for (
+    const campaign of
+      campaigns.slice(0, 50)
+  ) {
+    recentActivity.push({
+      type:
+        "generation",
+      at:
+        campaign.createdAt,
+      campaignId:
+        campaign.id,
+      campaignName:
+        campaign.campaignName,
+      languageName:
+        campaign.languageName,
+      visualStyle:
+        campaign.visualStyle,
+      audienceFocus:
+        campaign.audienceFocus,
+      imageryTone:
+        campaign.imageryTone,
+      creditDelta:
+        -1,
+      reason:
+        ""
+    });
+  }
+
+  for (
+    const refund of
+      refunds.slice(0, 50)
+  ) {
+    const campaign =
+      campaignById.get(
+        String(
+          refund.campaign_id ||
+          ""
+        )
+      ) || {};
+
+    recentActivity.push({
+      type:
+        "refund",
+      at:
+        Number(
+          refund.requested_at ||
+          0
+        ),
+      campaignId:
+        String(
+          refund.campaign_id ||
+          ""
+        ),
+      campaignName:
+        String(
+          campaign.campaignName ||
+          ""
+        ),
+      languageName:
+        String(
+          campaign.languageName ||
+          ""
+        ),
+      visualStyle:
+        String(
+          campaign.visualStyle ||
+          ""
+        ),
+      audienceFocus:
+        String(
+          campaign.audienceFocus ||
+          ""
+        ),
+      imageryTone:
+        String(
+          campaign.imageryTone ||
+          ""
+        ),
+      creditDelta:
+        1,
+      reason:
+        String(
+          refund.reason ||
+          ""
+        )
+    });
+  }
+
+  recentActivity.sort(
+    (a, b) =>
+      Number(b.at || 0) -
+      Number(a.at || 0)
+  );
+
+  return {
+    balance:
+      Math.max(
+        0,
+        Number(
+          creditAccount?.balance ||
+          0
+        )
+      ),
+    lifetimePurchased:
+      Math.max(
+        0,
+        Number(
+          creditAccount
+            ?.lifetime_purchased ||
+          0
+        )
+      ),
+    lifetimeNetUsed:
+      Math.max(
+        0,
+        Number(
+          creditAccount
+            ?.lifetime_used ||
+          0
+        )
+      ),
+    periods,
+    languages:
+      breakdownBy(
+        "languageCode",
+        "languageName"
+      ),
+    visualStyles:
+      breakdownBy(
+        "visualStyle"
+      ),
+    audienceFocus:
+      breakdownBy(
+        "audienceFocus"
+      ),
+    imageryTones:
+      breakdownBy(
+        "imageryTone"
+      ),
+    combinations,
+    recentActivity:
+      recentActivity.slice(
+        0,
+        30
+      )
+  };
+}
+
+
+/*
+=======================================================
+ADMIN - SAVE ORGANIZATION DISPLAY ORDER
+=======================================================
+*/
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/organization-order"
+) {
+
+  try {
+
+    await ensureAdminOrganizationOrderSchema(
+      env
+    );
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const organizationIds =
+      Array.isArray(
+        body.organizationIds
+      )
+        ? body.organizationIds
+            .map(
+              value =>
+                Number(value)
+            )
+            .filter(
+              value =>
+                Number.isInteger(value) &&
+                value > 0
+            )
+        : [];
+
+    const uniqueIds =
+      Array.from(
+        new Set(
+          organizationIds
+        )
+      );
+
+    const countRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT COUNT(*) AS count
+        FROM organizations
+      `)
+      .first();
+
+    const organizationCount =
+      Number(
+        countRow?.count || 0
+      );
+
+    if (
+      uniqueIds.length !==
+      organizationIds.length ||
+      uniqueIds.length !==
+      organizationCount
+    ) {
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization list changed while reordering. Refresh the Admin page and try again."
+        },
+        409
+      );
+    }
+
+    const now =
+      Date.now();
+
+    const statements = [
+      env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_admin_order
+      `)
+    ];
+
+    uniqueIds.forEach(
+      (organizationId,index) => {
+        statements.push(
+          env.TRANSLATIONS_DB.prepare(`
+            INSERT INTO organization_admin_order (
+              organization_id,
+              sort_order,
+              updated_at
+            )
+            VALUES (?, ?, ?)
+          `)
+          .bind(
+            organizationId,
+            index,
+            now
+          )
+        );
+      }
+    );
+
+    await env.TRANSLATIONS_DB.batch(
+      statements
+    );
+
+    return jsonResponse({
+      success: true,
+      organizationIds:
+        uniqueIds
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin organization reorder failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to save organization order."
       },
       403
     );
@@ -9036,9 +13438,21 @@ if (
 
       success: true,
 
-      account:
-        buildOrganizationAccount(
+      account: {
+        ...buildOrganizationAccount(
           row
+        ),
+        marketingCredits:
+          await marketingCreditBalance(
+            env,
+            organizationId
+          )
+      },
+
+      marketingAnalytics:
+        await buildMarketingAdminAnalytics(
+          env,
+          organizationId
         ),
 
       broadcasts,
@@ -9915,6 +14329,18 @@ if (
     .run();
 
 
+    if (
+      body.marketingCredits !== undefined
+    ) {
+      await setMarketingCreditBalance(
+        env,
+        organizationId,
+        body.marketingCredits,
+        "admin_override",
+        "Admin set Marketing Credit balance"
+      );
+    }
+
     const updated =
       await env.TRANSLATIONS_DB.prepare(`
         SELECT *
@@ -9927,15 +14353,24 @@ if (
       )
       .first();
 
+    const updatedMarketingCredits =
+      await marketingCreditBalance(
+        env,
+        organizationId
+      );
+
 
     return jsonResponse({
 
       success: true,
 
-      account:
-        buildOrganizationAccount(
+      account: {
+        ...buildOrganizationAccount(
           updated
-        )
+        ),
+        marketingCredits:
+          updatedMarketingCredits
+      }
     });
 
   } catch (error) {
@@ -10768,6 +15203,2337 @@ if (
           "Unable to save listener profile."
       },
       403
+    );
+  }
+}
+
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/marketing/credits"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    const balance =
+      await marketingCreditBalance(
+        env,
+        organization.id
+      );
+
+    return jsonResponse({
+      success: true,
+      balance,
+      packages:
+        Object.entries(
+          LIVEBRIDGE_MARKETING_CREDIT_PACKAGES
+        ).map(([key, value]) => ({
+          key,
+          credits: value.credits,
+          priceCents: value.priceCents,
+          currency: "CAD",
+          label: value.label
+        }))
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load Marketing Credits."
+      },
+      403
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/credits/checkout"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    const body =
+      await request.json();
+
+    const packageKey =
+      String(
+        body.packageKey || ""
+      ).trim();
+
+    const pack =
+      LIVEBRIDGE_MARKETING_CREDIT_PACKAGES[
+        packageKey
+      ];
+
+    if (!pack) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That Marketing Credit package is not available."
+        },
+        400
+      );
+    }
+
+    await ensureMarketingCreditsSchema(
+      env
+    );
+
+    const registration =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM stripe_registrations
+        WHERE organization_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `)
+      .bind(
+        Number(organization.id)
+      )
+      .first();
+
+    const customerId =
+      String(
+        registration?.stripe_customer_id || ""
+      ).trim();
+
+    const origin =
+      String(
+        request.headers.get("Origin") || ""
+      ).trim();
+
+    const allowedReturnOrigin =
+      (
+        /^https:\/\/(?:[^/]+\.)?livebridge\.ca$/i.test(origin) ||
+        /^https:\/\/[^/]+\.northstarventures-ca\.workers\.dev$/i.test(origin)
+      )
+        ? origin
+        : "https://livebridge.ca";
+
+    const successUrl =
+      allowedReturnOrigin +
+      "/account/?panel=billing" +
+      "&marketing_credits=success" +
+      "&session_id={CHECKOUT_SESSION_ID}";
+
+    const cancelUrl =
+      allowedReturnOrigin +
+      "/account/?panel=billing" +
+      "&marketing_credits=cancelled";
+
+    const checkout =
+      await stripeApiRequest(
+        env,
+        "/v1/checkout/sessions",
+        {
+          mode: "payment",
+          "line_items[0][price_data][currency]": "cad",
+          "line_items[0][price_data][unit_amount]":
+            pack.priceCents,
+          "line_items[0][price_data][product_data][name]":
+            pack.label,
+          "line_items[0][price_data][product_data][description]":
+            "One Marketing Credit generates one complete four-graphic LiveBridge outreach campaign.",
+          "line_items[0][quantity]": 1,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          "metadata[livebridge_purchase_type]":
+            "marketing_credits",
+          "metadata[livebridge_organization_id]":
+            String(organization.id),
+          "metadata[livebridge_marketing_credits]":
+            String(pack.credits),
+          ...(customerId.startsWith("cus_")
+            ? { customer: customerId }
+            : {
+                customer_email:
+                  String(
+                    organization.account_email ||
+                    organization.email ||
+                    ""
+                  ).trim() || undefined
+              })
+        }
+      );
+
+    const sessionId =
+      String(
+        checkout?.id || ""
+      ).trim();
+
+    if (!sessionId) {
+      throw new Error(
+        "Stripe did not return a checkout session."
+      );
+    }
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_credit_purchases (
+        checkout_session_id,
+        organization_id,
+        credits,
+        amount_cents,
+        currency,
+        status,
+        created_at,
+        completed_at
+      )
+      VALUES (?, ?, ?, ?, 'CAD', 'pending', ?, NULL)
+      ON CONFLICT(checkout_session_id) DO NOTHING
+    `)
+    .bind(
+      sessionId,
+      Number(organization.id),
+      pack.credits,
+      pack.priceCents,
+      Date.now()
+    )
+    .run();
+
+    return jsonResponse({
+      success: true,
+      checkoutUrl:
+        String(checkout?.url || ""),
+      sessionId
+    });
+
+  } catch (error) {
+    console.error(
+      "Marketing credit checkout failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to start Marketing Credit checkout."
+      },
+      Number(error.stripeStatus || 500)
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/credits/verify"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    const body =
+      await request.json();
+
+    const sessionId =
+      String(
+        body.sessionId || ""
+      ).trim();
+
+    if (
+      !sessionId ||
+      !sessionId.startsWith("cs_")
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "A valid Stripe Checkout session is required."
+        },
+        400
+      );
+    }
+
+    const purchase =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_credit_purchases
+        WHERE checkout_session_id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        sessionId,
+        Number(organization.id)
+      )
+      .first();
+
+    if (!purchase) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Marketing Credit purchase was not found."
+        },
+        404
+      );
+    }
+
+    const session =
+      await stripeApiGet(
+        env,
+        "/v1/checkout/sessions/" +
+        encodeURIComponent(sessionId)
+      );
+
+    const result =
+      await completeMarketingCreditPurchase(
+        env,
+        session
+      );
+
+    return jsonResponse({
+      success: true,
+      purchased:
+        result?.paid === true ||
+        result?.alreadyCompleted === true,
+      credits:
+        Number(
+          result?.credits ||
+          purchase.credits ||
+          0
+        ),
+      balance:
+        await marketingCreditBalance(
+          env,
+          organization.id
+        )
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to verify Marketing Credit purchase."
+      },
+      Number(error.stripeStatus || 500)
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/marketing/profile"
+) {
+  try {
+    const organization = await marketingOrganization(request, env);
+    const row = await marketingProfileRow(env, organization.id);
+    const campaignsResult = await env.TRANSLATIONS_DB.prepare(`
+      SELECT *
+      FROM marketing_campaigns
+      WHERE organization_id = ?
+      ORDER BY created_at DESC
+      LIMIT 50
+    `).bind(Number(organization.id)).all();
+
+    await ensureMarketingCreditsSchema(env);
+
+    const refundsResult =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          campaign_id,
+          requested_at,
+          refunded_at,
+          reason
+        FROM marketing_generation_refunds
+        WHERE organization_id = ?
+      `)
+      .bind(
+        Number(organization.id)
+      )
+      .all();
+
+    const refundsByCampaign =
+      new Map(
+        (refundsResult.results || [])
+          .map(item => [
+            String(
+              item.campaign_id || ""
+            ),
+            item
+          ])
+      );
+
+    const refundWindowMs =
+      24 * 60 * 60 * 1000;
+
+    const now =
+      Date.now();
+
+    const campaigns =
+      (campaignsResult.results || [])
+        .map(row => {
+          const campaign =
+            marketingCampaign(row);
+
+          const refund =
+            refundsByCampaign.get(
+              String(row.id || "")
+            );
+
+          const createdAt =
+            Number(
+              row.created_at ||
+              campaign.createdAt ||
+              0
+            );
+
+          const refundExpiresAt =
+            createdAt +
+            refundWindowMs;
+
+          return {
+            ...campaign,
+            refundRequested:
+              !!refund,
+            refundReason:
+              refund
+                ? String(
+                    refund.reason ||
+                    ""
+                  )
+                : "",
+            refundRequestedAt:
+              Number(
+                refund?.requested_at ||
+                0
+              ),
+            refundExpiresAt,
+            refundEligible:
+              campaign.creditCharged === true &&
+              !refund &&
+              createdAt > 0 &&
+              now <= refundExpiresAt
+          };
+        });
+
+    return jsonResponse({
+      success: true,
+      profile: marketingProfile(organization, row),
+      supportedLanguages: LIVEBRIDGE_MARKETING_LANGUAGES,
+      campaigns,
+      marketingCredits:
+        await marketingCreditBalance(
+          env,
+          organization.id
+        )
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to load marketing profile."
+    }, 401);
+  }
+}
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/profile"
+) {
+  try {
+    const organization = await marketingOrganization(request, env);
+    await ensureMarketingSchema(env);
+    const body = await request.json();
+    const existing = await marketingProfileRow(env, organization.id);
+    const now = Date.now();
+
+    const websiteUrl = String(body.websiteUrl ?? existing?.website_url ?? "").trim().slice(0, 600);
+    const address = String(body.address ?? existing?.address ?? "").trim().slice(0, 500);
+    const city = String(body.city ?? existing?.city ?? "").trim().slice(0, 120);
+    const region = String(body.region ?? existing?.region ?? "").trim().slice(0, 120);
+    const country = String(body.country ?? existing?.country ?? "Canada").trim().slice(0, 120) || "Canada";
+    const logoUrl = String(body.logoUrl ?? existing?.logo_url ?? "").trim().slice(0, 800);
+    const primaryColor = marketingColor(body.primaryColor ?? existing?.primary_color, "#2588ff");
+    const secondaryColor = marketingColor(body.secondaryColor ?? existing?.secondary_color, "#6f43df");
+    const serviceDetails = String(body.serviceDetails ?? existing?.service_details ?? "").trim().slice(0, 1200);
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_profiles (
+        organization_id, website_url, address, city, region, country,
+        logo_url, primary_color, secondary_color, service_details,
+        last_analysis_json, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(organization_id)
+      DO UPDATE SET
+        website_url = excluded.website_url,
+        address = excluded.address,
+        city = excluded.city,
+        region = excluded.region,
+        country = excluded.country,
+        logo_url = excluded.logo_url,
+        primary_color = excluded.primary_color,
+        secondary_color = excluded.secondary_color,
+        service_details = excluded.service_details,
+        updated_at = excluded.updated_at
+    `).bind(
+      Number(organization.id),
+      websiteUrl,
+      address,
+      city,
+      region,
+      country,
+      logoUrl,
+      primaryColor,
+      secondaryColor,
+      serviceDetails,
+      String(existing?.last_analysis_json || ""),
+      now
+    ).run();
+
+    const updated = await marketingProfileRow(env, organization.id);
+
+    return jsonResponse({
+      success: true,
+      profile: marketingProfile(organization, updated)
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to save marketing profile."
+    }, 400);
+  }
+}
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/analyze"
+) {
+  try {
+    const organization = await marketingOrganization(request, env);
+
+    const marketingGenerationReference =
+      crypto.randomUUID();
+
+    let marketingCreditConsumed = false;
+
+    if (!env.OPENAI_API_KEY) {
+      return jsonResponse({
+        success: false,
+        error: "OpenAI is not configured."
+      }, 503);
+    }
+
+    const profileRow = await marketingProfileRow(env, organization.id);
+    const profile = marketingProfile(organization, profileRow);
+
+    if (!profile.address && !profile.city && !profile.region) {
+      return jsonResponse({
+        success: false,
+        error: "Add the organization city or address before analyzing local languages."
+      }, 400);
+    }
+
+    const locationText = [
+      profile.address,
+      profile.city,
+      profile.region,
+      profile.country
+    ].filter(Boolean).join(", ");
+
+    const supportedList = Object.entries(LIVEBRIDGE_MARKETING_LANGUAGES)
+      .map(([code, name]) => code + "=" + name)
+      .join(", ");
+
+    const prompt = `Research current publicly available demographic and language data for the LOCAL area served by this organization.
+
+Organization: ${organization.organization_name || ""}
+Location: ${locationText}
+Website: ${profile.websiteUrl || "not supplied"}
+
+Goal:
+Identify the largest non-English language communities in this organization's local area so the organization can decide which language communities to invite to its multilingual service or event.
+
+Use reliable public evidence. Prefer official census/statistics sources, municipal/regional demographic reports, and other primary or highly credible sources. If exact city/neighborhood data is unavailable, use the smallest credible geographic area available and explicitly say what geography was used.
+
+Do not infer ethnicity, religion, immigration status, or any individual's traits. This is language-market research only.
+
+LiveBridge currently supports these campaign/listener language codes:
+${supportedList}
+
+Return ONLY valid JSON:
+{
+  "areaSummary": "short factual summary of the geographic evidence used",
+  "methodology": "one short sentence explaining the language metric used",
+  "languages": [
+    {
+      "language": "Language name",
+      "code": "best matching language code",
+      "estimatedShare": "percentage/estimate or Not reported",
+      "estimatedPeople": "population/count or Not reported",
+      "why": "brief factual explanation",
+      "sources": [
+        {"title": "source title", "url": "https://..."}
+      ]
+    }
+  ]
+}
+
+Requirements:
+- Exclude English.
+- Return up to 8 languages ordered by strongest evidence of local prevalence.
+- Do not fabricate percentages, counts, URLs, or source titles.
+- If datasets use different definitions, explain that briefly.
+- Use one of the supported LiveBridge codes when the language truly matches; otherwise use a normal short language code.
+- This ordering is descriptive demographic evidence only.`;
+
+    const userLocation = {
+      type: "approximate"
+    };
+
+    if (profile.city) userLocation.city = profile.city;
+    if (profile.region) userLocation.region = profile.region;
+
+    const countryRaw = String(profile.country || "").trim();
+    if (/^[A-Za-z]{2}$/.test(countryRaw)) {
+      userLocation.country = countryRaw.toUpperCase();
+    } else if (/^canada$/i.test(countryRaw)) {
+      userLocation.country = "CA";
+    } else if (/^(usa|united states|united states of america)$/i.test(countryRaw)) {
+      userLocation.country = "US";
+    } else if (/^(uk|united kingdom)$/i.test(countryRaw)) {
+      userLocation.country = "GB";
+    }
+
+    const aiResponse = await fetch(
+      OPENAI_RESPONSES_URL,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-5.6-luna",
+          tools: [{
+            type: "web_search",
+            search_context_size: "medium",
+            user_location: userLocation
+          }],
+          include: ["web_search_call.action.sources"],
+          input: prompt
+        })
+      }
+    );
+
+    const aiData = await aiResponse.json();
+
+    if (!aiResponse.ok) {
+      throw new Error(aiData?.error?.message || "Language analysis failed.");
+    }
+
+    const analysis = normalizeMarketingAnalysis(
+      parseAIJson(
+        openAIResponseText(aiData)
+      )
+    );
+
+    analysis.sources =
+      openAISearchSources(aiData);
+
+    if (!analysis.languages.length) {
+      throw new Error("No usable local language data was found.");
+    }
+
+    const strategyLanguage = analysis.languages[0];
+
+    try {
+      const strategyPrompt = `Create a VERY SHORT practical outreach plan for a local organization using LiveBridge to welcome a ${strategyLanguage.language}-speaking community.
+
+Organization: ${organization.organization_name || ""}
+Location: ${locationText}
+Target language: ${strategyLanguage.language}
+Website: ${profile.websiteUrl || "not supplied"}
+
+Use current web search to identify practical local places where a small printed invitation could reasonably be shared or posted. Prefer real currently operating community centres, libraries, settlement/newcomer services, multicultural organizations, language/cultural associations, grocery stores, restaurants, cafes, or other public-facing places that are genuinely relevant. Nearby regional options are okay if the immediate city has few choices.
+
+Do NOT claim that a specific business's customers or staff speak this language unless reliable public evidence supports it. Phrase uncertain opportunities as places worth asking. Always remind the organization to ask permission before posting.
+
+Return ONLY valid JSON:
+{
+  "language": "${strategyLanguage.language}",
+  "tips": [
+    "very short actionable tip",
+    "very short actionable tip",
+    "very short actionable tip"
+  ],
+  "placements": [
+    {
+      "name": "real local place or business",
+      "type": "very short category",
+      "why": "very short reason to consider asking here",
+      "url": "https://verified-public-source..."
+    }
+  ]
+}
+
+Requirements:
+- Exactly 3 tips, each preferably under 12 words.
+- Up to 5 placement ideas.
+- Do not fabricate businesses, addresses, or URLs.
+- Keep this useful and extremely concise.`;
+
+      const strategyResponse = await fetch(
+        OPENAI_RESPONSES_URL,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "gpt-5.6-luna",
+            tools: [{
+              type: "web_search",
+              search_context_size: "low",
+              user_location: userLocation
+            }],
+            include: ["web_search_call.action.sources"],
+            input: strategyPrompt
+          })
+        }
+      );
+
+      const strategyData = await strategyResponse.json();
+
+      if (strategyResponse.ok) {
+        const rawStrategy = parseAIJson(
+          openAIResponseText(strategyData)
+        );
+
+        analysis.outreachStrategy = {
+          language: String(
+            rawStrategy?.language ||
+            strategyLanguage.language ||
+            ""
+          ).trim().slice(0, 100),
+
+          tips: (
+            Array.isArray(rawStrategy?.tips)
+              ? rawStrategy.tips
+              : []
+          )
+            .slice(0, 3)
+            .map(item =>
+              String(item || "")
+                .trim()
+                .slice(0, 180)
+            )
+            .filter(Boolean),
+
+          placements: (
+            Array.isArray(rawStrategy?.placements)
+              ? rawStrategy.placements
+              : []
+          )
+            .slice(0, 5)
+            .map(item => ({
+              name: String(item?.name || "").trim().slice(0, 160),
+              type: String(item?.type || "").trim().slice(0, 100),
+              why: String(item?.why || "").trim().slice(0, 240),
+              url: String(item?.url || "").trim().slice(0, 800)
+            }))
+            .filter(item =>
+              item.name &&
+              /^https?:\/\//i.test(item.url)
+            ),
+
+          sources:
+            openAISearchSources(strategyData)
+              .slice(0, 10)
+        };
+      }
+    } catch (strategyError) {
+      console.error(
+        "Marketing outreach strategy failed:",
+        strategyError
+      );
+    }
+
+    const now = Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_profiles (
+        organization_id,
+        last_analysis_json,
+        updated_at
+      )
+      VALUES (?, ?, ?)
+      ON CONFLICT(organization_id)
+      DO UPDATE SET
+        last_analysis_json = excluded.last_analysis_json,
+        updated_at = excluded.updated_at
+    `).bind(
+      Number(organization.id),
+      JSON.stringify(analysis),
+      now
+    ).run();
+
+    return jsonResponse({
+      success: true,
+      analysis
+    });
+  } catch (error) {
+    console.error("Marketing language analysis failed:", error);
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to analyze local languages."
+    }, 500);
+  }
+}
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/generate"
+) {
+  let marketingGenerationOrganization = null;
+  let marketingCreditConsumed = false;
+  const marketingGenerationReference = crypto.randomUUID();
+
+  try {
+    const organization = await marketingOrganization(request, env);
+    marketingGenerationOrganization = organization;
+
+    if (!env.OPENAI_API_KEY) {
+      return jsonResponse({
+        success: false,
+        error: "OpenAI is not configured."
+      }, 503);
+    }
+
+    await ensureMarketingSchema(env);
+
+    const body = await request.json();
+    const languageCode = String(body.languageCode || "").trim().toLowerCase();
+
+    const visualStyle = cleanMarketingChoice(
+      body.visualStyle,
+      ["people", "balanced", "clean"],
+      "people"
+    );
+
+    const audienceFocus = cleanMarketingChoice(
+      body.audienceFocus,
+      ["general", "families", "adults", "youth", "seniors"],
+      "general"
+    );
+
+    const imageryTone = cleanMarketingChoice(
+      body.imageryTone,
+      ["warm", "modern", "community", "church"],
+      "warm"
+    );
+
+    const includeTearOff =
+      body.includeTearOff !== false;
+
+    const requestedTabs =
+      Number(body.tearOffTabs || 8);
+
+    const tearOffTabs =
+      [6, 8, 10].includes(requestedTabs)
+        ? requestedTabs
+        : 8;
+
+    const includeQr =
+      body.includeQr !== false;
+
+    const includePhone =
+      body.includePhone === true;
+
+    const phoneNumber =
+      includePhone
+        ? String(body.phoneNumber || "")
+            .trim()
+            .replace(/[\r\n\t]+/g, " ")
+            .slice(0, 80)
+        : "";
+
+    if (!Object.prototype.hasOwnProperty.call(LIVEBRIDGE_MARKETING_LANGUAGES, languageCode)) {
+      return jsonResponse({
+        success: false,
+        error: "That language is not currently enabled on the LiveBridge listener."
+      }, 400);
+    }
+
+    const languageName = LIVEBRIDGE_MARKETING_LANGUAGES[languageCode];
+
+    const profileRow = await marketingProfileRow(env, organization.id);
+    const profile = marketingProfile(organization, profileRow);
+
+    if (!profile.websiteUrl && !profile.address && !profile.city) {
+      return jsonResponse({
+        success: false,
+        error: "Save the organization marketing details before generating a campaign."
+      }, 400);
+    }
+
+    const marketingCreditsRemaining =
+      await consumeMarketingCredit(
+        env,
+        organization.id,
+        marketingGenerationReference
+      );
+
+    marketingCreditConsumed = true;
+
+    const location = [profile.city, profile.region, profile.country]
+      .filter(Boolean)
+      .join(", ");
+
+    const prompt = `Create a welcoming outreach campaign for this organization.
+
+Organization: ${organization.organization_name || ""}
+Target language: ${languageName} (${languageCode})
+Location: ${location || "not supplied"}
+Address: ${profile.address || "not supplied"}
+Website: ${profile.websiteUrl || "not supplied"}
+Service/event details: ${profile.serviceDetails || "not supplied"}
+Visual style: ${visualStyle}
+Audience focus: ${audienceFocus}
+Imagery tone: ${imageryTone}
+
+LiveBridge lets people attend the organization's live service/event and follow the message with live translated captions and translated audio in their selected language.
+
+Tone:
+Warm, welcoming, respectful, community-focused, simple and clear.
+Do not describe the target-language community as outsiders.
+Do not make claims about attendance, demographics, schedules, services, or the organization that were not supplied.
+
+Return ONLY valid JSON:
+{
+  "campaignName": "short internal campaign name",
+  "printTarget": {
+    "headline": "headline in ${languageName}",
+    "subheadline": "short subheadline in ${languageName}",
+    "body": "2-3 short sentences in ${languageName}",
+    "cta": "short call to action in ${languageName}"
+  },
+  "socialEnglish": {
+    "headline": "English headline",
+    "subheadline": "English subheadline",
+    "body": "1-2 short English sentences",
+    "cta": "short English call to action"
+  },
+  "socialTarget": {
+    "headline": "headline in ${languageName}",
+    "subheadline": "subheadline in ${languageName}",
+    "body": "1-2 short sentences in ${languageName}",
+    "cta": "short call to action in ${languageName}"
+  },
+  "tearOff": {
+    "headline": "short welcoming headline in ${languageName}",
+    "subheadline": "short invitation in ${languageName}",
+    "body": "1-2 very short sentences in ${languageName}",
+    "cta": "short call to action in ${languageName}",
+    "tabCallout": "2-5 word phrase in ${languageName} meaning live translation available",
+    "tabServiceLine": "very short service/event time line using ONLY the supplied service details; preserve all times exactly"
+  }
+}
+
+Clearly communicate that people can listen/follow the live service in their own language using LiveBridge. Keep every field concise enough for a poster/social graphic. For tabServiceLine, never invent a day or time that was not supplied.`;
+
+    const aiResponse = await fetch(
+      OPENAI_RESPONSES_URL,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-5.6-luna",
+          input: prompt
+        })
+      }
+    );
+
+    const aiData = await aiResponse.json();
+
+    if (!aiResponse.ok) {
+      throw new Error(aiData?.error?.message || "Campaign generation failed.");
+    }
+
+    const generated = parseAIJson(
+      openAIResponseText(aiData)
+    );
+
+    const cleanBlock = block => ({
+      headline: String(block?.headline || "").trim().slice(0, 180),
+      subheadline: String(block?.subheadline || "").trim().slice(0, 220),
+      body: String(block?.body || "").trim().slice(0, 700),
+      cta: String(block?.cta || "").trim().slice(0, 180)
+    });
+
+    const now = Date.now();
+    const campaignId =
+      marketingGenerationReference;
+
+    const campaign = {
+      campaignName: String(generated?.campaignName || (languageName + " Outreach")).trim().slice(0, 140),
+      organizationName: String(organization.organization_name || ""),
+      roomName: String(organization.room_name || "").trim().toUpperCase(),
+      languageCode,
+      languageName,
+      websiteUrl: profile.websiteUrl,
+      address: profile.address,
+      location,
+      logoUrl: profile.logoUrl,
+      primaryColor: profile.primaryColor,
+      secondaryColor: profile.secondaryColor,
+      serviceDetails: profile.serviceDetails,
+      visualStyle,
+      audienceFocus,
+      imageryTone,
+      includeTearOff,
+      tearOffTabs,
+      includeQr,
+      includePhone,
+      phoneNumber,
+      creditCharged: true,
+      printTarget: cleanBlock(generated?.printTarget),
+      socialEnglish: cleanBlock(generated?.socialEnglish),
+      socialTarget: cleanBlock(generated?.socialTarget),
+      tearOff: {
+        ...cleanBlock(generated?.tearOff),
+        tabCallout: String(generated?.tearOff?.tabCallout || "").trim().slice(0, 120),
+        tabServiceLine: String(generated?.tearOff?.tabServiceLine || profile.serviceDetails || "").trim().slice(0, 180)
+      },
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO marketing_campaigns (
+        id,
+        organization_id,
+        language_code,
+        language_name,
+        campaign_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      campaignId,
+      Number(organization.id),
+      languageCode,
+      languageName,
+      JSON.stringify(campaign),
+      now,
+      now
+    ).run();
+
+    return jsonResponse({
+      success: true,
+      campaign: {
+        id: campaignId,
+        ...campaign
+      },
+      marketingCreditsRemaining
+    });
+  } catch (error) {
+    if (
+      marketingCreditConsumed === true &&
+      marketingGenerationOrganization?.id
+    ) {
+      try {
+        await refundMarketingCredit(
+          env,
+          marketingGenerationOrganization.id,
+          marketingGenerationReference
+        );
+      } catch (refundError) {
+        console.error(
+          "Marketing credit refund failed:",
+          refundError
+        );
+      }
+    }
+
+    console.error("Marketing campaign generation failed:", error);
+
+    const needsCredits =
+      error?.code === "MARKETING_CREDITS_REQUIRED";
+
+    return jsonResponse({
+      success: false,
+      code:
+        needsCredits
+          ? "MARKETING_CREDITS_REQUIRED"
+          : undefined,
+      error: error.message || "Unable to generate marketing campaign."
+    }, needsCredits ? 402 : 500);
+  }
+}
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/refund-request"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    await ensureMarketingSchema(env);
+    await ensureMarketingCreditsSchema(env);
+
+    const body =
+      await request.json();
+
+    const campaignId =
+      String(
+        body.campaignId || ""
+      ).trim();
+
+    const reason =
+      String(
+        body.reason || ""
+      )
+      .trim()
+      .replace(
+        /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,
+        ""
+      )
+      .slice(0, 1500);
+
+    if (!campaignId) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Campaign ID is required."
+        },
+        400
+      );
+    }
+
+    if (reason.length < 10) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Please tell us briefly what went wrong before requesting the credit back."
+        },
+        400
+      );
+    }
+
+    const row =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_campaigns
+        WHERE id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        campaignId,
+        Number(organization.id)
+      )
+      .first();
+
+    if (!row) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Marketing campaign not found."
+        },
+        404
+      );
+    }
+
+    const campaign =
+      marketingCampaign(row);
+
+    if (campaign.creditCharged !== true) {
+      return jsonResponse(
+        {
+          success: false,
+          code:
+            "REFUND_NOT_ELIGIBLE",
+          error:
+            "This campaign was not generated using a Marketing Credit."
+        },
+        409
+      );
+    }
+
+    const generationTransaction =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM marketing_credit_transactions
+        WHERE organization_id = ?
+          AND reference_id = ?
+          AND transaction_type = 'generation'
+        LIMIT 1
+      `)
+      .bind(
+        Number(organization.id),
+        campaignId
+      )
+      .first();
+
+    if (!generationTransaction) {
+      return jsonResponse(
+        {
+          success: false,
+          code:
+            "REFUND_NOT_ELIGIBLE",
+          error:
+            "No Marketing Credit charge was found for this generation."
+        },
+        409
+      );
+    }
+
+    const existingRefund =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_generation_refunds
+        WHERE campaign_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        campaignId
+      )
+      .first();
+
+    if (existingRefund) {
+      return jsonResponse(
+        {
+          success: false,
+          code:
+            "ALREADY_REFUNDED",
+          error:
+            "A credit has already been returned for this generation."
+        },
+        409
+      );
+    }
+
+    const createdAt =
+      Number(
+        row.created_at || 0
+      );
+
+    const now =
+      Date.now();
+
+    const refundExpiresAt =
+      createdAt +
+      (
+        24 *
+        60 *
+        60 *
+        1000
+      );
+
+    if (
+      !createdAt ||
+      now > refundExpiresAt
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          code:
+            "REFUND_WINDOW_EXPIRED",
+          error:
+            "The 24-hour credit-back window for this generation has expired."
+        },
+        410
+      );
+    }
+
+    const refundId =
+      crypto.randomUUID();
+
+    try {
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO marketing_generation_refunds (
+          id,
+          campaign_id,
+          organization_id,
+          reason,
+          campaign_created_at,
+          requested_at,
+          refunded_at,
+          credit_delta,
+          balance_after,
+          email_sent
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, 0)
+      `)
+      .bind(
+        refundId,
+        campaignId,
+        Number(organization.id),
+        reason,
+        createdAt,
+        now,
+        now
+      )
+      .run();
+
+    } catch (insertError) {
+      const message =
+        String(
+          insertError?.message ||
+          ""
+        )
+        .toLowerCase();
+
+      if (
+        message.includes("unique") ||
+        message.includes("constraint")
+      ) {
+        return jsonResponse(
+          {
+            success: false,
+            code:
+              "ALREADY_REFUNDED",
+            error:
+              "A credit has already been returned for this generation."
+          },
+          409
+        );
+      }
+
+      throw insertError;
+    }
+
+    let balanceAfter;
+
+    try {
+      balanceAfter =
+        await addMarketingCredits(
+          env,
+          organization.id,
+          1,
+          {
+            transactionType:
+              "customer_generation_refund",
+            referenceId:
+              campaignId,
+            note:
+              "24-hour customer generation report refund",
+            countAsPurchased:
+              false
+          }
+        );
+
+      await env.TRANSLATIONS_DB.prepare(`
+        UPDATE marketing_credit_accounts
+        SET
+          lifetime_used = CASE
+            WHEN lifetime_used > 0 THEN lifetime_used - 1
+            ELSE 0
+          END,
+          updated_at = ?
+        WHERE organization_id = ?
+      `)
+      .bind(
+        now,
+        Number(organization.id)
+      )
+      .run();
+
+      await env.TRANSLATIONS_DB.prepare(`
+        UPDATE marketing_generation_refunds
+        SET balance_after = ?
+        WHERE id = ?
+      `)
+      .bind(
+        balanceAfter,
+        refundId
+      )
+      .run();
+
+    } catch (creditError) {
+      await env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM marketing_generation_refunds
+        WHERE id = ?
+      `)
+      .bind(
+        refundId
+      )
+      .run();
+
+      throw creditError;
+    }
+
+    const emailSent =
+      await sendMarketingRefundAdminEmail(
+        env,
+        organization,
+        campaign,
+        reason,
+        balanceAfter,
+        now
+      );
+
+    await env.TRANSLATIONS_DB.prepare(`
+      UPDATE marketing_generation_refunds
+      SET email_sent = ?
+      WHERE id = ?
+    `)
+    .bind(
+      emailSent ? 1 : 0,
+      refundId
+    )
+    .run();
+
+    return jsonResponse({
+      success: true,
+      refunded: true,
+      creditReturned: 1,
+      balance:
+        balanceAfter,
+      requestedAt:
+        now,
+      refundExpiresAt,
+      emailSent
+    });
+
+  } catch (error) {
+    console.error(
+      "Marketing generation refund request failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to process the generation report."
+      },
+      500
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/delete"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    const body =
+      await request.json();
+
+    const campaignId =
+      String(
+        body.campaignId || ""
+      ).trim();
+
+    if (!campaignId) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Campaign ID is required."
+        },
+        400
+      );
+    }
+
+    await ensureMarketingSchema(env);
+
+    const existing =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM marketing_campaigns
+        WHERE id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        campaignId,
+        Number(organization.id)
+      )
+      .first();
+
+    if (!existing) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Marketing campaign not found."
+        },
+        404
+      );
+    }
+
+    await env.TRANSLATIONS_DB.prepare(`
+      DELETE FROM marketing_campaigns
+      WHERE id = ?
+        AND organization_id = ?
+    `)
+    .bind(
+      campaignId,
+      Number(organization.id)
+    )
+    .run();
+
+    if (env.AZURE_TTS_CACHE) {
+      const cachePrefixes = [
+        "marketing-artwork/v3/",
+        "marketing-artwork/v2/"
+      ].map(version =>
+        version +
+        Number(organization.id) +
+        "/" +
+        campaignId +
+        "/"
+      );
+
+      await Promise.allSettled(
+        cachePrefixes.flatMap(prefix => [
+          env.AZURE_TTS_CACHE.delete(
+            prefix + "portrait.b64"
+          ),
+          env.AZURE_TTS_CACHE.delete(
+            prefix + "square.b64"
+          )
+        ])
+      );
+    }
+
+    return jsonResponse({
+      success: true,
+      campaignId
+    });
+
+  } catch (error) {
+    console.error(
+      "Marketing campaign delete failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to delete marketing campaign."
+      },
+      500
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/marketing/artwork"
+) {
+  try {
+    const organization =
+      await marketingOrganization(
+        request,
+        env
+      );
+
+    if (!env.OPENAI_API_KEY) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "OpenAI is not configured."
+        },
+        503
+      );
+    }
+
+    const body = await request.json();
+
+    const campaignId =
+      String(body.campaignId || "")
+        .trim();
+
+    const kind =
+      String(body.kind || "")
+        .trim()
+        .toLowerCase();
+
+    if (
+      !campaignId ||
+      !["portrait", "square"].includes(kind)
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Campaign artwork request is invalid."
+        },
+        400
+      );
+    }
+
+    await ensureMarketingSchema(env);
+
+    const row =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM marketing_campaigns
+        WHERE id = ?
+          AND organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        campaignId,
+        Number(organization.id)
+      )
+      .first();
+
+    if (!row) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Marketing campaign not found."
+        },
+        404
+      );
+    }
+
+    const campaign =
+      marketingCampaign(row);
+
+    if (
+      String(campaign.visualStyle || "people") ===
+      "clean"
+    ) {
+      return jsonResponse({
+        success: true,
+        skipped: true
+      });
+    }
+
+    const cacheKey =
+      "marketing-artwork/v3/" +
+      Number(organization.id) +
+      "/" +
+      campaignId +
+      "/" +
+      kind +
+      ".b64";
+
+    if (env.AZURE_TTS_CACHE) {
+      const cached =
+        await env.AZURE_TTS_CACHE.get(
+          cacheKey
+        );
+
+      if (cached) {
+        return jsonResponse({
+          success: true,
+          cached: true,
+          mimeType: "image/png",
+          imageBase64:
+            await cached.text()
+        });
+      }
+    }
+
+    const imageBase64 =
+      await generateMarketingArtworkBase64(
+        env,
+        campaign,
+        kind
+      );
+
+    if (env.AZURE_TTS_CACHE) {
+      await env.AZURE_TTS_CACHE.put(
+        cacheKey,
+        imageBase64,
+        {
+          httpMetadata: {
+            contentType: "text/plain; charset=utf-8"
+          }
+        }
+      );
+    }
+
+    return jsonResponse({
+      success: true,
+      cached: false,
+      mimeType: "image/png",
+      imageBase64
+    });
+
+  } catch (error) {
+    console.error(
+      "Marketing artwork generation failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to generate campaign artwork."
+      },
+      500
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/account/stats-api/test"
+) {
+  try {
+    const organization =
+      await organizationForStatsApiAccount(
+        request,
+        env
+      );
+
+    await ensureOrganizationStatsApiSchema(
+      env
+    );
+
+    const access =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organization_stats_api_access
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    const scopes =
+      normalizeOrganizationStatsApiScopes(
+        safeJson(
+          access?.scopes_json,
+          {}
+        )
+      );
+
+    const policy =
+      organizationStatsApiPolicy(
+        organization
+      );
+
+    const {
+      payload,
+      cacheStatus
+    } =
+      await organizationStatsApiPayloadWithCache(
+        env,
+        organization,
+        scopes,
+        url,
+        policy.cacheSeconds
+      );
+
+    return jsonResponse(
+      payload,
+      200,
+      {
+        "Cache-Control":
+          "no-store",
+        "X-LiveBridge-Stats-Cache":
+          cacheStatus
+      }
+    );
+
+  } catch (error) {
+    const code =
+      String(
+        error?.code || ""
+      );
+
+    const status =
+      code ===
+      "STATS_API_DISABLED"
+        ? 403
+        : (
+            [
+              "SCOPE_DISABLED",
+              "UNKNOWN_SCOPE"
+            ].includes(code)
+              ? 400
+              : 500
+          );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to preview Organization Stats API data."
+      },
+      status,
+      {
+        "Cache-Control":
+          "no-store"
+      }
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/account/stats-api"
+) {
+  try {
+    const organization =
+      await organizationForStatsApiAccount(
+        request,
+        env
+      );
+
+    await ensureOrganizationStatsApiSchema(
+      env
+    );
+
+    const now =
+      Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO organization_stats_api_access (
+        organization_id,
+        api_key_hash,
+        key_prefix,
+        scopes_json,
+        created_at,
+        updated_at,
+        rotated_at,
+        revoked_at,
+        last_used_at
+      )
+      VALUES (?, '', '', ?, ?, ?, NULL, NULL, NULL)
+      ON CONFLICT(organization_id) DO NOTHING
+    `)
+    .bind(
+      Number(
+        organization.id
+      ),
+      JSON.stringify(
+        defaultOrganizationStatsApiScopes()
+      ),
+      now,
+      now
+    )
+    .run();
+
+    const access =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organization_stats_api_access
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    const policy =
+      organizationStatsApiPolicy(
+        organization
+      );
+
+    return jsonResponse({
+      success: true,
+      enabled: true,
+      policy: {
+        planCode:
+          policy.planCode,
+        accessSource:
+          policy.accessSource,
+        minIntervalSeconds:
+          policy.minIntervalSeconds,
+        cacheSeconds:
+          policy.cacheSeconds,
+        hardLimitPerMinute:
+          policy.hardLimitPerMinute
+      },
+      hasKey:
+        !!String(
+          access?.api_key_hash ||
+          ""
+        ),
+      keyPrefix:
+        String(
+          access?.key_prefix ||
+          ""
+        ),
+      scopes:
+        normalizeOrganizationStatsApiScopes(
+          safeJson(
+            access?.scopes_json,
+            {}
+          )
+        ),
+      scopeLabels:
+        LIVEBRIDGE_STATS_API_SCOPES,
+      apiEndpoint:
+        new URL(
+          request.url
+        ).origin +
+        "/api/v1/stats",
+      createdAt:
+        Number(
+          access?.created_at ||
+          0
+        ),
+      rotatedAt:
+        Number(
+          access?.rotated_at ||
+          0
+        ),
+      lastUsedAt:
+        Number(
+          access?.last_used_at ||
+          0
+        )
+    });
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load Organization Stats API settings."
+      },
+      error?.code ===
+        "STATS_API_DISABLED"
+          ? 403
+          : 500
+    );
+  }
+}
+
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/account/stats-api"
+) {
+  try {
+    const organization =
+      await organizationForStatsApiAccount(
+        request,
+        env
+      );
+
+    await ensureOrganizationStatsApiSchema(
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const action =
+      String(
+        body.action || ""
+      )
+      .trim()
+      .toLowerCase();
+
+    const now =
+      Date.now();
+
+    const existing =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organization_stats_api_access
+        WHERE organization_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          organization.id
+        )
+      )
+      .first();
+
+    const existingScopes =
+      normalizeOrganizationStatsApiScopes(
+        safeJson(
+          existing?.scopes_json,
+          {}
+        )
+      );
+
+    if (
+      action ===
+      "save_scopes"
+    ) {
+      const scopes =
+        normalizeOrganizationStatsApiScopes(
+          body.scopes
+        );
+
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO organization_stats_api_access (
+          organization_id,
+          api_key_hash,
+          key_prefix,
+          scopes_json,
+          created_at,
+          updated_at,
+          rotated_at,
+          revoked_at,
+          last_used_at
+        )
+        VALUES (?, '', '', ?, ?, ?, NULL, NULL, NULL)
+        ON CONFLICT(organization_id)
+        DO UPDATE SET
+          scopes_json =
+            excluded.scopes_json,
+          updated_at =
+            excluded.updated_at
+      `)
+      .bind(
+        Number(
+          organization.id
+        ),
+        JSON.stringify(
+          scopes
+        ),
+        Number(
+          existing?.created_at ||
+          now
+        ),
+        now
+      )
+      .run();
+
+      return jsonResponse({
+        success: true,
+        scopes
+      });
+    }
+
+    if (
+      action === "generate" ||
+      action === "rotate"
+    ) {
+      const apiKey =
+        generateOrganizationStatsApiKey();
+
+      const keyHash =
+        await sha256(
+          apiKey
+        );
+
+      const keyPrefix =
+        apiKey.slice(0, 18) +
+        "…";
+
+      const scopes =
+        body.scopes
+          ? normalizeOrganizationStatsApiScopes(
+              body.scopes
+            )
+          : existingScopes;
+
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO organization_stats_api_access (
+          organization_id,
+          api_key_hash,
+          key_prefix,
+          scopes_json,
+          created_at,
+          updated_at,
+          rotated_at,
+          revoked_at,
+          last_used_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+        ON CONFLICT(organization_id)
+        DO UPDATE SET
+          api_key_hash =
+            excluded.api_key_hash,
+          key_prefix =
+            excluded.key_prefix,
+          scopes_json =
+            excluded.scopes_json,
+          updated_at =
+            excluded.updated_at,
+          rotated_at =
+            excluded.rotated_at,
+          revoked_at =
+            NULL,
+          last_used_at =
+            NULL
+      `)
+      .bind(
+        Number(
+          organization.id
+        ),
+        keyHash,
+        keyPrefix,
+        JSON.stringify(
+          scopes
+        ),
+        Number(
+          existing?.created_at ||
+          now
+        ),
+        now,
+        now
+      )
+      .run();
+
+      return jsonResponse({
+        success: true,
+        apiKey,
+        keyPrefix,
+        scopes,
+        apiEndpoint:
+          new URL(
+            request.url
+          ).origin +
+          "/api/v1/stats",
+        notice:
+          "Copy this API key now. LiveBridge will not display the full key again."
+      });
+    }
+
+    if (
+      action === "revoke"
+    ) {
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO organization_stats_api_access (
+          organization_id,
+          api_key_hash,
+          key_prefix,
+          scopes_json,
+          created_at,
+          updated_at,
+          rotated_at,
+          revoked_at,
+          last_used_at
+        )
+        VALUES (?, '', '', ?, ?, ?, NULL, ?, NULL)
+        ON CONFLICT(organization_id)
+        DO UPDATE SET
+          api_key_hash = '',
+          key_prefix = '',
+          updated_at =
+            excluded.updated_at,
+          revoked_at =
+            excluded.revoked_at,
+          last_used_at =
+            NULL
+      `)
+      .bind(
+        Number(
+          organization.id
+        ),
+        JSON.stringify(
+          existingScopes
+        ),
+        Number(
+          existing?.created_at ||
+          now
+        ),
+        now,
+        now
+      )
+      .run();
+
+      return jsonResponse({
+        success: true,
+        revoked: true
+      });
+    }
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          "Unknown Stats API action."
+      },
+      400
+    );
+
+  } catch (error) {
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to update Organization Stats API settings."
+      },
+      error?.code ===
+        "STATS_API_DISABLED"
+          ? 403
+          : 500
+    );
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/api/v1/stats"
+) {
+  try {
+    const {
+      organization,
+      scopes,
+      policy
+    } =
+      await authenticateOrganizationStatsApi(
+        request,
+        env
+      );
+
+    const rate =
+      await enforceOrganizationStatsApiRateLimit(
+        env,
+        organization.id,
+        policy
+      );
+
+    const {
+      payload,
+      cacheStatus
+    } =
+      await organizationStatsApiPayloadWithCache(
+        env,
+        organization,
+        scopes,
+        url,
+        policy.cacheSeconds
+      );
+
+    return jsonResponse(
+      payload,
+      200,
+      {
+        "Cache-Control":
+          "no-store",
+        "X-LiveBridge-Stats-Cache":
+          cacheStatus,
+        "X-LiveBridge-Stats-Rate-Limit":
+          String(
+            rate.limitPerMinute
+          ),
+        "X-LiveBridge-Stats-Rate-Remaining":
+          "0"
+      }
+    );
+
+  } catch (error) {
+    const code =
+      String(
+        error?.code || ""
+      );
+
+    const status =
+      [
+        "API_KEY_REQUIRED",
+        "API_KEY_INVALID"
+      ].includes(code)
+        ? 401
+        : (
+            code ===
+            "STATS_API_RATE_LIMITED"
+              ? 429
+              : (
+                  [
+                    "STATS_API_DISABLED",
+                    "SCOPE_DISABLED"
+                  ].includes(code)
+                    ? 403
+                    : (
+                        code ===
+                        "UNKNOWN_SCOPE"
+                          ? 400
+                          : 500
+                      )
+                )
+          );
+
+    const retryAfter =
+      Math.max(
+        0,
+        Number(
+          error?.retryAfterSeconds ||
+          0
+        )
+      );
+
+    return jsonResponse(
+      {
+        success: false,
+        code:
+          code || undefined,
+        error:
+          error.message ||
+          "Unable to load organization statistics.",
+        retryAfterSeconds:
+          retryAfter || undefined
+      },
+      status,
+      {
+        "Cache-Control":
+          "no-store",
+        ...(retryAfter
+          ? {
+              "Retry-After":
+                String(
+                  retryAfter
+                )
+            }
+          : {}),
+        ...(error?.rateLimit
+          ? {
+              "X-LiveBridge-Stats-Rate-Limit":
+                String(
+                  error.rateLimit
+                ),
+              "X-LiveBridge-Stats-Rate-Remaining":
+                "0"
+            }
+          : {})
+      }
     );
   }
 }
@@ -12112,6 +18878,7 @@ const audioMuted =
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
+              room,
               text,
               chunkId: body.chunkId || null,
               sourceLanguage: body.sourceLanguage || "en"
@@ -12323,6 +19090,22 @@ return jsonResponse({
           );
         }
         const data = await response.json();
+
+        try {
+          await recordOpenAiUsageForRoom(
+            env,
+            room,
+            "transcription",
+            "gpt-4o-mini-transcribe",
+            data.usage
+          );
+        } catch (usageError) {
+          console.error(
+            "Transcription OpenAI usage tracking failed:",
+            usageError
+          );
+        }
+
         return jsonResponse({
           success: true,
           text: String(data.text || "").trim()
@@ -13602,6 +20385,21 @@ const now =
 
     const summaryData = await summaryResponse.json();
 
+    try {
+      await recordOpenAiUsageByOrganization(
+        env,
+        ownedRoom.organization.id,
+        "transcript_notes",
+        "gpt-4.1-mini",
+        summaryData.usage
+      );
+    } catch (usageError) {
+      console.error(
+        "Transcript notes OpenAI usage tracking failed:",
+        usageError
+      );
+    }
+
     const summary =
       summaryData.choices?.[0]?.message?.content?.trim() ||
       "Summary unavailable.";
@@ -14204,10 +21002,18 @@ if (
 
       try {
 
+        const billableCharacters =
+          Number(
+            internalResponse.headers.get(
+              "X-LiveBridge-TTS-Billable-Characters"
+            ) || 0
+          );
+
         await recordAzureTtsUsage(
           env,
           room,
-          text
+          text,
+          billableCharacters
         );
 
       } catch (usageError) {

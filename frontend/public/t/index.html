@@ -41,6 +41,18 @@
     font-size: 42px;
     font-weight: 900;
     margin-bottom: 8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+  }
+
+  .lb-official-brand-logo {
+    width:62px;
+    height:62px;
+    border-radius:16px;
+    object-fit:cover;
+    flex:0 0 auto;
   }
 
   .lb-live-brand span {
@@ -161,6 +173,46 @@
     background:rgba(45,151,255,.12);
     border-color:rgba(45,151,255,.30);
     color:white;
+  }
+
+  .lb-listener-count-pill{
+    cursor:default;
+  }
+
+  .lb-listener-count-pill:hover{
+    background:rgba(45,151,255,.07);
+    border-color:rgba(45,151,255,.18);
+    color:#c7d8e8;
+  }
+
+  .lb-chat-pill-button{
+    position:relative;
+  }
+
+  .lb-chat-pill-button.has-unread{
+    background:rgba(255,181,71,.16);
+    border-color:rgba(255,181,71,.55);
+    color:#ffd08a;
+    animation:lbChatNudge .42s ease-in-out 0s 2;
+  }
+
+  .lb-chat-pill-button.has-unread::after{
+    content:"";
+    position:absolute;
+    top:-3px;
+    right:-3px;
+    width:8px;
+    height:8px;
+    border-radius:999px;
+    background:#ffb547;
+    box-shadow:0 0 0 2px #0b1623;
+  }
+
+  @keyframes lbChatNudge{
+    0%,100%{ transform:translateX(0) rotate(0deg); }
+    25%{ transform:translateX(-2px) rotate(-2deg); }
+    50%{ transform:translateX(2px) rotate(2deg); }
+    75%{ transform:translateX(-1px) rotate(-1deg); }
   }
 
   .lb-listener-chat-panel{
@@ -487,7 +539,7 @@
   }
   .lb-language-gate.show{display:block}
   .lb-language-gate-inner{width:100%;max-width:1050px;margin:0 auto}
-  .lb-language-gate-brand{text-align:center;font-size:44px;font-weight:900;margin:16px 0 8px}
+  .lb-language-gate-brand{text-align:center;font-size:44px;font-weight:900;margin:16px 0 8px;display:flex;align-items:center;justify-content:center;gap:14px}
   .lb-language-gate-brand span{
     background:linear-gradient(90deg,#34d4bd,#2897ff,#a14cff);
     -webkit-background-clip:text;
@@ -558,7 +610,7 @@
 </style>
         <div id="lbLanguageGate" class="lb-language-gate">
           <div class="lb-language-gate-inner">
-            <div class="lb-language-gate-brand">Live<span>Bridge</span>
+            <div class="lb-language-gate-brand"><img class="lb-official-brand-logo" src="/assets/livebridge-logo.jpg" alt="LiveBridge logo"><div>Live<span>Bridge</span></div>
           </div>
           <div class="lb-language-gate-title">Choose your language</div>
           <div class="lb-language-gate-subtitle">
@@ -579,7 +631,7 @@
             <a class="lb-listener-home" href="/">← Back to LiveBridge</a>
           </div>
           <div class="lb-live-header">
-            <div class="lb-live-brand">Live<span>Bridge</span>
+            <div class="lb-live-brand"><img class="lb-official-brand-logo" src="/assets/livebridge-logo.jpg" alt="LiveBridge logo"><div>Live<span>Bridge</span></div>
           </div>
           <div class="lb-live-subtitle">
             Join a room. Choose your language. Understand live.
@@ -676,9 +728,21 @@
                 <span class="lb-live-pill" id="listenerLangLabel">🌐 Languages: 0</span>
                 <button
                   type="button"
-                  class="lb-live-pill-button"
+                  class="lb-live-pill-button lb-listener-count-pill"
                   id="listenerCountLabel"
-                >💬 With You: 0</button>
+                  aria-disabled="true"
+                  tabindex="-1"
+                >👥 With You: 0</button>
+                <button
+                  type="button"
+                  class="lb-live-pill-button lb-chat-pill-button"
+                  id="listenerChatButton"
+                  aria-label="Open listener chat"
+                >💬 Chat</button>
+                <span
+                  id="listenerDataUsage"
+                  class="lb-listener-data lb-live-pill"
+                >📶 Data: 0 KB</span>
               </div>
             </div>
 
@@ -782,10 +846,6 @@
               </div>
               <div>
                 🎧 Translated Audio &nbsp; • &nbsp; 💬 Live Captions
-                <span
-                  id="listenerDataUsage"
-                  class="lb-listener-data"
-                >Data this visit: 0 KB</span>
               </div>
             </div>
           </div>
@@ -813,8 +873,20 @@
           </div>
         </div>
         <script>
+  const LISTENER_HOST =
+    String(
+      window.location.hostname || ""
+    ).toLowerCase();
+
+  const LISTENER_PREVIEW =
+    LISTENER_HOST.includes("dev-v1-3-0") ||
+    LISTENER_HOST.includes("livebridge-allinone-frontend-test") ||
+    LISTENER_HOST.includes("livebridge-promoter-frontend-test");
+
   const WORKER_URL =
-  "https://livebridge.northstarventures-ca.workers.dev";
+    LISTENER_PREVIEW
+      ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+      : "https://livebridge.northstarventures-ca.workers.dev";
 
   let ROOM_ID = "";
   let listenerSocket = null;
@@ -911,7 +983,7 @@
 
     if (listenerDataCounterEnabled) {
       element.textContent =
-        "Data this visit: " +
+        "📶 Data: " +
         formatListenerDataBytes(
           listenerDataBytes
         );
@@ -1105,6 +1177,22 @@
     updateListenerNameUI();
   }
 
+  function setListenerChatUnread(unread) {
+    const button =
+      document.getElementById(
+        "listenerChatButton"
+      );
+
+    if (!button) {
+      return;
+    }
+
+    button.classList.toggle(
+      "has-unread",
+      unread === true
+    );
+  }
+
   function appendListenerChatMessage(message) {
     const box =
       document.getElementById(
@@ -1167,6 +1255,10 @@
 
     box.scrollTop =
       box.scrollHeight;
+
+    if (!listenerChatOpen) {
+      setListenerChatUnread(true);
+    }
   }
 
   function handleListenerPresence(data) {
@@ -1232,7 +1324,7 @@
 
     if (withYou) {
       withYou.textContent =
-        "💬 With You: " +
+        "👥 With You: " +
         others;
     }
   }
@@ -1256,6 +1348,8 @@
     );
 
     if (listenerChatOpen) {
+      setListenerChatUnread(false);
+
       document.getElementById(
         "listenerChatInput"
       )?.focus();
@@ -1902,7 +1996,7 @@ listenerAudioButton.addEventListener("click", () => {
   });
 
   document.getElementById(
-    "listenerCountLabel"
+    "listenerChatButton"
   )?.addEventListener(
     "click",
     toggleListenerChat
@@ -2522,8 +2616,12 @@ listenerAudioButton.addEventListener("click", () => {
             font-size:26px;
             font-weight:900;
             margin-bottom:5px;
+            display:flex;
+            align-items:center;
+            gap:12px;
           ">
-            Live<span style="color:#39d7c1;">Bridge</span>
+            <img src="/assets/livebridge-logo.jpg" alt="LiveBridge logo" style="width:48px;height:48px;border-radius:12px;object-fit:cover;">
+            <div>Live<span style="color:#39d7c1;">Bridge</span></div>
           </div>
 
           <div style="
@@ -3001,8 +3099,8 @@ if (listenerReconnectTimer) {
     listenerConnectionWanted = true;
 
     /*
-      Keep the public alias visible to the listener
-      while all live traffic uses the canonical room.
+      Keep the public alias visible while all
+      live traffic uses the canonical room.
     */
     roomInput.value =
       requestedRoom;
@@ -3030,7 +3128,9 @@ if (listenerReconnectTimer) {
     document.getElementById(
       "listenerCountLabel"
     ).textContent =
-      "💬 With You: 0";
+      "👥 With You: 0";
+
+    setListenerChatUnread(false);
 
     const chatLanguageNote =
       document.getElementById(
@@ -4316,7 +4416,9 @@ resolve(email);
 (function () {
 
   const AZURE_WORKER =
-    "https://livebridge.northstarventures-ca.workers.dev";
+    typeof WORKER_URL === "string"
+      ? WORKER_URL
+      : "https://livebridge.northstarventures-ca.workers.dev";
 
   let azureVoices = [];
   let azureVoicesLoaded = false;
@@ -6281,7 +6383,7 @@ return url.toString();
     const ll=document.getElementById("listenerLangLabel");
     if(ll){ const n=(ll.textContent.match(/\d+/)||["0"])[0]; ll.textContent="🌐 Languages: "+n; }
     const vl=document.getElementById("listenerCountLabel");
-    if(vl){ const n=(vl.textContent.match(/\d+/)||["0"])[0]; vl.textContent="💬 With You: "+n; }
+    if(vl){ const n=(vl.textContent.match(/\d+/)||["0"])[0]; vl.textContent="👥 With You: "+n; }
     const output=document.getElementById("listenerOutput");
     if(output && (output.textContent.trim()===UI.en.output || output.textContent.trim()==="Join a room to begin receiving the live message.")) output.textContent=x.output;
     document.querySelectorAll(".lb-live-controls div,.lb-live-controls span").forEach(el=>{
