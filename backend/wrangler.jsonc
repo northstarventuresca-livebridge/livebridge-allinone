@@ -1,5 +1,5 @@
 {
-  "name": "livebridge-allinone-backend-test",
+  "name": "livebridge",
   "main": "./worker.js",
   "compatibility_date": "2026-08-29",
 
