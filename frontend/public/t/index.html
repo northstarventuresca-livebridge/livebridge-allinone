@@ -537,6 +537,56 @@
     padding:28px 18px 50px;
     display:none;
   }
+  .lb-auto-listener-session{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:14px;
+    padding:11px 12px;
+    border-radius:12px;
+    border:1px solid rgba(37,136,255,.16);
+    background:rgba(37,136,255,.06);
+  }
+
+  .lb-auto-listener-summary{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    color:#91a8bf;
+    font-size:12px;
+    font-weight:700;
+  }
+
+  .lb-auto-listener-summary strong{
+    color:#dce9f5;
+    font-weight:900;
+  }
+
+  .lb-auto-listener-separator{
+    opacity:.45;
+  }
+
+  #changeLanguageButton{
+    width:auto;
+    flex:0 0 auto;
+    margin:0;
+    padding:10px 13px;
+    font-size:12px;
+  }
+
+  @media(max-width:620px){
+    .lb-auto-listener-session{
+      align-items:stretch;
+      flex-direction:column;
+    }
+
+    #changeLanguageButton{
+      width:100%;
+    }
+  }
+
   .lb-language-gate.show{display:block}
   .lb-language-gate-inner{width:100%;max-width:1050px;margin:0 auto}
   .lb-language-gate-brand{text-align:center;font-size:44px;font-weight:900;margin:16px 0 8px;display:flex;align-items:center;justify-content:center;gap:14px}
@@ -639,15 +689,18 @@
         </div>
         <div class="lb-live-card">
           <div class="lb-live-controls">
-            <label class="lb-live-label">Room Name</label>
             <input
               id="listenerRoom"
-              class="lb-live-input"
+              type="hidden"
               value="TRANSLATION"
-              placeholder="Enter room name"
+            >
+              <select
+                id="listenerLanguage"
+                class="lb-live-select"
+                style="display:none;"
+                aria-hidden="true"
+                tabindex="-1"
               >
-              <label class="lb-live-label">Listening Language</label>
-              <select id="listenerLanguage" class="lb-live-select">
                 <option value="en|en-US">English</option>
                 <option value="fr|fr-CA">French — Français</option>
                 <option value="es|es-ES">Spanish — Español</option>
@@ -667,9 +720,23 @@
                 <option value="zh|zh-CN">Mandarin Chinese — 中文（普通话）</option>
                 <option value="yue|yue-CN">Cantonese — 廣東話</option>
               </select>
-              <button class="lb-live-button" id="joinRoomButton">
-                Join Live Room
-              </button>
+
+              <div class="lb-auto-listener-session">
+                <div class="lb-auto-listener-summary">
+                  <span id="activeListenerRoomName">Live room</span>
+                  <span class="lb-auto-listener-separator">•</span>
+                  <strong id="activeListenerLanguageName">Language</strong>
+                </div>
+
+                <button
+                  type="button"
+                  class="lb-live-button"
+                  id="changeLanguageButton"
+                >
+                  🌐 Change Language
+                </button>
+              </div>
+
               <div style="
                 margin-top:12px;
                 padding:12px 13px;
@@ -1792,7 +1859,15 @@
         "listenerLanguage"
       );
 
+    const languageLockedByUrl =
+      !!String(
+        new URLSearchParams(
+          window.location.search
+        ).get("lang") || ""
+      ).trim();
+
     if (
+      !languageLockedByUrl &&
       remembered &&
       select &&
       localPreferred &&
@@ -1853,6 +1928,7 @@
         );
 
       if (
+        !languageLockedByUrl &&
         select &&
         preferred &&
         Array.from(
@@ -1971,9 +2047,6 @@ listenerAudioButton.addEventListener("click", () => {
 
 });
 
-  const joinButton =
-    document.getElementById("joinRoomButton");
-
   const emailButton =
     document.getElementById("emailTranscriptButton");
 
@@ -2039,11 +2112,6 @@ listenerAudioButton.addEventListener("click", () => {
   );
 
   updateListenerNameUI();
-
-  joinButton.addEventListener(
-    "click",
-    joinLiveRoom
-  );
 
   document
     .getElementById("sizeDown")
@@ -3509,101 +3577,6 @@ if (listenerReconnectTimer) {
         }
       };
   }
-
-
-  /*
-    Changing listening language must never require a refresh.
-    Reconnect the live-feed socket immediately in the background
-    using the same room and listener session.
-  */
-  document.getElementById(
-    "listenerLanguage"
-  )?.addEventListener(
-    "change",
-    async function () {
-
-      if (
-        !ROOM_ID
-      ) {
-        return;
-      }
-
-      document.getElementById(
-        "listenerStatus"
-      ).textContent =
-        "Switching language…";
-
-      document.getElementById(
-        "listenerDot"
-      ).classList.remove("live");
-
-      /*
-        Stop old-language audio and queued items first.
-      */
-      window.speechSynthesis?.cancel();
-
-      if (
-        typeof stopAzureAudio ===
-        "function"
-      ) {
-        try {
-          stopAzureAudio();
-        } catch {}
-      }
-
-      listenerDisplayQueue = [];
-      listenerQueueRunning = false;
-
-      /*
-        Fully release the old listener connection.
-      */
-      listenerConnectionWanted = false;
-      clearListenerReconnectTimer();
-
-      if (listenerSocket) {
-        try {
-          listenerSocket.onopen = null;
-          listenerSocket.onmessage = null;
-          listenerSocket.onerror = null;
-          listenerSocket.onclose = null;
-          listenerSocket.__lbIntentionalClose = true;
-          listenerSocket.close();
-        } catch {}
-        listenerSocket = null;
-      }
-
-      try {
-        stopListenerTracking();
-      } catch {}
-
-      /*
-        Give the old socket a moment to close, then perform the
-        exact same Join Live Room action that works manually.
-      */
-      await new Promise(
-        resolve =>
-          setTimeout(
-            resolve,
-            500
-          )
-      );
-
-      const joinButton =
-        document.getElementById(
-          "joinRoomButton"
-        );
-
-      if (joinButton) {
-        joinButton.click();
-      } else {
-        /*
-          Fallback in case the button ID ever changes.
-        */
-        listenerConnectionWanted = true;
-        await joinLiveRoom();
-      }
-    }
-  );
 
 
   /*
@@ -6137,20 +6110,6 @@ return url.toString();
   )?.addEventListener(
     "input",
     refreshListenerShare
-  );
-
-
-  document.getElementById(
-    "joinRoomButton"
-  )?.addEventListener(
-    "click",
-    function(){
-
-      setTimeout(
-        refreshListenerShare,
-        50
-      );
-    }
   );
 
 
