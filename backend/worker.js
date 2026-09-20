@@ -15351,6 +15351,12 @@ if (
       .bind(organizationId),
 
       env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organization_stats_reset
+        WHERE organization_id = ?
+      `)
+      .bind(organizationId),
+
+      env.TRANSLATIONS_DB.prepare(`
         DELETE FROM organization_visitor_days
         WHERE organization_id = ?
       `)
