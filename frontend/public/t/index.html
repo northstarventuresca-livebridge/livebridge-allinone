@@ -1085,8 +1085,8 @@
                 );
 
           if (
-            requestUrl.includes(
-              "livebridge.northstarventures-ca.workers.dev"
+            requestUrl.startsWith(
+              WORKER_URL
             )
           ) {
             const options =
@@ -3209,7 +3209,10 @@ if (listenerReconnectTimer) {
         : "Connecting...";
 
     const socketURL =
-      "wss://livebridge.northstarventures-ca.workers.dev/live-feed" +
+      WORKER_URL
+        .replace(/^https:/,"wss:")
+        .replace(/^http:/,"ws:") +
+      "/live-feed" +
       "?room=" +
       encodeURIComponent(ROOM_ID) +
       "&lang=" +
