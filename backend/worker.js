@@ -1621,6 +1621,32 @@ async function ensureApiCostSchema(
     )
   `).run();
 
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS api_cost_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL,
+      provider TEXT NOT NULL,
+      category TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT '',
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      requests INTEGER NOT NULL DEFAULT 0,
+      characters INTEGER NOT NULL DEFAULT 0,
+      generations INTEGER NOT NULL DEFAULT 0,
+      cost_usd REAL NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_api_cost_events_org_time
+    ON api_cost_events (
+      organization_id,
+      created_at
+    )
+  `).run();
+
   apiCostSchemaReady = true;
 }
 
@@ -1790,6 +1816,9 @@ async function recordOpenAiUsageByOrganization(
       usage
     );
 
+  const usageNow =
+    Date.now();
+
   await env.TRANSLATIONS_DB.prepare(`
     INSERT INTO openai_usage (
       organization_id,
@@ -1843,7 +1872,36 @@ async function recordOpenAiUsageByOrganization(
     normalized.cachedInputTokens,
     normalized.outputTokens,
     costUsd,
-    Date.now()
+    usageNow
+  )
+  .run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO api_cost_events (
+      organization_id,
+      provider,
+      category,
+      model,
+      input_tokens,
+      cached_input_tokens,
+      output_tokens,
+      requests,
+      characters,
+      generations,
+      cost_usd,
+      created_at
+    )
+    VALUES (?, 'openai', ?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
+  `)
+  .bind(
+    id,
+    String(category || "other"),
+    String(model || "unknown"),
+    normalized.inputTokens,
+    normalized.cachedInputTokens,
+    normalized.outputTokens,
+    costUsd,
+    usageNow
   )
   .run();
 }
@@ -1971,6 +2029,14 @@ async function recordAzureTtsUsage(
           text
         );
 
+  const usageNow =
+    Date.now();
+
+  const costUsd =
+    calculateAzureTtsCostUsd(
+      characters
+    );
+
   await env.TRANSLATIONS_DB.prepare(`
     INSERT INTO azure_tts_usage (
       organization_id,
@@ -2002,7 +2068,34 @@ async function recordAzureTtsUsage(
     ),
     usageMonth,
     characters,
-    Date.now()
+    usageNow
+  )
+  .run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    INSERT INTO api_cost_events (
+      organization_id,
+      provider,
+      category,
+      model,
+      input_tokens,
+      cached_input_tokens,
+      output_tokens,
+      requests,
+      characters,
+      generations,
+      cost_usd,
+      created_at
+    )
+    VALUES (?, 'azure', 'tts', 's0-standard-neural', 0, 0, 0, 0, ?, 1, ?, ?)
+  `)
+  .bind(
+    Number(
+      organization.id
+    ),
+    characters,
+    costUsd,
+    usageNow
   )
   .run();
 }
@@ -13277,6 +13370,345 @@ if (
         error:
           error.message ||
           "Unable to save organization order."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
+ADMIN - API COST RANGE
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/organization-api-cost"
+) {
+
+  try {
+
+    await ensureApiCostSchema(
+      env
+    );
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const organizationId =
+      Number(
+        url.searchParams.get(
+          "organizationId"
+        ) || 0
+      );
+
+    let start =
+      Number(
+        url.searchParams.get(
+          "start"
+        ) || 0
+      );
+
+    let end =
+      Number(
+        url.searchParams.get(
+          "end"
+        ) || 0
+      );
+
+    if (
+      !Number.isInteger(
+        organizationId
+      ) ||
+      organizationId <= 0
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID is required."
+        },
+        400
+      );
+    }
+
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      start <= 0 ||
+      end <= start
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "A valid start and end time are required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          organization_name
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        organizationId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    const rows =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          provider,
+          category,
+          model,
+
+          COALESCE(
+            SUM(input_tokens),
+            0
+          ) AS input_tokens,
+
+          COALESCE(
+            SUM(cached_input_tokens),
+            0
+          ) AS cached_input_tokens,
+
+          COALESCE(
+            SUM(output_tokens),
+            0
+          ) AS output_tokens,
+
+          COALESCE(
+            SUM(requests),
+            0
+          ) AS requests,
+
+          COALESCE(
+            SUM(characters),
+            0
+          ) AS characters,
+
+          COALESCE(
+            SUM(generations),
+            0
+          ) AS generations,
+
+          COALESCE(
+            SUM(cost_usd),
+            0
+          ) AS cost_usd,
+
+          COUNT(*) AS event_count
+
+        FROM api_cost_events
+
+        WHERE
+          organization_id = ?
+          AND created_at >= ?
+          AND created_at < ?
+
+        GROUP BY
+          provider,
+          category,
+          model
+
+        ORDER BY
+          provider ASC,
+          category ASC,
+          model ASC
+      `)
+      .bind(
+        organizationId,
+        Math.floor(start),
+        Math.floor(end)
+      )
+      .all();
+
+    let openAiInputTokens = 0;
+    let openAiCachedInputTokens = 0;
+    let openAiOutputTokens = 0;
+    let openAiRequests = 0;
+    let openAiCostUsd = 0;
+    let azureTtsCharacters = 0;
+    let azureTtsGenerations = 0;
+    let azureTtsCostUsd = 0;
+
+    const openAiCostBreakdown = {};
+
+    for (
+      const row of
+      rows.results || []
+    ) {
+
+      const provider =
+        String(
+          row.provider || ""
+        );
+
+      const category =
+        String(
+          row.category || "other"
+        );
+
+      const rowCost =
+        Number(
+          row.cost_usd || 0
+        );
+
+      if (
+        provider === "openai"
+      ) {
+
+        openAiInputTokens +=
+          Number(
+            row.input_tokens || 0
+          );
+
+        openAiCachedInputTokens +=
+          Number(
+            row.cached_input_tokens || 0
+          );
+
+        openAiOutputTokens +=
+          Number(
+            row.output_tokens || 0
+          );
+
+        openAiRequests +=
+          Number(
+            row.requests || 0
+          );
+
+        openAiCostUsd +=
+          rowCost;
+
+        openAiCostBreakdown[
+          category
+        ] =
+          Math.round(
+            (
+              Number(
+                openAiCostBreakdown[
+                  category
+                ] || 0
+              ) +
+              rowCost
+            ) *
+            1000000
+          ) /
+          1000000;
+
+      } else if (
+        provider === "azure"
+      ) {
+
+        azureTtsCharacters +=
+          Number(
+            row.characters || 0
+          );
+
+        azureTtsGenerations +=
+          Number(
+            row.generations || 0
+          );
+
+        azureTtsCostUsd +=
+          rowCost;
+      }
+    }
+
+    const totalApiCostUsd =
+      openAiCostUsd +
+      azureTtsCostUsd;
+
+    return jsonResponse({
+      success: true,
+
+      organizationId,
+
+      organizationName:
+        organization.organization_name ||
+        "",
+
+      range: {
+        start:
+          Math.floor(start),
+        end:
+          Math.floor(end)
+      },
+
+      stats: {
+        azureTtsCharacters,
+        azureTtsGenerations,
+
+        azureTtsCostUsd:
+          Math.round(
+            azureTtsCostUsd *
+            1000000
+          ) /
+          1000000,
+
+        openAiInputTokens,
+        openAiCachedInputTokens,
+        openAiOutputTokens,
+        openAiRequests,
+
+        openAiCostUsd:
+          Math.round(
+            openAiCostUsd *
+            1000000
+          ) /
+          1000000,
+
+        openAiCostBreakdown,
+
+        apiCostUsd:
+          Math.round(
+            totalApiCostUsd *
+            1000000
+          ) /
+          1000000,
+
+        apiCostCurrency:
+          LIVEBRIDGE_API_COST_PRICING
+            .currency
+      }
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin API cost range failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load API cost range."
       },
       403
     );
