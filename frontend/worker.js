@@ -52,6 +52,8 @@ const PAGES = new Map([
   ["/terms/", "/terms/index.html"],
   ["/offer", "/offer/index.html"],
   ["/offer/", "/offer/index.html"],
+  ["/clerk-migrate", "/clerk-migrate/index.html"],
+  ["/clerk-migrate/", "/clerk-migrate/index.html"],
 ]);
 
 function preserveQueryRedirect(
