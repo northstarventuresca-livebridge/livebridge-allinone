@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiveBridge Auth Diagnostic</title>
+<style>
+body{font-family:Arial,sans-serif;background:#07111d;color:#fff;margin:0;padding:24px}
+.card{max-width:820px;margin:40px auto;background:#111d2d;border:1px solid #2d3f55;border-radius:16px;padding:24px}
+pre{background:#050b13;border-radius:10px;padding:16px;white-space:pre-wrap;overflow:auto}
+button{padding:12px 16px;border:0;border-radius:9px;background:#2588ff;color:white;font-weight:800;cursor:pointer}
+#signin{margin-top:20px}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>LiveBridge Auth Diagnostic</h1>
+<p id="status">Loading…</p>
+<button type="button" onclick="run()">Run Diagnostic</button>
+<div id="signin"></div>
+<pre id="out">Waiting…</pre>
+</div>
+
+<script async crossorigin="anonymous"
+data-clerk-publishable-key="pk_live_Y2xlcmsubGl2ZWJyaWRnZS5jYSQ"
+src="https://clerk.livebridge.ca/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
+
+<script>
+const BACKEND="https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev";
+const out=document.getElementById("out");
+const status=document.getElementById("status");
+const signin=document.getElementById("signin");
+
+function decodeJwtPart(part){
+  try{
+    const s=part.replace(/-/g,"+").replace(/_/g,"/");
+    return JSON.parse(atob(s.padEnd(Math.ceil(s.length/4)*4,"=")));
+  }catch{return null}
+}
+
+async function getSession(){
+  await Clerk.load();
+  const sessions=Clerk.client?.sessions||Clerk.client?.signedInSessions||[];
+  let session=Clerk.session||sessions.find(s=>s.status==="active")||sessions[0]||null;
+  if(session && Clerk.session?.id!==session.id) await Clerk.setActive({session:session.id});
+  return session;
+}
+
+async function run(){
+  out.textContent="Running…";
+  try{
+    await Clerk.load();
+    const session=await getSession();
+    const user=Clerk.user||session?.user||null;
+
+    if(!session||!user){
+      status.textContent="Not signed in.";
+      signin.innerHTML="";
+      Clerk.mountSignIn(signin,{
+        routing:"hash",
+        forceRedirectUrl:window.location.href.split("#")[0],
+        fallbackRedirectUrl:window.location.href.split("#")[0]
+      });
+      out.textContent=JSON.stringify({
+        signedIn:false,
+        hostname:location.hostname
+      },null,2);
+      return;
+    }
+
+    signin.innerHTML="";
+    const token=await session.getToken();
+    const payload=decodeJwtPart(token.split(".")[1])||{};
+
+    let accountResult={};
+    try{
+      const r=await fetch(BACKEND+"/account",{
+        headers:{Authorization:"Bearer "+token}
+      });
+      const text=await r.text();
+      let body;
+      try{body=JSON.parse(text)}catch{body=text}
+      accountResult={httpStatus:r.status,body};
+    }catch(e){
+      accountResult={fetchError:e.message||String(e)};
+    }
+
+    const email=user.primaryEmailAddress?.emailAddress||user.emailAddresses?.[0]?.emailAddress||"";
+
+    status.textContent="Signed in as "+email;
+
+    out.textContent=JSON.stringify({
+      signedIn:true,
+      hostname:location.hostname,
+      clerkUserId:user.id||null,
+      clerkExternalId:user.externalId||null,
+      email,
+      sessionId:session.id||null,
+      tokenClaims:{
+        sub:payload.sub||null,
+        userId:payload.userId||null,
+        iss:payload.iss||null,
+        azp:payload.azp||null
+      },
+      liveBridgeAccountLookup:accountResult
+    },null,2);
+  }catch(e){
+    out.textContent="ERROR: "+(e.message||String(e));
+  }
+}
+
+window.addEventListener("load",run);
+</script>
+</body>
+</html>
