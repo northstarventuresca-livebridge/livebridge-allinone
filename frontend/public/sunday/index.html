@@ -3997,7 +3997,10 @@ async function toggleBroadcast() {
 
     stopAudioSafetyMonitoring();
 
-    await releaseBroadcastRoom("manual");
+    const releaseData =
+      await releaseBroadcastRoom(
+        "manual"
+      );
 
     document.getElementById(
       "inputLanguage"
@@ -4029,6 +4032,19 @@ async function toggleBroadcast() {
       "broadcastStatus"
     ).textContent =
       "NOT BROADCASTING";
+
+    if(
+      releaseData?.usage &&
+      Number(
+        releaseData.usage
+          .remainingMinutes ??
+        1
+      ) <= 0
+    ){
+      await showBroadcastAllowanceComplete(
+        releaseData.usage
+      );
+    }
   }
 }
 
@@ -4182,8 +4198,11 @@ async function releaseBroadcastRoom(reason = "manual") {
     !ROOM_ID ||
     !roomReserved
   ) {
-    return;
+    return null;
   }
+
+  let releaseData =
+    null;
 
   try {
 
@@ -4225,6 +4244,9 @@ async function releaseBroadcastRoom(reason = "manual") {
     const data =
       await response.json();
 
+    releaseData =
+      data;
+
     console.log(
       "LIVEBRIDGE BROADCAST SUMMARY:",
       data
@@ -4261,6 +4283,8 @@ async function releaseBroadcastRoom(reason = "manual") {
 
   lastBroadcastAuthToken =
     null;
+
+  return releaseData;
 }
 
 
