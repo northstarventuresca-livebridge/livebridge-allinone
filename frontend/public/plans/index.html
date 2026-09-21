@@ -332,7 +332,21 @@ tbody tr:last-child td{border-bottom:0}
 
 <script>
 (function(){
-  const WORKER = "https://livebridge.northstarventures-ca.workers.dev";
+  const PLAN_HOST =
+    String(
+      window.location.hostname || ""
+    ).toLowerCase();
+
+  const PLAN_PREVIEW =
+    PLAN_HOST.includes("dev-v1-3-0") ||
+    PLAN_HOST.includes("dev-v1-4-0") ||
+    PLAN_HOST.includes("livebridge-allinone-frontend-test") ||
+    PLAN_HOST.includes("livebridge-promoter-frontend-test");
+
+  const WORKER =
+    PLAN_PREVIEW
+      ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
+      : "https://livebridge.northstarventures-ca.workers.dev";
 
   const planMeta = {
     starter:{
