@@ -598,7 +598,9 @@
   .lb-language-gate-title{text-align:center;font-size:28px;font-weight:900;margin:28px 0 8px}
   .lb-language-gate-subtitle{text-align:center;color:#9fb1c7;font-size:15px;line-height:1.6;margin-bottom:28px}
   .lb-language-gate-room{
-    display:inline-block;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
     padding:7px 11px;
     border-radius:999px;
     margin-top:8px;
@@ -607,6 +609,92 @@
     color:#8ee8dc;
     font-weight:800;
     font-size:12px;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .lb-language-gate-room:hover{
+    background:rgba(52,212,189,.14);
+    border-color:rgba(52,212,189,.34);
+  }
+  .lb-room-entry{
+    width:100%;
+    max-width:520px;
+    margin:0 auto 26px;
+    padding:18px;
+    border-radius:16px;
+    border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.04);
+  }
+  .lb-room-entry-label{
+    display:block;
+    color:#9fb1c7;
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    margin-bottom:8px;
+  }
+  .lb-room-entry-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:9px;
+  }
+  .lb-room-entry-input{
+    width:100%;
+    box-sizing:border-box;
+    min-width:0;
+    border-radius:11px;
+    border:1px solid rgba(255,255,255,.14);
+    background:#101d2d;
+    color:white;
+    padding:13px 14px;
+    font-size:15px;
+    font-weight:800;
+    text-transform:uppercase;
+    outline:none;
+  }
+  .lb-room-entry-input:focus{
+    border-color:rgba(52,212,189,.52);
+    box-shadow:0 0 0 3px rgba(52,212,189,.08);
+  }
+  .lb-room-entry-button{
+    border:0;
+    border-radius:11px;
+    padding:12px 18px;
+    background:linear-gradient(135deg,#2588ff,#6f43df);
+    color:white;
+    font-size:13px;
+    font-weight:900;
+    cursor:pointer;
+  }
+  .lb-room-entry-error{
+    min-height:16px;
+    margin-top:8px;
+    color:#ff9f9f;
+    font-size:11px;
+  }
+  .lb-active-room-button{
+    appearance:none;
+    border:0;
+    background:none;
+    color:#8ee8dc;
+    padding:0;
+    margin:0;
+    font:inherit;
+    font-weight:900;
+    cursor:pointer;
+    text-align:left;
+  }
+  .lb-active-room-button:hover{
+    text-decoration:underline;
+  }
+  @media(max-width:560px){
+    .lb-room-entry-row{
+      grid-template-columns:1fr;
+    }
+    .lb-room-entry-button{
+      width:100%;
+    }
   }
   .lb-language-grid{
     display:grid;
@@ -665,9 +753,53 @@
           <div class="lb-language-gate-title">Choose your language</div>
           <div class="lb-language-gate-subtitle">
             Select the language you understand best.<br>
-            <span id="lbLanguageGateRoom" class="lb-language-gate-room">
-            </span>
+            <button
+              type="button"
+              id="lbLanguageGateRoom"
+              class="lb-language-gate-room"
+              style="display:none;"
+              title="Change room"
+            ></button>
           </div>
+
+          <div
+            id="lbRoomEntry"
+            class="lb-room-entry"
+            style="display:none;"
+          >
+            <label
+              for="lbRoomEntryInput"
+              class="lb-room-entry-label"
+            >
+              LiveBridge Room
+            </label>
+
+            <div class="lb-room-entry-row">
+              <input
+                id="lbRoomEntryInput"
+                class="lb-room-entry-input"
+                type="text"
+                autocomplete="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                placeholder="Enter room name"
+              >
+
+              <button
+                type="button"
+                id="lbRoomEntryButton"
+                class="lb-room-entry-button"
+              >
+                Continue
+              </button>
+            </div>
+
+            <div
+              id="lbRoomEntryError"
+              class="lb-room-entry-error"
+            ></div>
+          </div>
+
           <div id="lbLanguageGrid" class="lb-language-grid">
           </div>
           <div class="lb-language-gate-note">
@@ -692,7 +824,7 @@
             <input
               id="listenerRoom"
               type="hidden"
-              value="TRANSLATION"
+              value=""
             >
               <select
                 id="listenerLanguage"
@@ -723,7 +855,14 @@
 
               <div class="lb-auto-listener-session">
                 <div class="lb-auto-listener-summary">
-                  <span id="activeListenerRoomName">Live room</span>
+                  <button
+                    type="button"
+                    id="activeListenerRoomName"
+                    class="lb-active-room-button"
+                    title="Change room"
+                  >
+                    Live room
+                  </button>
                   <span class="lb-auto-listener-separator">•</span>
                   <strong id="activeListenerLanguageName">Language</strong>
                 </div>
@@ -947,6 +1086,7 @@
 
   const LISTENER_PREVIEW =
     LISTENER_HOST.includes("dev-v1-3-0") ||
+    LISTENER_HOST.includes("dev-v1-4-0") ||
     LISTENER_HOST.includes("livebridge-allinone-frontend-test") ||
     LISTENER_HOST.includes("livebridge-promoter-frontend-test");
 
@@ -4265,17 +4405,16 @@ resolve(email);
       );
 
     const roomFromURL =
-      params.get("room");
+      String(
+        params.get("room") || ""
+      )
+      .trim()
+      .toUpperCase();
 
-    if (roomFromURL) {
-
-      document.getElementById(
-        "listenerRoom"
-      ).value =
-        roomFromURL
-          .trim()
-          .toUpperCase();
-    }
+    document.getElementById(
+      "listenerRoom"
+    ).value =
+      roomFromURL;
   }
 
 
@@ -6300,6 +6439,110 @@ return url.toString();
     return new URLSearchParams(window.location.search);
   }
 
+  function normalizePublicRoom(
+    value
+  ){
+    return String(
+      value || ""
+    )
+    .trim()
+    .toUpperCase();
+  }
+
+  function requestedRoomFromURL(){
+    return normalizePublicRoom(
+      params().get("room")
+    );
+  }
+
+  function navigateToFreshRoomSelector(
+    room
+  ){
+    const normalizedRoom =
+      normalizePublicRoom(
+        room
+      );
+
+    if(!normalizedRoom){
+      return;
+    }
+
+    const p =
+      params();
+
+    p.set(
+      "room",
+      normalizedRoom
+    );
+
+    /*
+      A room change always clears the old language.
+      The next page starts at language selection with
+      no old socket/audio/session state remaining.
+    */
+    p.delete("lang");
+
+    window.location.href =
+      window.location.pathname +
+      "?" +
+      p.toString();
+  }
+
+  function returnToRoomEntry(){
+    const p =
+      params();
+
+    /*
+      Full navigation intentionally destroys any active
+      listener connection before another room can be entered.
+    */
+    p.delete("room");
+    p.delete("lang");
+
+    window.location.href =
+      window.location.pathname +
+      (
+        p.toString()
+          ? "?" + p.toString()
+          : ""
+      );
+  }
+
+  function submitRoomEntry(){
+    const input =
+      document.getElementById(
+        "lbRoomEntryInput"
+      );
+
+    const error =
+      document.getElementById(
+        "lbRoomEntryError"
+      );
+
+    const room =
+      normalizePublicRoom(
+        input?.value
+      );
+
+    if(!room){
+      if(error){
+        error.textContent =
+          "Enter a LiveBridge room name.";
+      }
+
+      input?.focus();
+      return;
+    }
+
+    if(error){
+      error.textContent = "";
+    }
+
+    navigateToFreshRoomSelector(
+      room
+    );
+  }
+
   function selectedLanguageFromURL(){
     const requested =
       String(params().get("lang") || "")
@@ -6352,6 +6595,20 @@ return url.toString();
 
   function chooseLanguage(code){
     const p = params();
+
+    const room =
+      requestedRoomFromURL();
+
+    if(!room){
+      returnToRoomEntry();
+      return;
+    }
+
+    p.set(
+      "room",
+      room
+    );
+
     p.set("lang",code);
 
     window.location.href =
@@ -6400,8 +6657,23 @@ return url.toString();
     if(roomName){
       roomName.textContent =
         room
-          ? "Room: " + room
-          : "Live room";
+          ? "Room: " + room + " ✎"
+          : "Choose room";
+
+      if(
+        roomName.dataset
+          .lbRoomBound !==
+        "1"
+      ){
+        roomName.dataset
+          .lbRoomBound =
+          "1";
+
+        roomName.addEventListener(
+          "click",
+          returnToRoomEntry
+        );
+      }
     }
 
     const languageName =
@@ -6484,11 +6756,50 @@ return url.toString();
       return;
     }
 
-    const p = params();
+    const title =
+      gate.querySelector(
+        ".lb-language-gate-title"
+      );
+
+    const subtitle =
+      gate.querySelector(
+        ".lb-language-gate-subtitle"
+      );
+
+    const roomEntry =
+      document.getElementById(
+        "lbRoomEntry"
+      );
+
+    const roomInput =
+      document.getElementById(
+        "lbRoomEntryInput"
+      );
+
+    const roomButton =
+      document.getElementById(
+        "lbRoomEntryButton"
+      );
+
+    const roomBadge =
+      document.getElementById(
+        "lbLanguageGateRoom"
+      );
+
+    const room =
+      requestedRoomFromURL();
+
     const selected =
       selectedLanguageFromURL();
 
-    if(selected){
+    /*
+      Never auto-join from a language alone.
+      A room must be explicit in the URL first.
+    */
+    if(
+      selected &&
+      room
+    ){
       gate.classList.remove("show");
       page.style.display = "";
 
@@ -6504,28 +6815,100 @@ return url.toString();
       return;
     }
 
-    /*
-      Invalid / stale language codes should never
-      open the live listener with an unknown state.
-      Show the language selector instead.
-    */
     page.style.display = "none";
     gate.classList.add("show");
 
-    const room =
-      String(p.get("room") || "")
-        .trim()
-        .toUpperCase();
+    /*
+      No room supplied:
+      show a deliberate room-entry step.
+      This is the normal /t experience.
+    */
+    if(!room){
+      if(title){
+        title.textContent =
+          "Enter your room";
+      }
 
-    const roomBadge =
-      document.getElementById("lbLanguageGateRoom");
+      if(subtitle){
+        subtitle.innerHTML =
+          "Enter the LiveBridge room name provided by your organization.";
+      }
+
+      if(roomBadge){
+        roomBadge.style.display =
+          "none";
+      }
+
+      if(roomEntry){
+        roomEntry.style.display =
+          "block";
+      }
+
+      grid.style.display =
+        "none";
+
+      if(roomButton){
+        roomButton.onclick =
+          submitRoomEntry;
+      }
+
+      if(roomInput){
+        roomInput.onkeydown =
+          event => {
+            if(
+              event.key ===
+              "Enter"
+            ){
+              event.preventDefault();
+              submitRoomEntry();
+            }
+          };
+
+        setTimeout(
+          () =>
+            roomInput.focus(),
+          80
+        );
+      }
+
+      return;
+    }
+
+    /*
+      A shared link / QR code already supplies the room.
+      Keep it locked from accidental typing, but make the
+      visible room name intentionally clickable to change it.
+    */
+    if(title){
+      title.textContent =
+        "Choose your language";
+    }
+
+    if(subtitle){
+      subtitle.innerHTML =
+        "Select the language you understand best.<br>";
+    }
+
+    if(roomEntry){
+      roomEntry.style.display =
+        "none";
+    }
 
     if(roomBadge){
+      roomBadge.style.display =
+        "inline-flex";
+
       roomBadge.textContent =
-        room
-          ? "Live room: " + room
-          : "Choose a language to continue";
+        "Room: " +
+        room +
+        " ✎";
+
+      roomBadge.onclick =
+        returnToRoomEntry;
     }
+
+    grid.style.display =
+      "grid";
 
     grid.innerHTML =
       languages.map(item => `
