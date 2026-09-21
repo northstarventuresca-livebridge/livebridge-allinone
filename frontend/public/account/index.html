@@ -4140,7 +4140,39 @@ function renderPlanSummary(){
 
   if(descEl){
 
+    const planCode =
+      String(
+        account.planCode ||
+        ""
+      )
+      .trim()
+      .toLowerCase();
+
     if(
+      planCode ===
+      "starter"
+    ){
+
+      descEl.textContent =
+        "Starter includes real-time translated captions, spoken translated audio, multiple listener languages, room links and QR sharing, AI Live Notes, and basic broadcast history and audience stats.";
+
+    }else if(
+      planCode ===
+      "growth"
+    ){
+
+      descEl.textContent =
+        "Growth includes everything in Starter plus 30-day transcript viewing and downloads, transcript + AI summary email, scheduled broadcasts, detailed listener and language analytics, Scripture/reference detection, Organization Stats API access, and priority email support.";
+
+    }else if(
+      planCode ===
+      "pro"
+    ){
+
+      descEl.textContent =
+        "Pro includes everything in Growth plus 90-day transcript access, downloadable analytics/report export, custom onboarding/configuration support, and the higher broadcast-time and listener capacity included with your Pro plan.";
+
+    }else if(
       entitlements
         .transcriptAccess ===
         true
@@ -4154,7 +4186,7 @@ function renderPlanSummary(){
         );
 
       descEl.textContent =
-        "Your plan includes post-broadcast transcript access" +
+        "Your LiveBridge plan includes post-broadcast transcript access" +
         (
           retention
             ? " for up to " +
@@ -4162,19 +4194,12 @@ function renderPlanSummary(){
               " days"
             : ""
         ) +
-        (
-          retention ===
-          30
-            ? ". Pro extends transcript access to 90 days."
-            : ""
-        ) +
-        " Your other LiveBridge features continue according to your current plan.";
+        " along with the features enabled for your organization.";
 
     }else{
 
-      descEl.innerHTML =
-        'Your plan includes the core LiveBridge live translation experience. ' +
-        '<strong>Growth and Pro unlock post-broadcast transcript access and additional workflow tools.</strong>';
+      descEl.textContent =
+        "Your LiveBridge plan includes the core live multilingual translation experience and the features enabled for your organization.";
     }
   }
 }
