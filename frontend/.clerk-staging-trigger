@@ -4,3 +4,4 @@ Force rebuild for clerk-migrate-v4.
 Force rebuild for clerk-migrate-v5.
 Force rebuild for token-based migration v6.
 Force rebuild for auth diagnostic.\nForce rebuild after auth route syntax fix.
+Force rebuild using existing migration route for auth diagnostic.
