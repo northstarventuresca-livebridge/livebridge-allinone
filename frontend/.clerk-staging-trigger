@@ -3,3 +3,4 @@ Trigger refresh after migration tool update.
 Force rebuild for clerk-migrate-v4.
 Force rebuild for clerk-migrate-v5.
 Force rebuild for token-based migration v6.
+Force rebuild for auth diagnostic.\n
