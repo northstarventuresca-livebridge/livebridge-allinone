@@ -1241,7 +1241,7 @@ body{
 
           </div>
 
-          <div class="lb-save-bar">
+          <div id="orgSaveBar" class="lb-save-bar">
             <button
               type="button"
               class="lb-button secondary"
@@ -1411,7 +1411,7 @@ body{
               Customer Profile
             </div>
 
-            <div class="lb-form-grid" style="margin-bottom:22px;">
+            <div class="lb-form-grid" id="orgProfileFields" style="margin-bottom:22px;">
 
               <div class="lb-field">
                 <label>Organization Name</label>
@@ -1450,9 +1450,9 @@ body{
               Plan & Access
             </div>
 
-            <div class="lb-form-grid">
+            <div class="lb-form-grid" id="orgPlanFields">
 
-              <div class="lb-field">
+              <div class="lb-field" id="orgPlanField">
                 <label>Plan</label>
 
                 <select id="editPlan">
@@ -1475,7 +1475,7 @@ body{
               </div>
 
 
-              <div class="lb-field">
+              <div class="lb-field" id="orgStatusField">
                 <label>Account Status</label>
 
                 <select id="editStatus">
@@ -1486,25 +1486,25 @@ body{
               </div>
 
 
-              <div class="lb-field">
+              <div class="lb-field" id="orgIncludedMinutesField">
                 <label>Included Minutes</label>
                 <input type="number" min="0" id="editIncludedMinutes">
               </div>
 
 
-              <div class="lb-field">
+              <div class="lb-field" id="orgBonusMinutesField">
                 <label>Bonus Minutes</label>
                 <input type="number" min="0" id="editBonusMinutes">
               </div>
 
 
-              <div class="lb-field">
+              <div class="lb-field" id="orgViewerLimitField">
                 <label>Base Viewer Limit</label>
                 <input type="number" min="1" id="editViewerLimit">
               </div>
 
 
-              <div class="lb-field">
+              <div class="lb-field" id="orgViewerOverrideField">
                 <label>
                   Viewer Override
                   <span style="font-weight:400;color:#647a91;">
@@ -1520,7 +1520,7 @@ body{
                 >
               </div>
 
-              <div class="lb-field">
+              <div class="lb-field" id="orgScriptureField">
                 <label>Church Features</label>
 
                 <label style="
@@ -1611,6 +1611,7 @@ body{
 
 
             <div
+              id="orgFeatureOverrides"
               style="
                 margin-top:18px;
                 padding:16px;
@@ -1696,6 +1697,7 @@ body{
 
 
             <div
+              id="orgMarketingCredits"
               style="
                 margin-top:18px;
                 padding:16px;
@@ -1738,6 +1740,7 @@ body{
 
 
             <div
+              id="orgMarketingAnalytics"
               style="
                 margin-top:18px;
                 padding:16px;
@@ -1762,11 +1765,11 @@ body{
             </div>
 
 
-            <div class="lb-small-label" style="margin-top:5px;">
+            <div id="orgQuickBonusLabel" class="lb-small-label" style="margin-top:5px;">
               Quick Bonus Time
             </div>
 
-            <div class="lb-quick-buttons">
+            <div id="orgQuickBonusButtons" class="lb-quick-buttons">
 
               <button class="lb-button secondary bonus-btn" data-minutes="60">
                 +1 Hour
@@ -1783,11 +1786,11 @@ body{
             </div>
 
 
-            <div class="lb-small-label" style="margin-top:18px;">
+            <div id="orgQuickViewerLabel" class="lb-small-label" style="margin-top:18px;">
               Quick Viewer Override
             </div>
 
-            <div class="lb-quick-buttons">
+            <div id="orgQuickViewerButtons" class="lb-quick-buttons">
 
               <button class="lb-button secondary viewer-btn" data-viewers="25">
                 25
@@ -1812,7 +1815,7 @@ body{
             </div>
 
 
-            <div class="lb-field" style="margin-top:18px;">
+            <div id="orgDefaultRoomField" class="lb-field" style="margin-top:18px;">
               <label>Default Room Name</label>
 
               <input
@@ -1828,7 +1831,7 @@ body{
             </div>
 
 
-            <div class="lb-field" style="margin-top:18px;">
+            <div id="orgAliasRoomField" class="lb-field" style="margin-top:18px;">
               <label>Alias Room Name</label>
 
               <input
@@ -1844,7 +1847,7 @@ body{
             </div>
 
 
-            <div class="lb-field" style="margin-top:18px;">
+            <div id="orgAdminNotesField" class="lb-field" style="margin-top:18px;">
               <label>Private Admin Notes</label>
 
               <textarea
@@ -1880,10 +1883,10 @@ body{
 
           <div>
 
-            <div class="lb-card">
+            <div class="lb-card" id="orgCustomerInfoCard">
 
               <div class="lb-card-title" style="margin-bottom:10px;">
-                Customer Information
+                Organization Details
               </div>
 
               <div class="lb-info-row">
@@ -1925,7 +1928,7 @@ body{
 
 
 
-            <div class="lb-card" style="margin-top:16px;">
+            <div class="lb-card" id="orgBillingCard" style="margin-top:16px;">
               <div class="lb-card-title" style="margin-bottom:7px;">Subscription Payments</div>
               <div class="lb-muted" style="line-height:1.5;margin-bottom:14px;">
                 Complete Stripe payment history for this organization, including subscriptions, top-ups and Marketing Credit purchases.
@@ -1948,7 +1951,7 @@ body{
             </div>
 
 
-<div class="lb-card" style="margin-top:16px;">
+<div class="lb-card" id="orgListenerDataCard" style="margin-top:16px;">
 
               <div class="lb-card-title" style="margin-bottom:7px;">
                 Listener Data Usage Display
@@ -1988,7 +1991,7 @@ body{
             </div>
 
 
-            <div class="lb-card" style="margin-top:16px;">
+            <div class="lb-card" id="orgReturnVisitorCard" style="margin-top:16px;">
 
               <div class="lb-card-title" style="margin-bottom:7px;">
                 Return Visitor Recognition
@@ -2089,7 +2092,7 @@ body{
             </div>
 
 
-            <div class="lb-card" style="margin-top:16px;">
+            <div class="lb-card" id="orgBroadcastsCard" style="margin-top:16px;">
 
               <div class="lb-card-title" style="margin-bottom:12px;">
                 Recent Broadcasts Data
@@ -2283,6 +2286,164 @@ body{
   </div>
 
 </div>
+
+
+<style>
+  .lb-org-tabs{
+    display:flex;
+    gap:9px;
+    overflow-x:auto;
+    padding:5px 2px 12px;
+    margin-top:20px;
+    scrollbar-width:thin;
+  }
+  .lb-org-tab{
+    flex:0 0 auto;
+    min-height:46px;
+    padding:11px 17px;
+    border-radius:11px;
+    border:1px solid rgba(255,255,255,.11);
+    background:#101f31;
+    color:#9db1c5;
+    font-size:13px;
+    font-weight:900;
+    cursor:pointer;
+  }
+  .lb-org-tab.active{
+    color:white;
+    border-color:rgba(45,151,255,.58);
+    background:linear-gradient(135deg,rgba(45,151,255,.28),rgba(111,67,223,.24));
+    box-shadow:0 8px 24px rgba(0,0,0,.18);
+  }
+  .lb-org-tab-panel{display:none;}
+  .lb-org-tab-panel.active{display:block;}
+  .lb-org-tab-panel>.lb-card,
+  .lb-org-always>.lb-card{
+    padding:24px;
+  }
+  .lb-org-tab-panel .lb-card-title,
+  .lb-org-always .lb-card-title{
+    font-size:18px;
+  }
+  .lb-org-tab-panel .lb-muted,
+  .lb-org-always .lb-muted{
+    font-size:12px;
+    line-height:1.55;
+  }
+  .lb-org-tab-panel input,
+  .lb-org-tab-panel select,
+  .lb-org-tab-panel textarea{
+    font-size:14px;
+    min-height:46px;
+  }
+  .lb-org-tab-panel textarea{min-height:110px;}
+  .lb-org-tab-panel label{font-size:12px;}
+  .lb-org-section-card{
+    margin-top:16px;
+  }
+  .lb-org-section-title{
+    color:white;
+    font-size:18px;
+    font-weight:900;
+    margin-bottom:16px;
+  }
+  .lb-org-save-wrap{
+    margin-top:18px;
+    padding:18px;
+    border-radius:14px;
+    border:1px solid rgba(41,215,131,.20);
+    background:rgba(41,215,131,.045);
+  }
+  @media(max-width:760px){
+    .lb-org-tab{font-size:12px;padding:10px 13px;}
+    .lb-org-tab-panel>.lb-card,.lb-org-always>.lb-card{padding:18px;}
+  }
+</style>
+
+
+<script>
+(function organizeOrganizationDetail(){
+  const detail=document.getElementById("clientDetailView");
+  const oldGrid=detail?.querySelector(".lb-detail-grid");
+  const metrics=detail?.querySelector(".lb-grid4");
+  if(!detail||!oldGrid||!metrics||document.getElementById("orgTabNav")) return;
+
+  const always=document.createElement("div");
+  always.className="lb-org-always";
+  const info=document.getElementById("orgCustomerInfoCard");
+  if(info) always.appendChild(info);
+  metrics.insertAdjacentElement("afterend",always);
+
+  const nav=document.createElement("div");
+  nav.id="orgTabNav";
+  nav.className="lb-org-tabs";
+  nav.innerHTML=[
+    ["overview","Overview"],
+    ["stats","Stats & Analytics"],
+    ["credits","Credits & Time"],
+    ["features","Feature Access"],
+    ["system","System Settings"]
+  ].map((item,index)=>
+    '<button type="button" class="lb-org-tab'+(index===0?' active':'')+'" data-org-tab="'+item[0]+'">'+item[1]+'</button>'
+  ).join("");
+  always.insertAdjacentElement("afterend",nav);
+
+  const panels=document.createElement("div");
+  panels.id="orgTabPanels";
+  panels.innerHTML=["overview","stats","credits","features","system"].map((name,index)=>
+    '<section class="lb-org-tab-panel'+(index===0?' active':'')+'" data-org-panel="'+name+'"></section>'
+  ).join("");
+  nav.insertAdjacentElement("afterend",panels);
+
+  const panel=name=>panels.querySelector('[data-org-panel="'+name+'"]');
+  const card=(title,name)=>{
+    const el=document.createElement("div");
+    el.className="lb-card lb-org-section-card";
+    el.innerHTML='<div class="lb-org-section-title">'+title+'</div>';
+    panel(name).appendChild(el);
+    return el;
+  };
+  const move=(target,...ids)=>ids.forEach(id=>{const el=document.getElementById(id);if(el)target.appendChild(el);});
+
+  const overviewProfile=card("Customer Profile","overview");
+  move(overviewProfile,"orgProfileFields");
+  const overviewPlan=card("Plan & Account Status","overview");
+  move(overviewPlan,"orgPlanField","orgStatusField");
+
+  const statsMarketing=card("Marketing Analytics","stats");
+  move(statsMarketing,"orgMarketingAnalytics");
+  move(panel("stats"),"orgReturnVisitorCard","orgBroadcastsCard");
+
+  const time=card("Broadcast Time & Viewer Limits","credits");
+  move(time,"orgIncludedMinutesField","orgBonusMinutesField","orgViewerLimitField","orgViewerOverrideField","orgQuickBonusLabel","orgQuickBonusButtons","orgQuickViewerLabel","orgQuickViewerButtons");
+  const credits=card("Marketing Generation Credits","credits");
+  move(credits,"orgMarketingCredits");
+  move(panel("credits"),"orgBillingCard");
+
+  const access=card("Feature Overrides","features");
+  move(access,"orgScriptureField","orgFeatureOverrides");
+  move(panel("features"),"orgListenerDataCard");
+
+  const system=card("Room & Listener Configuration","system");
+  move(system,"orgDefaultRoomField","orgAliasRoomField","orgAdminNotesField");
+
+  const saveWrap=document.createElement("div");
+  saveWrap.className="lb-org-save-wrap";
+  move(saveWrap,"orgSaveBar","saveMessage");
+  panels.insertAdjacentElement("afterend",saveWrap);
+
+  oldGrid.remove();
+
+  nav.querySelectorAll(".lb-org-tab").forEach(button=>{
+    button.addEventListener("click",()=>{
+      nav.querySelectorAll(".lb-org-tab").forEach(x=>x.classList.remove("active"));
+      panels.querySelectorAll(".lb-org-tab-panel").forEach(x=>x.classList.remove("active"));
+      button.classList.add("active");
+      panel(button.dataset.orgTab)?.classList.add("active");
+    });
+  });
+})();
+</script>
 
 
 <script
