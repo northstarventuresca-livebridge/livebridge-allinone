@@ -278,6 +278,7 @@ tbody tr:last-child td{border-bottom:0}
         <tr><td>Email transcript + AI summary after broadcast</td><td class="lb-no">—</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
         <tr><td>Scheduled broadcasts</td><td class="lb-no">—</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
         <tr><td>Detailed listener & language analytics</td><td class="lb-no">Basic only</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
+        <tr><td>Organization Stats API</td><td class="lb-no">—</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
         <tr><td>Downloadable analytics/report export</td><td class="lb-no">—</td><td class="lb-no lb-growth-col">—</td><td class="lb-yes">✓</td></tr>
         <tr><td>Specialized Scripture/reference detection</td><td class="lb-no">—</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓</td></tr>
         <tr><td>Priority email support</td><td class="lb-no">Standard</td><td class="lb-yes lb-growth-col">✓</td><td class="lb-yes">✓ Priority</td></tr>
@@ -335,15 +336,15 @@ tbody tr:last-child td{border-bottom:0}
 
   const planMeta = {
     starter:{
-      best:"Best for smaller or occasional use",
+      best:"Core live translation for smaller or occasional use",
       className:"",
       bullets:[
         "Real-time translated captions",
         "Spoken translated audio",
         "Multiple listener languages",
         "Room links & QR sharing",
-        "Basic broadcast history & audience stats",
-        "AI Live Notes"
+        "AI Live Notes",
+        "Basic broadcast history & audience stats"
       ]
     },
     growth:{
@@ -351,24 +352,25 @@ tbody tr:last-child td{border-bottom:0}
       className:"growth",
       bullets:[
         "Everything in Starter",
-        "View & download post-broadcast transcripts",
-        "30-day transcript access",
+        "30-day transcript viewing & downloads",
         "Email transcript + AI summary",
         "Scheduled broadcasts",
         "Detailed listener & language analytics",
         "Specialized Scripture/reference detection",
+        "Organization Stats API access",
         "Priority email support"
       ]
     },
     pro:{
-      best:"Best for larger, frequent or high-capacity use",
+      best:"For larger, frequent or high-capacity organizations",
       className:"",
       bullets:[
         "Everything in Growth",
-        "90-day transcript access",
+        "90-day transcript viewing & downloads",
         "Higher monthly broadcast capacity",
         "Higher simultaneous listener capacity",
         "Downloadable analytics/report export",
+        "Organization Stats API access",
         "Priority support",
         "Custom onboarding/configuration support"
       ]
