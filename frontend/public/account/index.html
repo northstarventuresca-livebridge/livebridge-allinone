@@ -2029,7 +2029,40 @@ body{
   </div>
 
 
+
   <div class="lb-card" style="margin-top:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <div>
+        <div class="lb-card-title">Payment History</div>
+        <div class="lb-muted" style="margin-top:5px;">Subscription renewals and one-time LiveBridge purchases.</div>
+      </div>
+      <button class="lb-secondary-button" id="openStripeBillingPortal" type="button">
+        Manage Billing & Receipts
+      </button>
+    </div>
+
+    <div class="lb-grid-3" style="margin-top:16px;">
+      <div class="lb-card" style="background:#0f1d2d;">
+        <div class="lb-muted">Lifetime Paid</div>
+        <div class="lb-metric-number" id="billingLifetimePaid">—</div>
+      </div>
+      <div class="lb-card" style="background:#0f1d2d;">
+        <div class="lb-muted">Subscriptions</div>
+        <div class="lb-metric-number" id="billingSubscriptionPaid">—</div>
+      </div>
+      <div class="lb-card" style="background:#0f1d2d;">
+        <div class="lb-muted">Top-Ups & Credits</div>
+        <div class="lb-metric-number" id="billingAdditionalPaid">—</div>
+      </div>
+    </div>
+
+    <div id="billingHistoryRows" style="margin-top:14px;">
+      <div class="lb-muted">Loading payment history...</div>
+    </div>
+    <div id="billingHistoryStatus" class="lb-muted" style="margin-top:10px;"></div>
+  </div>
+
+<div class="lb-card" style="margin-top:16px;">
 
     <div class="lb-card-title">
       Need More Every Month?
@@ -5138,6 +5171,8 @@ async function renderDashboard(
 
   loadMarketingCreditBilling();
 
+  loadBillingHistory();
+
   loadCustomerUsageStats(
     "since-reset",
     {
@@ -6399,6 +6434,85 @@ function formatMarketingCreditPrice(
 }
 
 
+
+function formatBillingMoney(cents, currency){
+  return new Intl.NumberFormat("en-CA",{
+    style:"currency",
+    currency:String(currency || "CAD").toUpperCase()
+  }).format(Number(cents || 0) / 100);
+}
+
+async function loadBillingHistory(){
+  const rows = document.getElementById("billingHistoryRows");
+  if(!rows) return;
+
+  try{
+    const data = await liveBridgeAccountApi(
+      "/account/billing-history",
+      {method:"GET"}
+    );
+    const billing = data.billing || {};
+    const currency = billing.currency || "CAD";
+
+    document.getElementById("billingLifetimePaid").textContent =
+      formatBillingMoney(billing.lifetimePaidCents,currency);
+    document.getElementById("billingSubscriptionPaid").textContent =
+      formatBillingMoney(billing.subscriptionPaidCents,currency);
+    document.getElementById("billingAdditionalPaid").textContent =
+      formatBillingMoney(billing.additionalPaidCents,currency);
+
+    const transactions = Array.isArray(billing.transactions)
+      ? billing.transactions
+      : [];
+
+    rows.innerHTML = transactions.length
+      ? transactions.map(item => {
+          const description = String(item.description || "LiveBridge purchase")
+            .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+          const receipt = item.receiptUrl
+            ? '<a href="' + String(item.receiptUrl).replace(/"/g,"&quot;") +
+              '" target="_blank" rel="noopener" style="color:#65b8ff;font-weight:800;">Receipt</a>'
+            : '<span class="lb-muted">Available in billing portal</span>';
+
+          return '<div style="display:grid;grid-template-columns:minmax(150px,1.5fr) minmax(105px,.8fr) minmax(90px,.7fr) minmax(120px,.8fr);gap:10px;align-items:center;padding:12px 4px;border-bottom:1px solid rgba(255,255,255,.07);">' +
+            '<div><strong style="color:white;">' + description +
+            '</strong><div class="lb-muted" style="font-size:10px;margin-top:3px;">' +
+            new Date(Number(item.paidAt || 0)).toLocaleDateString("en-CA") +
+            '</div></div><div style="font-weight:900;color:white;">' +
+            formatBillingMoney(item.amountCents,item.currency) +
+            '</div><div style="color:#63e7a1;font-weight:800;">' +
+            String(item.status || "Paid") +
+            '</div><div>' + receipt + '</div></div>';
+        }).join("")
+      : '<div class="lb-muted" style="padding:14px 0;">No completed payments are recorded yet.</div>';
+  }catch(error){
+    rows.innerHTML =
+      '<div class="lb-muted" style="padding:14px 0;">Payment history is temporarily unavailable.</div>';
+  }
+}
+
+async function openStripeBillingPortal(){
+  const button = document.getElementById("openStripeBillingPortal");
+  const status = document.getElementById("billingHistoryStatus");
+  button.disabled = true;
+  button.textContent = "Opening...";
+  status.textContent = "";
+
+  try{
+    const data = await liveBridgeAccountApi(
+      "/stripe/customer-portal",
+      {method:"POST"}
+    );
+    if(!data.portalUrl) throw new Error("Billing portal URL was not returned.");
+    window.location.href = data.portalUrl;
+  }catch(error){
+    status.textContent = error.message || "Unable to open billing portal.";
+    button.disabled = false;
+    button.textContent = "Manage Billing & Receipts";
+  }
+}
+
+
 async function loadMarketingCreditBilling(){
 
   const card =
@@ -7352,6 +7466,8 @@ async function previewAccountShareInvite(){
 
   return generated;
 }
+
+document.getElementById("openStripeBillingPortal")?.addEventListener("click",openStripeBillingPortal);
 
 function setupNavigation(){
 

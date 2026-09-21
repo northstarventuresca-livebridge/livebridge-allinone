@@ -485,7 +485,10 @@ tbody tr:last-child td{border-bottom:0}
           <div class="lb-price">${esc(money(plan.priceCents,plan.currency))} <small>${esc(plan.currency)} / ${esc(plan.billingInterval)}</small></div>
           <div class="lb-core">
             <div><strong>${esc(hours(plan.includedMinutes))} hrs</strong><span>broadcast time / month</span></div>
-            <div><strong>${esc(plan.viewerLimit)}</strong><span>simultaneous listeners</span></div>
+            <div><strong>${esc(plan.viewerLimit)}</strong><span>simultaneous listeners · all languages included</span></div>
+          </div>
+          <div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(45,151,255,.08);border:1px solid rgba(45,151,255,.18);font-size:12px;line-height:1.45;color:#dbeeff;">
+            <strong>Don’t pay per language.</strong> Use every available language—or any combination—on every broadcast.
           </div>
           <ul class="lb-feature-list">
             ${meta.bullets.map(x=>`<li><span class="lb-check">✓</span><span>${esc(x)}</span></li>`).join("")}

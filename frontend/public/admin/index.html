@@ -1924,7 +1924,31 @@ body{
             </div>
 
 
+
             <div class="lb-card" style="margin-top:16px;">
+              <div class="lb-card-title" style="margin-bottom:7px;">Subscription Payments</div>
+              <div class="lb-muted" style="line-height:1.5;margin-bottom:14px;">
+                Complete Stripe payment history for this organization, including subscriptions, top-ups and Marketing Credit purchases.
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+                <div style="padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#0d1a2a;">
+                  <div id="adminBillingLifetime" style="font-size:20px;font-weight:900;color:white;">—</div>
+                  <div class="lb-muted" style="font-size:10px;">Lifetime Paid</div>
+                </div>
+                <div style="padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#0d1a2a;">
+                  <div id="adminBillingSubscriptions" style="font-size:20px;font-weight:900;color:white;">—</div>
+                  <div class="lb-muted" style="font-size:10px;">Subscriptions</div>
+                </div>
+                <div style="padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:#0d1a2a;">
+                  <div id="adminBillingExtras" style="font-size:20px;font-weight:900;color:white;">—</div>
+                  <div class="lb-muted" style="font-size:10px;">Top-Ups & Credits</div>
+                </div>
+              </div>
+              <div id="adminBillingHistory"><div class="lb-muted">Loading payment history...</div></div>
+            </div>
+
+
+<div class="lb-card" style="margin-top:16px;">
 
               <div class="lb-card-title" style="margin-bottom:7px;">
                 Listener Data Usage Display
@@ -4859,6 +4883,43 @@ function renderMarketingCreditAnalytics(analytics){
 }
 
 
+
+function formatAdminBillingMoney(cents,currency){
+  return new Intl.NumberFormat("en-CA",{
+    style:"currency",
+    currency:String(currency || "CAD").toUpperCase()
+  }).format(Number(cents || 0) / 100);
+}
+
+function renderAdminBillingHistory(billing){
+  const data = billing || {};
+  const currency = data.currency || "CAD";
+
+  document.getElementById("adminBillingLifetime").textContent =
+    formatAdminBillingMoney(data.lifetimePaidCents,currency);
+  document.getElementById("adminBillingSubscriptions").textContent =
+    formatAdminBillingMoney(data.subscriptionPaidCents,currency);
+  document.getElementById("adminBillingExtras").textContent =
+    formatAdminBillingMoney(data.additionalPaidCents,currency);
+
+  const rows = Array.isArray(data.transactions) ? data.transactions : [];
+  document.getElementById("adminBillingHistory").innerHTML = rows.length
+    ? rows.slice(0,20).map(item =>
+        '<div style="display:grid;grid-template-columns:1.5fr .8fr .7fr;gap:8px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07);align-items:center;">' +
+        '<div><strong style="color:white;font-size:12px;">' +
+        escapeHtml(item.description || "LiveBridge purchase") +
+        '</strong><div class="lb-muted" style="font-size:9px;margin-top:2px;">' +
+        new Date(Number(item.paidAt || 0)).toLocaleDateString("en-CA") +
+        '</div></div><div style="font-weight:900;color:white;font-size:12px;">' +
+        formatAdminBillingMoney(item.amountCents,item.currency) +
+        '</div><div style="font-weight:800;color:#63e7a1;font-size:11px;">' +
+        escapeHtml(item.status || "Paid") +
+        '</div></div>'
+      ).join("")
+    : '<div class="lb-muted">No completed payments are recorded yet.</div>';
+}
+
+
 async function openOrganization(id){
 
   document.getElementById(
@@ -4910,6 +4971,10 @@ async function openOrganization(id){
 
   const account =
     data.account;
+
+  renderAdminBillingHistory(
+    data.billingHistory
+  );
 
 
   document.getElementById(

@@ -10982,6 +10982,110 @@ async function stripeApiGet(
 }
 
 
+
+async function loadOrganizationBillingHistory(env, organizationId) {
+  await ensureStripeRegistrationTable(env);
+
+  const registration = await env.TRANSLATIONS_DB.prepare(`
+    SELECT stripe_customer_id
+    FROM stripe_registrations
+    WHERE organization_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `).bind(Number(organizationId)).first();
+
+  const customerId = String(registration?.stripe_customer_id || "").trim();
+
+  if (!customerId) {
+    return {
+      connected: false,
+      currency: "CAD",
+      lifetimePaidCents: 0,
+      subscriptionPaidCents: 0,
+      additionalPaidCents: 0,
+      transactions: []
+    };
+  }
+
+  const encodedCustomer = encodeURIComponent(customerId);
+  const [invoiceResult, checkoutResult] = await Promise.all([
+    stripeApiGet(env, "/v1/invoices?customer=" + encodedCustomer + "&status=paid&limit=100"),
+    stripeApiGet(env, "/v1/checkout/sessions?customer=" + encodedCustomer + "&limit=100")
+  ]);
+
+  const invoices = (invoiceResult?.data || [])
+    .filter(item => String(item?.status || "") === "paid")
+    .map(item => ({
+      id: String(item.id || ""),
+      type: "subscription",
+      description:
+        String(item.billing_reason || "") === "subscription_create"
+          ? "LiveBridge subscription started"
+          : "LiveBridge subscription renewal",
+      amountCents: Number(item.amount_paid || 0),
+      currency: String(item.currency || "cad").toUpperCase(),
+      status: "Paid",
+      paidAt: Number(item.status_transitions?.paid_at || item.created || 0) * 1000,
+      receiptUrl: String(item.hosted_invoice_url || item.invoice_pdf || ""),
+      reference: String(item.number || "")
+    }));
+
+  const oneTimePurchases = (checkoutResult?.data || [])
+    .filter(item =>
+      String(item?.mode || "") === "payment" &&
+      String(item?.payment_status || "") === "paid"
+    )
+    .map(item => {
+      const purchaseType = String(item?.metadata?.livebridge_purchase_type || "");
+      let description = "LiveBridge one-time purchase";
+
+      if (purchaseType === "marketing_credits") {
+        const credits = Number(item?.metadata?.livebridge_marketing_credits || 0);
+        description = credits + " Marketing Credit" + (credits === 1 ? "" : "s");
+      } else if (
+        purchaseType === "broadcast_topup" ||
+        purchaseType === "broadcast_time_topup"
+      ) {
+        description = "Broadcast-time top-up";
+      }
+
+      return {
+        id: String(item.id || ""),
+        type: purchaseType || "one_time",
+        description,
+        amountCents: Number(item.amount_total || 0),
+        currency: String(item.currency || "cad").toUpperCase(),
+        status: "Paid",
+        paidAt: Number(item.created || 0) * 1000,
+        receiptUrl: "",
+        reference: String(item.payment_intent || item.id || "")
+      };
+    });
+
+  const transactions = [...invoices, ...oneTimePurchases]
+    .sort((a, b) => Number(b.paidAt || 0) - Number(a.paidAt || 0));
+
+  const subscriptionPaidCents = invoices.reduce(
+    (sum, item) => sum + Number(item.amountCents || 0),
+    0
+  );
+
+  const additionalPaidCents = oneTimePurchases.reduce(
+    (sum, item) => sum + Number(item.amountCents || 0),
+    0
+  );
+
+  return {
+    connected: true,
+    currency: transactions[0]?.currency || "CAD",
+    lifetimePaidCents: subscriptionPaidCents + additionalPaidCents,
+    subscriptionPaidCents,
+    additionalPaidCents,
+    transactions
+  };
+}
+
+
 async function loadPlanByCode(
   env,
   planCode
@@ -14415,6 +14519,12 @@ if (
             organizationId
           )
       },
+
+      billingHistory:
+        await loadOrganizationBillingHistory(
+          env,
+          organizationId
+        ),
 
       marketingAnalytics:
         await buildMarketingAdminAnalytics(
@@ -18999,6 +19109,36 @@ if (
       },
       403
     );
+  }
+}
+
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/account/billing-history"
+) {
+  try {
+    const auth = await verifyClerkRequest(request);
+    const organization = await env.TRANSLATIONS_DB.prepare(`
+      SELECT id FROM organizations
+      WHERE clerk_user_id = ?
+      LIMIT 1
+    `).bind(auth.clerkUserId).first();
+
+    if (!organization) {
+      return jsonResponse({ success: false, error: "LiveBridge account not found." }, 404);
+    }
+
+    return jsonResponse({
+      success: true,
+      billing: await loadOrganizationBillingHistory(env, organization.id)
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to load billing history."
+    }, 403);
   }
 }
 
