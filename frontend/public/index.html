@@ -1525,8 +1525,8 @@ body{margin:0;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-ser
   const PLAN_API =
     (
       PLAN_PREVIEW
-        ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
-        : "https://livebridge.northstarventures-ca.workers.dev"
+        ? "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev"
+        : "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev"
     ) +
     "/plans";
 
@@ -1837,7 +1837,7 @@ body{margin:0;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-ser
 
       const response =
         await fetch(
-          "https://livebridge.northstarventures-ca.workers.dev/stripe/create-checkout-session",
+          "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev/stripe/create-checkout-session",
           {
             method:"POST",
             headers:{
@@ -2063,7 +2063,7 @@ body{margin:0;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-ser
 
 
   const AZURE_WORKER =
-    "https://livebridge.northstarventures-ca.workers.dev";
+    "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev";
 
 
   const DEMO_ROOM =
