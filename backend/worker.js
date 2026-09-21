@@ -15776,14 +15776,26 @@ if (
 
   try {
 
-    const auth =
-      await verifyClerkRequest(
-        request
-      );
+    const authorization =
+      String(
+        request.headers.get(
+          "Authorization"
+        ) || ""
+      ).trim();
+
+    const suppliedMigrationToken =
+      authorization.startsWith(
+        "Bearer "
+      )
+        ? authorization
+            .substring(7)
+            .trim()
+        : "";
 
     if (
       !env.CLERK_SECRET_KEY ||
-      !env.CLERK_MIGRATION_USERS
+      !env.CLERK_MIGRATION_USERS ||
+      !env.CLERK_MIGRATION_TOKEN
     ) {
       return jsonResponse(
         {
@@ -15837,69 +15849,18 @@ if (
         "application/json"
     };
 
-    const currentUserResponse =
-      await fetch(
-        "https://api.clerk.com/v1/users/" +
-        encodeURIComponent(
-          auth.clerkNativeUserId
-        ),
-        {
-          headers:
-            clerkHeaders
-        }
-      );
-
-    if (!currentUserResponse.ok) {
-      return jsonResponse(
-        {
-          success: false,
-          error:
-            "Unable to verify the migration operator."
-        },
-        403
-      );
-    }
-
-    const currentUser =
-      await currentUserResponse.json();
-
-    const operatorEmails =
-      (currentUser.email_addresses || [])
-        .map(
-          item =>
-            String(
-              item.email_address || ""
-            )
-            .trim()
-            .toLowerCase()
-        )
-        .filter(Boolean);
-
-    const allowedEmails =
-      new Set(
-        sourceUsers
-          .map(
-            item =>
-              String(
-                item.email || ""
-              )
-              .trim()
-              .toLowerCase()
-          )
-          .filter(Boolean)
-      );
-
     if (
-      !operatorEmails.some(
-        email =>
-          allowedEmails.has(email)
-      )
+      !suppliedMigrationToken ||
+      suppliedMigrationToken !==
+        String(
+          env.CLERK_MIGRATION_TOKEN || ""
+        )
     ) {
       return jsonResponse(
         {
           success: false,
           error:
-            "This signed-in account is not authorized to run the migration."
+            "Invalid migration authorization."
         },
         403
       );
