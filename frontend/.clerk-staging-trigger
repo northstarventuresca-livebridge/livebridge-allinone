@@ -1,2 +1,3 @@
 Trigger Cloudflare staging frontend build for Clerk production test.
 Trigger refresh after migration tool update.
+Force rebuild for clerk-migrate-v4.
