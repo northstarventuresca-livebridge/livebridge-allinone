@@ -1094,8 +1094,8 @@
 
   const WORKER_URL =
     LISTENER_PREVIEW
-      ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
-      : "https://livebridge.northstarventures-ca.workers.dev";
+      ? "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev"
+      : "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev";
 
   let ROOM_ID = "";
   let listenerSocket = null;
@@ -1668,11 +1668,11 @@
 
           script.setAttribute(
             "data-clerk-publishable-key",
-            "pk_test_c3RhYmxlLXN3aW5lLTY1NTQuY2xlcmsuYWNjb3VudHMuZGV2JA"
+            "pk_live_Y2xlcmsubGl2ZWJyaWRnZS5jYSQ"
           );
 
           script.src =
-            "https://stable-swine-6554.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
+            "https://clerk.livebridge.ca/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
 
           script.onload =
             async () => {
@@ -4535,7 +4535,7 @@ resolve(email);
   const AZURE_WORKER =
     typeof WORKER_URL === "string"
       ? WORKER_URL
-      : "https://livebridge.northstarventures-ca.workers.dev";
+      : "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev";
 
   let azureVoices = [];
   let azureVoicesLoaded = false;
