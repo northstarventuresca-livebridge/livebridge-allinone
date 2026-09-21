@@ -2429,7 +2429,9 @@ body{
 
   const saveWrap=document.createElement("div");
   saveWrap.className="lb-org-save-wrap";
-  move(saveWrap,"orgSaveBar","saveMessage");
+  const clientSaveBar=document.getElementById("saveClientButton")?.closest(".lb-save-bar");
+  if(clientSaveBar) saveWrap.appendChild(clientSaveBar);
+  move(saveWrap,"saveMessage");
   panels.insertAdjacentElement("afterend",saveWrap);
 
   oldGrid.remove();
