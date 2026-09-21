@@ -4038,6 +4038,78 @@ until this catalog is verified.
 =======================================================
 */
 
+function publicPlanPresentation(
+  plan
+) {
+  if (!plan) {
+    return plan;
+  }
+
+  const code =
+    normalizePlanCode(
+      plan.planCode || ""
+    );
+
+  const presentations = {
+    starter: {
+      description:
+        "Core live multilingual access for smaller or occasional events, with real-time translated captions and spoken audio, multiple listener languages, room sharing, AI Live Notes, and basic broadcast history.",
+      features: [
+        "Real-time translated captions",
+        "Spoken translated audio",
+        "Multiple listener languages",
+        "Room links & QR sharing",
+        "AI Live Notes",
+        "Basic broadcast history & audience stats"
+      ]
+    },
+
+    growth: {
+      description:
+        "For regular organizational use. Includes everything in Starter plus transcript access, scheduling, detailed analytics, Scripture/reference detection, API access, and post-broadcast AI follow-up.",
+      features: [
+        "Everything in Starter",
+        "30-day transcript viewing & downloads",
+        "Email transcript + AI summary",
+        "Scheduled broadcasts",
+        "Detailed listener & language analytics",
+        "Specialized Scripture/reference detection",
+        "Organization Stats API access",
+        "Priority email support"
+      ]
+    },
+
+    pro: {
+      description:
+        "For larger, frequent or high-capacity use. Includes everything in Growth plus longer transcript retention, downloadable reporting, and custom onboarding/configuration support.",
+      features: [
+        "Everything in Growth",
+        "90-day transcript viewing & downloads",
+        "Higher monthly broadcast capacity",
+        "Higher simultaneous listener capacity",
+        "Downloadable analytics/report export",
+        "Organization Stats API access",
+        "Priority support",
+        "Custom onboarding/configuration support"
+      ]
+    }
+  };
+
+  const presentation =
+    presentations[code];
+
+  return presentation
+    ? {
+        ...plan,
+        description:
+          presentation.description,
+        features:
+          presentation.features
+      }
+    : plan;
+}
+
+
 function buildPlanRecord(row) {
   if (!row) return null;
 
@@ -11857,7 +11929,16 @@ if (
   try {
     return jsonResponse({
       success: true,
-      plans: await loadPlans(env, true)
+      plans:
+        (
+          await loadPlans(
+            env,
+            true
+          )
+        )
+        .map(
+          publicPlanPresentation
+        )
     });
   } catch (error) {
     console.error("Public plans failed:", error);
