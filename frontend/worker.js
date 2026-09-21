@@ -187,8 +187,8 @@ function protectListenerPage(
 
   const BACKEND =
     preview
-      ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
-      : "https://livebridge.northstarventures-ca.workers.dev";
+      ? "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev"
+      : "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev";
 
   function moveDataMeterToTopbar() {
     const meter = document.getElementById("listenerDataUsage");
