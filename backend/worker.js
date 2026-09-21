@@ -3979,6 +3979,41 @@ function getEffectiveScriptureDetection(
 }
 
 
+async function getBroadcastUsageResetAt(
+  env,
+  organizationId
+) {
+  await ensureStripeLifecycleSchema(
+    env
+  );
+
+  const row =
+    await env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        current_period_end
+      FROM stripe_registrations
+      WHERE organization_id = ?
+      ORDER BY id DESC
+      LIMIT 1
+    `)
+    .bind(
+      Number(
+        organizationId ||
+        0
+      )
+    )
+    .first();
+
+  return Math.max(
+    0,
+    Number(
+      row?.current_period_end ||
+      0
+    )
+  );
+}
+
+
 function buildOrganizationAccount(
   row
 ) {
@@ -19009,13 +19044,21 @@ if (
     }
 
 
+    const account =
+      buildOrganizationAccount(
+        row
+      );
+
+    account.broadcastUsageResetAt =
+      await getBroadcastUsageResetAt(
+        env,
+        row.id
+      );
+
     return jsonResponse({
       success: true,
       exists: true,
-      account:
-        buildOrganizationAccount(
-          row
-        )
+      account
     });
 
   } catch (error) {
@@ -21360,56 +21403,6 @@ const now =
             );
 
 
-          if (
-            remainingSeconds <= 0
-          ) {
-
-            await finalizeBroadcastForReason(
-              env,
-              room,
-              "time_limit"
-            );
-
-            const watchdogId =
-              env.LIVEBRIDGE_ROOMS.idFromName(
-                room
-              );
-
-            const watchdogStub =
-              env.LIVEBRIDGE_ROOMS.get(
-                watchdogId
-              );
-
-            await watchdogStub.fetch(
-              new Request(
-                "https://livebridge.internal/watchdog-clear",
-                {
-                  method: "POST"
-                }
-              )
-            );
-
-            return jsonResponse(
-              {
-                success: false,
-
-                code:
-                  "BROADCAST_TIME_EXHAUSTED",
-
-                error:
-                  "Your LiveBridge broadcast time has been fully used.",
-
-                remainingSeconds:
-                  0,
-
-                remainingMinutes:
-                  0
-              },
-              402
-            );
-          }
-
-
           await env.TRANSLATIONS_DB.prepare(`
             UPDATE active_broadcasts
             SET last_seen = ?
@@ -21457,7 +21450,10 @@ const now =
               Math.ceil(
                 remainingSeconds /
                 60
-              )
+              ),
+
+            allowanceExhausted:
+              remainingSeconds <= 0
           });
         }
 
@@ -21671,6 +21667,32 @@ const now =
           broadcast.id
         ) : null;
 
+        const updatedOrganizationRow =
+          await env.TRANSLATIONS_DB.prepare(`
+            SELECT *
+            FROM organizations
+            WHERE id = ?
+            LIMIT 1
+          `)
+          .bind(
+            Number(
+              owned.organization.id
+            )
+          )
+          .first();
+
+        const updatedAccount =
+          buildOrganizationAccount(
+            updatedOrganizationRow ||
+            owned.organization
+          );
+
+        const broadcastUsageResetAt =
+          await getBroadcastUsageResetAt(
+            env,
+            owned.organization.id
+          );
+
         if (
           broadcast &&
           ["no_audio", "page_exit", "time_limit", "broadcaster_disconnected"]
@@ -21691,7 +21713,36 @@ const now =
 
         return jsonResponse({
           success: true,
-          summary
+          summary,
+
+          usage: {
+            planCode:
+              updatedAccount.planCode,
+
+            planName:
+              updatedAccount.planName,
+
+            includedMinutes:
+              updatedAccount.includedMinutes,
+
+            bonusMinutes:
+              updatedAccount.bonusMinutes,
+
+            usedMinutes:
+              updatedAccount.usedMinutes,
+
+            remainingMinutes:
+              updatedAccount.remainingMinutes,
+
+            viewerLimit:
+              updatedAccount
+                .effectiveViewerLimit,
+
+            entitlements:
+              updatedAccount.entitlements,
+
+            broadcastUsageResetAt
+          }
         });
       } catch (error) {
 
