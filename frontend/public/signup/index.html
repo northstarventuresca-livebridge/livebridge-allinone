@@ -1272,30 +1272,24 @@
 
   async function verifyStripeCheckoutReturn() {
 
-    // STAGING ONLY: bypass Stripe checkout so Clerk production email
-    // verification can be tested without creating a real paid subscription.
-    if (
-      window.location.hostname ===
-      "livebridge-clerk-production-frontend-test.northstarventures-ca.workers.dev"
-    ) {
-      showVerifiedStripePlan({
-        success: true,
-        verified: true,
-        plan: {
-          planCode: "staging-test",
-          planName: "Staging Test",
-          price: 0,
-          includedMinutes: 0,
-          viewerLimit: 1
-        },
-        checkout: {
-          customerEmail: "",
-          sessionId: "staging-clerk-production-test"
-        }
-      });
+    // STAGING BRANCH ONLY: bypass Stripe entirely so Clerk production
+    // verification email can be tested without a real payment.
+    showVerifiedStripePlan({
+      success: true,
+      verified: true,
+      plan: {
+        planCode: "staging-test",
+        planName: "Staging Test",
+        price: 0,
+        includedMinutes: 0,
+        viewerLimit: 1
+      },
+      checkout: {
+        customerEmail: ""
+      }
+    });
 
-      return true;
-    }
+    return true;
 
     const params =
       new URLSearchParams(
