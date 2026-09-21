@@ -752,7 +752,9 @@
           </div>
           <div class="lb-language-gate-title">Choose your language</div>
           <div class="lb-language-gate-subtitle">
-            Select the language you understand best.<br>
+            <span id="lbLanguageGateSubtitleText">
+              Select the language you understand best.
+            </span><br>
             <button
               type="button"
               id="lbLanguageGateRoom"
@@ -6761,9 +6763,9 @@ return url.toString();
         ".lb-language-gate-title"
       );
 
-    const subtitle =
-      gate.querySelector(
-        ".lb-language-gate-subtitle"
+    const subtitleText =
+      document.getElementById(
+        "lbLanguageGateSubtitleText"
       );
 
     const roomEntry =
@@ -6829,8 +6831,8 @@ return url.toString();
           "Enter your room";
       }
 
-      if(subtitle){
-        subtitle.innerHTML =
+      if(subtitleText){
+        subtitleText.textContent =
           "Enter the LiveBridge room name provided by your organization.";
       }
 
@@ -6884,9 +6886,9 @@ return url.toString();
         "Choose your language";
     }
 
-    if(subtitle){
-      subtitle.innerHTML =
-        "Select the language you understand best.<br>";
+    if(subtitleText){
+      subtitleText.textContent =
+        "Select the language you understand best.";
     }
 
     if(roomEntry){
