@@ -2939,6 +2939,239 @@ function openLiveBridgeBilling(){
 }
 
 
+function safeBroadcasterUsageHtml(value){
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+
+function formatBroadcastAllowanceMinutes(value){
+
+  const minutes =
+    Math.max(
+      0,
+      Math.round(
+        Number(value || 0)
+      )
+    );
+
+  if(minutes >= 60){
+
+    const hours =
+      Math.floor(
+        minutes / 60
+      );
+
+    const remainder =
+      minutes % 60;
+
+    return (
+      hours +
+      " hr" +
+      (
+        hours === 1
+          ? ""
+          : "s"
+      ) +
+      (
+        remainder
+          ? " " +
+            remainder +
+            " min"
+          : ""
+      )
+    );
+  }
+
+  return minutes + " min";
+}
+
+
+function broadcastPlanSupportText(usage){
+
+  const code =
+    String(
+      usage?.planCode ||
+      ""
+    )
+    .trim()
+    .toLowerCase();
+
+  if(code === "starter"){
+    return "real-time translated captions, spoken translated audio, multiple listener languages, room sharing, AI Live Notes, and basic broadcast history";
+  }
+
+  if(code === "growth"){
+    return "everything in Starter plus 30-day transcripts, transcript + AI summary email, scheduled broadcasts, detailed analytics, Scripture/reference detection, Organization Stats API access, and priority email support";
+  }
+
+  if(code === "pro"){
+    return "everything in Growth plus 90-day transcript access, downloadable analytics/report export, and custom onboarding/configuration support";
+  }
+
+  return "the LiveBridge features enabled for your organization";
+}
+
+
+function broadcastUsageResetText(usage){
+
+  const resetAt =
+    Number(
+      usage?.broadcastUsageResetAt ||
+      0
+    );
+
+  if(
+    resetAt >
+    Date.now()
+  ){
+    return new Date(
+      resetAt
+    ).toLocaleDateString(
+      undefined,
+      {
+        year:"numeric",
+        month:"long",
+        day:"numeric"
+      }
+    );
+  }
+
+  return "your next monthly billing cycle";
+}
+
+
+function broadcastUsageDetailsHtml(
+  usage,
+  {
+    completed = false
+  } = {}
+){
+
+  const planName =
+    safeBroadcasterUsageHtml(
+      usage?.planName ||
+      usage?.planCode ||
+      "LiveBridge"
+    );
+
+  const included =
+    formatBroadcastAllowanceMinutes(
+      usage?.includedMinutes
+    );
+
+  const bonus =
+    Math.max(
+      0,
+      Number(
+        usage?.bonusMinutes ||
+        0
+      )
+    );
+
+  const used =
+    formatBroadcastAllowanceMinutes(
+      usage?.usedMinutes
+    );
+
+  const viewerLimit =
+    Math.max(
+      0,
+      Number(
+        usage?.viewerLimit ||
+        usage?.effectiveViewerLimit ||
+        0
+      )
+    );
+
+  const support =
+    safeBroadcasterUsageHtml(
+      broadcastPlanSupportText(
+        usage
+      )
+    );
+
+  const reset =
+    safeBroadcasterUsageHtml(
+      broadcastUsageResetText(
+        usage
+      )
+    );
+
+  return (
+    (
+      completed
+        ? "Your broadcast was allowed to finish normally even though your available broadcast time reached zero."
+        : "There is currently no broadcast time remaining on this account."
+    ) +
+    "<br><br>" +
+    "<strong>" +
+    planName +
+    " plan</strong><br>" +
+    "Monthly broadcast time: <strong>" +
+    safeBroadcasterUsageHtml(
+      included
+    ) +
+    "</strong>" +
+    (
+      bonus > 0
+        ? " + <strong>" +
+          safeBroadcasterUsageHtml(
+            formatBroadcastAllowanceMinutes(
+              bonus
+            )
+          ) +
+          " bonus</strong>"
+        : ""
+    ) +
+    "<br>Used this cycle: <strong>" +
+    safeBroadcasterUsageHtml(
+      used
+    ) +
+    "</strong>" +
+    (
+      viewerLimit > 0
+        ? "<br>Simultaneous listeners supported: <strong>" +
+          viewerLimit.toLocaleString() +
+          "</strong>"
+        : ""
+    ) +
+    "<br>Includes: " +
+    support +
+    ".<br>Broadcast time resets: <strong>" +
+    reset +
+    "</strong>." +
+    "<br><br>If this level of usage is becoming normal for your organization, consider upgrading so you have more broadcast capacity available next month."
+  );
+}
+
+
+async function showBroadcastAllowanceComplete(usage){
+
+  await showUsageWarningModal({
+    title:
+      "Monthly broadcast time used",
+
+    message:
+      broadcastUsageDetailsHtml(
+        usage,
+        {
+          completed:true
+        }
+      ),
+
+    allowContinue:
+      false,
+
+    topUpLabel:
+      "Top Up Hours / View Upgrades"
+  });
+}
+
+
 function showUsageWarningModal({
   title,
   message,
@@ -3217,6 +3450,30 @@ async function checkStartingBroadcastTime(){
 
 
     if(
+      remainingMinutes <= 0
+    ){
+
+      await showUsageWarningModal({
+        title:
+          "No broadcast time remaining",
+
+        message:
+          broadcastUsageDetailsHtml(
+            data.account
+          ),
+
+        allowContinue:
+          false,
+
+        topUpLabel:
+          "Top Up Hours / View Upgrades"
+      });
+
+      return false;
+    }
+
+
+    if(
       remainingMinutes > 0 &&
       remainingMinutes < 60
     ){
@@ -3396,7 +3653,7 @@ function maybeShowRemainingTimeWarning(
         message:
           "You have approximately " +
           minutes +
-          " minutes of LiveBridge broadcast time remaining. Your broadcast will automatically end when the available time reaches zero.",
+          " minutes of LiveBridge broadcast time remaining. If your allowance reaches zero during this broadcast, the broadcast will continue until you end it normally. You will need additional time or your next reset before starting another broadcast.",
 
         allowContinue:
           false
@@ -3845,7 +4102,9 @@ function startBroadcastHeartbeat() {
               "BROADCAST_TIME_EXHAUSTED"
             ){
 
-              await endBroadcastForTimeLimit();
+              maybeShowRemainingTimeWarning(
+                0
+              );
 
               return;
             }
