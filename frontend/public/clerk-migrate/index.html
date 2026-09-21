@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiveBridge Clerk Migration</title>
+<style>
+body{font-family:Arial,sans-serif;background:#081423;color:#fff;display:grid;place-items:center;min-height:100vh;margin:0}
+.card{width:min(720px,92vw);background:#111d2d;border:1px solid #2c3b4f;border-radius:18px;padding:28px}
+button{background:#2588ff;color:#fff;border:0;border-radius:10px;padding:13px 18px;font-weight:800;cursor:pointer}
+pre{white-space:pre-wrap;background:#08111e;padding:16px;border-radius:10px;overflow:auto}
+.muted{color:#a8b8ca}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>LiveBridge Clerk Migration</h1>
+  <p class="muted">Production Clerk user migration utility. This page exists only on the staging Worker.</p>
+  <p id="status">Loading Clerk…</p>
+  <button id="run" disabled>Run Migration</button>
+  <pre id="result"></pre>
+</div>
+
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="pk_live_Y2xlcmsubGl2ZWJyaWRnZS5jYSQ"
+  src="https://clerk.livebridge.ca/npm/@clerk/clerk-js@latest/dist/clerk.browser.js">
+</script>
+
+<script>
+const BACKEND="https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev";
+const statusEl=document.getElementById("status");
+const runBtn=document.getElementById("run");
+const resultEl=document.getElementById("result");
+
+window.addEventListener("load",async()=>{
+  try{
+    await Clerk.load();
+    if(!Clerk.user || !Clerk.session){
+      statusEl.textContent="Not signed in on Production Clerk. Sign in at test.livebridge.ca first, then return here.";
+      return;
+    }
+    const email=Clerk.user.primaryEmailAddress?.emailAddress || "signed-in user";
+    statusEl.textContent="Signed in as "+email+". Ready.";
+    runBtn.disabled=false;
+  }catch(err){
+    statusEl.textContent="Unable to load Clerk: "+(err.message||err);
+  }
+});
+
+runBtn.addEventListener("click",async()=>{
+  runBtn.disabled=true;
+  resultEl.textContent="Running migration…";
+  try{
+    const token=await Clerk.session.getToken();
+    const response=await fetch(BACKEND+"/admin/clerk-migrate-users",{
+      method:"POST",
+      headers:{
+        "Authorization":"Bearer "+token,
+        "Content-Type":"application/json"
+      }
+    });
+    const data=await response.json();
+    resultEl.textContent=JSON.stringify(data,null,2);
+  }catch(err){
+    resultEl.textContent="Migration request failed: "+(err.message||err);
+  }finally{
+    runBtn.disabled=false;
+  }
+});
+</script>
+</body>
+</html>
