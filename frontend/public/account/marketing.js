@@ -213,8 +213,8 @@
       host.includes("livebridge-promoter-frontend-test");
     var workerBase=
       previewHost
-        ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
-        : (window.LB_WORKER || "https://livebridge.northstarventures-ca.workers.dev");
+        ? "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev"
+        : (window.LB_WORKER || "https://livebridge-clerk-production-backend-test.northstarventures-ca.workers.dev");
 
     var response=await fetch(
       workerBase+path,
