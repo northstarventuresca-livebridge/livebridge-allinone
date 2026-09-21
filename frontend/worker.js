@@ -53,7 +53,9 @@ const PAGES = new Map([
   ["/offer", "/offer/index.html"],
   ["/offer/", "/offer/index.html"],
   ["/clerk-migrate", "/clerk-migrate/index.html"],
-  ["/clerk-migrate/", "/clerk-migrate/index.html"],\n  ["/auth-debug", "/auth-debug/index.html"],\n  ["/auth-debug/", "/auth-debug/index.html"],
+  ["/clerk-migrate/", "/clerk-migrate/index.html"],
+  ["/auth-debug", "/auth-debug/index.html"],
+  ["/auth-debug/", "/auth-debug/index.html"],
 ]);
 
 function preserveQueryRedirect(
