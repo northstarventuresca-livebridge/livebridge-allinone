@@ -2108,7 +2108,7 @@ LIVEBRIDGE CUSTOMER ACCOUNTS
 */
 
 const CLERK_ISSUER =
-  "https://stable-swine-6554.clerk.accounts.dev";
+  "https://clerk.livebridge.ca";
 
 const CLERK_JWKS_URL =
   CLERK_ISSUER + "/.well-known/jwks.json";
@@ -2338,12 +2338,19 @@ async function verifyClerkRequest(
     );
   }
 
-  const clerkUserId =
+  const clerkNativeUserId =
     String(
       payload.sub || ""
     ).trim();
 
-  if (!clerkUserId) {
+  const clerkUserId =
+    String(
+      payload.userId ||
+      clerkNativeUserId ||
+      ""
+    ).trim();
+
+  if (!clerkNativeUserId) {
 
     throw new Error(
       "Clerk user ID missing."
@@ -2352,6 +2359,7 @@ async function verifyClerkRequest(
 
   return {
     clerkUserId,
+    clerkNativeUserId,
     payload
   };
 }
