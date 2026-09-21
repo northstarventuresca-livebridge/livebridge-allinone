@@ -2399,6 +2399,8 @@ async function ensureStripeWebhookRegistrationTable(
       clerk_user_id TEXT NOT NULL UNIQUE,
       organization_id INTEGER,
       plan_code TEXT NOT NULL,
+      current_period_start INTEGER,
+      current_period_end INTEGER,
       created_at INTEGER NOT NULL
     )
   `).run();
@@ -2408,6 +2410,43 @@ async function ensureStripeWebhookRegistrationTable(
 async function ensureStripeLifecycleSchema(
   env
 ) {
+
+  await ensureStripeWebhookRegistrationTable(
+    env
+  );
+
+  for (
+    const statement of
+    [
+      `ALTER TABLE stripe_registrations ADD COLUMN current_period_start INTEGER`,
+      `ALTER TABLE stripe_registrations ADD COLUMN current_period_end INTEGER`
+    ]
+  ) {
+    try {
+      await env.TRANSLATIONS_DB.prepare(
+        statement
+      ).run();
+    } catch (error) {
+      const message =
+        String(
+          error?.message ||
+          error ||
+          ""
+        )
+        .toLowerCase();
+
+      if (
+        !message.includes(
+          "duplicate column"
+        ) &&
+        !message.includes(
+          "already exists"
+        )
+      ) {
+        throw error;
+      }
+    }
+  }
 
   await env.TRANSLATIONS_DB.prepare(`
     CREATE TABLE IF NOT EXISTS stripe_webhook_events (
@@ -2807,6 +2846,26 @@ async function applyStripeSubscriptionToOrganization(
   const now =
     Date.now();
 
+  const currentPeriodStart =
+    Math.max(
+      0,
+      Number(
+        subscription
+          ?.current_period_start ||
+        0
+      )
+    ) * 1000;
+
+  const currentPeriodEnd =
+    Math.max(
+      0,
+      Number(
+        subscription
+          ?.current_period_end ||
+        0
+      )
+    ) * 1000;
+
   if (plan) {
 
     await env.TRANSLATIONS_DB.prepare(`
@@ -2838,13 +2897,27 @@ async function applyStripeSubscriptionToOrganization(
       SET
         stripe_customer_id = ?,
         stripe_subscription_id = ?,
-        plan_code = ?
+        plan_code = ?,
+        current_period_start =
+          CASE
+            WHEN ? > 0 THEN ?
+            ELSE current_period_start
+          END,
+        current_period_end =
+          CASE
+            WHEN ? > 0 THEN ?
+            ELSE current_period_end
+          END
       WHERE id = ?
     `)
     .bind(
       customerId,
       subscriptionId,
       plan.planCode,
+      currentPeriodStart,
+      currentPeriodStart,
+      currentPeriodEnd,
+      currentPeriodEnd,
       Number(registration.id)
     )
     .run();
@@ -2924,6 +2997,61 @@ async function applyStripeInvoiceStatus(
 
   const now =
     Date.now();
+
+  const invoicePeriod =
+    invoice?.lines
+      ?.data?.[0]
+      ?.period ||
+    {};
+
+  const currentPeriodStart =
+    Math.max(
+      0,
+      Number(
+        invoicePeriod.start ||
+        invoice?.period_start ||
+        0
+      )
+    ) * 1000;
+
+  const currentPeriodEnd =
+    Math.max(
+      0,
+      Number(
+        invoicePeriod.end ||
+        invoice?.period_end ||
+        0
+      )
+    ) * 1000;
+
+  if (
+    currentPeriodStart > 0 ||
+    currentPeriodEnd > 0
+  ) {
+    await env.TRANSLATIONS_DB.prepare(`
+      UPDATE stripe_registrations
+      SET
+        current_period_start =
+          CASE
+            WHEN ? > 0 THEN ?
+            ELSE current_period_start
+          END,
+        current_period_end =
+          CASE
+            WHEN ? > 0 THEN ?
+            ELSE current_period_end
+          END
+      WHERE id = ?
+    `)
+    .bind(
+      currentPeriodStart,
+      currentPeriodStart,
+      currentPeriodEnd,
+      currentPeriodEnd,
+      Number(registration.id)
+    )
+    .run();
+  }
 
   const normalizedStatus =
     stripeSubscriptionAccessStatus(
@@ -9585,6 +9713,8 @@ async function ensureStripeRegistrationTable(
       clerk_user_id TEXT NOT NULL UNIQUE,
       organization_id INTEGER,
       plan_code TEXT NOT NULL,
+      current_period_start INTEGER,
+      current_period_end INTEGER,
       created_at INTEGER NOT NULL
     )
   `).run();
