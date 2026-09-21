@@ -2108,7 +2108,7 @@ LIVEBRIDGE CUSTOMER ACCOUNTS
 */
 
 const CLERK_ISSUER =
-  "https://stable-swine-6554.clerk.accounts.dev";
+  "https://clerk.livebridge.ca";
 
 const CLERK_JWKS_URL =
   CLERK_ISSUER + "/.well-known/jwks.json";
