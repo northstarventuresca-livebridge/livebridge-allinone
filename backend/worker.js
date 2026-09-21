@@ -2338,12 +2338,19 @@ async function verifyClerkRequest(
     );
   }
 
-  const clerkUserId =
+  const clerkNativeUserId =
     String(
       payload.sub || ""
     ).trim();
 
-  if (!clerkUserId) {
+  const clerkUserId =
+    String(
+      payload.userId ||
+      clerkNativeUserId ||
+      ""
+    ).trim();
+
+  if (!clerkNativeUserId) {
 
     throw new Error(
       "Clerk user ID missing."
@@ -2352,6 +2359,7 @@ async function verifyClerkRequest(
 
   return {
     clerkUserId,
+    clerkNativeUserId,
     payload
   };
 }
@@ -15750,6 +15758,463 @@ if (
   }
 }
 
+
+
+/*
+=======================================================
+ONE-TIME CLERK PRODUCTION USER MIGRATION (STAGING ONLY)
+Reads source users from encrypted CLERK_MIGRATION_USERS.
+Only an authenticated user whose email is in that source
+list may run it. Idempotent by email / external_id.
+=======================================================
+*/
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/clerk-migrate-users"
+) {
+
+  try {
+
+    const auth =
+      await verifyClerkRequest(
+        request
+      );
+
+    if (
+      !env.CLERK_SECRET_KEY ||
+      !env.CLERK_MIGRATION_USERS
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Migration secrets are not configured."
+        },
+        500
+      );
+    }
+
+    let sourceUsers = [];
+
+    try {
+      sourceUsers =
+        JSON.parse(
+          env.CLERK_MIGRATION_USERS
+        );
+    } catch {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "CLERK_MIGRATION_USERS is not valid JSON."
+        },
+        500
+      );
+    }
+
+    if (
+      !Array.isArray(sourceUsers) ||
+      sourceUsers.length === 0
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "No migration users are configured."
+        },
+        500
+      );
+    }
+
+    const clerkHeaders = {
+      "Authorization":
+        "Bearer " +
+        env.CLERK_SECRET_KEY,
+      "Content-Type":
+        "application/json",
+      "Accept":
+        "application/json"
+    };
+
+    const currentUserResponse =
+      await fetch(
+        "https://api.clerk.com/v1/users/" +
+        encodeURIComponent(
+          auth.clerkNativeUserId
+        ),
+        {
+          headers:
+            clerkHeaders
+        }
+      );
+
+    if (!currentUserResponse.ok) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Unable to verify the migration operator."
+        },
+        403
+      );
+    }
+
+    const currentUser =
+      await currentUserResponse.json();
+
+    const operatorEmails =
+      (currentUser.email_addresses || [])
+        .map(
+          item =>
+            String(
+              item.email_address || ""
+            )
+            .trim()
+            .toLowerCase()
+        )
+        .filter(Boolean);
+
+    const allowedEmails =
+      new Set(
+        sourceUsers
+          .map(
+            item =>
+              String(
+                item.email || ""
+              )
+              .trim()
+              .toLowerCase()
+          )
+          .filter(Boolean)
+      );
+
+    if (
+      !operatorEmails.some(
+        email =>
+          allowedEmails.has(email)
+      )
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "This signed-in account is not authorized to run the migration."
+        },
+        403
+      );
+    }
+
+    const listResponse =
+      await fetch(
+        "https://api.clerk.com/v1/users?limit=100",
+        {
+          headers:
+            clerkHeaders
+        }
+      );
+
+    if (!listResponse.ok) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Unable to read Production Clerk users."
+        },
+        502
+      );
+    }
+
+    const listData =
+      await listResponse.json();
+
+    const productionUsers =
+      Array.isArray(listData)
+        ? listData
+        : (
+            Array.isArray(listData.data)
+              ? listData.data
+              : []
+          );
+
+    const results = [];
+
+    for (
+      const source of
+        sourceUsers
+    ) {
+
+      const email =
+        String(
+          source.email || ""
+        )
+        .trim()
+        .toLowerCase();
+
+      const externalId =
+        String(
+          source.externalId || ""
+        )
+        .trim();
+
+      if (
+        !email ||
+        !externalId
+      ) {
+        results.push({
+          email,
+          status:
+            "skipped",
+          error:
+            "Missing email or externalId."
+        });
+        continue;
+      }
+
+      let existing =
+        productionUsers.find(
+          user =>
+            (user.email_addresses || [])
+              .some(
+                item =>
+                  String(
+                    item.email_address || ""
+                  )
+                  .trim()
+                  .toLowerCase() ===
+                    email
+              )
+        ) || null;
+
+      if (!existing) {
+        existing =
+          productionUsers.find(
+            user =>
+              String(
+                user.external_id || ""
+              ).trim() ===
+                externalId
+          ) || null;
+      }
+
+      if (existing) {
+
+        const patchBody = {
+          external_id:
+            externalId
+        };
+
+        if (
+          source.firstName
+        ) {
+          patchBody.first_name =
+            source.firstName;
+        }
+
+        if (
+          source.lastName
+        ) {
+          patchBody.last_name =
+            source.lastName;
+        }
+
+        const updateResponse =
+          await fetch(
+            "https://api.clerk.com/v1/users/" +
+            encodeURIComponent(
+              existing.id
+            ),
+            {
+              method:
+                "PATCH",
+              headers:
+                clerkHeaders,
+              body:
+                JSON.stringify(
+                  patchBody
+                )
+            }
+          );
+
+        if (!updateResponse.ok) {
+          let details =
+            "Unable to update existing Clerk user.";
+
+          try {
+            const errorData =
+              await updateResponse.json();
+
+            details =
+              errorData?.errors?.[0]?.long_message ||
+              errorData?.errors?.[0]?.message ||
+              details;
+          } catch {}
+
+          results.push({
+            email,
+            status:
+              "error",
+            error:
+              details
+          });
+
+          continue;
+        }
+
+        const updated =
+          await updateResponse.json();
+
+        results.push({
+          email,
+          status:
+            "updated",
+          clerkUserId:
+            updated.id,
+          externalId:
+            updated.external_id
+        });
+
+        continue;
+      }
+
+      const createBody = {
+        email_address: [
+          email
+        ],
+        external_id:
+          externalId,
+        skip_password_requirement:
+          true,
+        skip_legal_checks:
+          true
+      };
+
+      if (
+        source.firstName
+      ) {
+        createBody.first_name =
+          source.firstName;
+      }
+
+      if (
+        source.lastName
+      ) {
+        createBody.last_name =
+          source.lastName;
+      }
+
+      if (
+        source.createdAt
+      ) {
+        createBody.created_at =
+          source.createdAt;
+      }
+
+      const createResponse =
+        await fetch(
+          "https://api.clerk.com/v1/users",
+          {
+            method:
+              "POST",
+            headers:
+              clerkHeaders,
+            body:
+              JSON.stringify(
+                createBody
+              )
+          }
+        );
+
+      if (!createResponse.ok) {
+        let details =
+          "Unable to create Clerk user.";
+
+        try {
+          const errorData =
+            await createResponse.json();
+
+          details =
+            errorData?.errors?.[0]?.long_message ||
+            errorData?.errors?.[0]?.message ||
+            details;
+        } catch {}
+
+        results.push({
+          email,
+          status:
+            "error",
+          error:
+            details
+        });
+
+        continue;
+      }
+
+      const created =
+        await createResponse.json();
+
+      productionUsers.push(
+        created
+      );
+
+      results.push({
+        email,
+        status:
+          "created",
+        clerkUserId:
+          created.id,
+        externalId:
+          created.external_id
+      });
+    }
+
+    const failed =
+      results.filter(
+        item =>
+          item.status ===
+          "error"
+      );
+
+    return jsonResponse(
+      {
+        success:
+          failed.length === 0,
+        total:
+          results.length,
+        created:
+          results.filter(
+            item =>
+              item.status ===
+              "created"
+          ).length,
+        updated:
+          results.filter(
+            item =>
+              item.status ===
+              "updated"
+          ).length,
+        failed:
+          failed.length,
+        results
+      },
+      failed.length === 0
+        ? 200
+        : 207
+    );
+
+  } catch (error) {
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Clerk migration failed."
+      },
+      500
+    );
+  }
+}
 
 
 /*
