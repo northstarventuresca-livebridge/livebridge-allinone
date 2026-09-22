@@ -12645,6 +12645,169 @@ if (
     }
 
     const publicBase = "https://livebridge.ca";
+
+    /*
+    =======================================================
+    PRIVATE OFFER RESUME
+    If this offer already completed Stripe Checkout but the
+    LiveBridge account was not created, do NOT make the client
+    repeat checkout. Reuse the completed Stripe Session and
+    send them straight back into verified registration.
+    =======================================================
+    */
+    let completedOfferSession =
+      null;
+
+    let startingAfter =
+      "";
+
+    for (
+      let pageIndex = 0;
+      pageIndex < 5;
+      pageIndex += 1
+    ) {
+      const sessionList =
+        await stripeApiGet(
+          env,
+          "/v1/checkout/sessions" +
+          "?limit=100" +
+          "&status=complete" +
+          (
+            startingAfter
+              ? "&starting_after=" +
+                encodeURIComponent(
+                  startingAfter
+                )
+              : ""
+          )
+        );
+
+      const sessions =
+        Array.isArray(
+          sessionList?.data
+        )
+          ? sessionList.data
+          : [];
+
+      completedOfferSession =
+        sessions.find(
+          session =>
+            String(
+              session?.mode || ""
+            ) === "subscription" &&
+            String(
+              session?.metadata
+                ?.livebridge_offer_token ||
+              ""
+            ).trim() === token &&
+            normalizePlanCode(
+              session?.metadata
+                ?.livebridge_plan_code ||
+              ""
+            ) ===
+              normalizePlanCode(
+                row.plan_code
+              ) &&
+            (
+              String(
+                session?.payment_status ||
+                ""
+              ) === "paid" ||
+              String(
+                session?.payment_status ||
+                ""
+              ) ===
+                "no_payment_required"
+            )
+        ) ||
+        null;
+
+      if (completedOfferSession) {
+        break;
+      }
+
+      if (
+        !sessionList?.has_more ||
+        !sessions.length
+      ) {
+        break;
+      }
+
+      startingAfter =
+        String(
+          sessions[
+            sessions.length - 1
+          ]?.id ||
+          ""
+        );
+
+      if (!startingAfter) {
+        break;
+      }
+    }
+
+    if (completedOfferSession) {
+      const completedSessionId =
+        String(
+          completedOfferSession.id ||
+          ""
+        );
+
+      const lineItems =
+        await stripeApiGet(
+          env,
+          "/v1/checkout/sessions/" +
+          encodeURIComponent(
+            completedSessionId
+          ) +
+          "/line_items?limit=10"
+        );
+
+      const purchasedPriceIds =
+        (
+          lineItems?.data || []
+        )
+        .map(
+          item =>
+            String(
+              item?.price?.id || ""
+            )
+        )
+        .filter(Boolean);
+
+      if (
+        purchasedPriceIds.includes(
+          String(
+            row.stripe_price_id || ""
+          )
+        )
+      ) {
+        const resumeUrl =
+          publicBase +
+          "/signup/" +
+          "?checkout=success" +
+          "&session_id=" +
+          encodeURIComponent(
+            completedSessionId
+          ) +
+          "&plan=" +
+          encodeURIComponent(
+            String(
+              row.plan_code || ""
+            )
+          );
+
+        return jsonResponse({
+          success: true,
+          resumed: true,
+          checkoutUrl:
+            resumeUrl,
+          sessionId:
+            completedSessionId
+        });
+      }
+    }
+
     const successUrl =
       publicBase +
       "/signup/" +
