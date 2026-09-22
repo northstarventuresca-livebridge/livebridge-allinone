@@ -12746,6 +12746,410 @@ if (
 
 /*
 =======================================================
+ADMIN - RECOVER / CREATE ORGANIZATION
+For completed Stripe checkouts where Clerk authentication
+succeeded but the normal post-signup account sync did not.
+=======================================================
+*/
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/organization-recover"
+) {
+
+  try {
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    await ensureRoomAliasSchema(
+      env
+    );
+
+    await ensureStripeRegistrationTable(
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const clerkUserId =
+      String(
+        body.clerkUserId || ""
+      ).trim();
+
+    const organizationName =
+      String(
+        body.organizationName || ""
+      ).trim();
+
+    const accountHolder =
+      String(
+        body.accountHolder || ""
+      ).trim();
+
+    const email =
+      String(
+        body.email || ""
+      ).trim()
+      .toLowerCase();
+
+    const phone =
+      String(
+        body.phone || ""
+      ).trim();
+
+    const roomName =
+      normalizeRoom(
+        body.roomName
+      );
+
+    const checkoutSessionId =
+      String(
+        body.checkoutSessionId || ""
+      ).trim();
+
+    const requestedPlanCode =
+      normalizePlanCode(
+        body.planCode
+      );
+
+    if (
+      !clerkUserId.startsWith("user_") ||
+      !organizationName ||
+      !accountHolder ||
+      !email ||
+      !email.includes("@") ||
+      !roomName ||
+      !checkoutSessionId.startsWith("cs_") ||
+      !requestedPlanCode
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Clerk user ID, completed Checkout Session ID, organization, account holder, email, room and plan are required."
+        },
+        400
+      );
+    }
+
+    const roomError =
+      roomNameValidationError(
+        roomName
+      );
+
+    if (roomError) {
+      return jsonResponse(
+        {
+          success: false,
+          error: roomError
+        },
+        400
+      );
+    }
+
+    const checkout =
+      await verifyPaidCheckoutForAccountCreation(
+        env,
+        checkoutSessionId
+      );
+
+    if (
+      checkout.customerEmail &&
+      checkout.customerEmail.toLowerCase() !==
+        email
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "The account email must match the email used for Stripe checkout."
+        },
+        409
+      );
+    }
+
+    const existingOrganization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE clerk_user_id = ?
+           OR LOWER(COALESCE(account_email, '')) = ?
+        LIMIT 1
+      `)
+      .bind(
+        clerkUserId,
+        email
+      )
+      .first();
+
+    if (existingOrganization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That Clerk login or account email is already connected to a LiveBridge organization."
+        },
+        409
+      );
+    }
+
+    const existingRoom =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE UPPER(room_name) = ?
+           OR UPPER(COALESCE(room_alias, '')) = ?
+        LIMIT 1
+      `)
+      .bind(
+        roomName,
+        roomName
+      )
+      .first();
+
+    if (existingRoom) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That LiveBridge room name is already assigned."
+        },
+        409
+      );
+    }
+
+    const existingRegistration =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM stripe_registrations
+        WHERE checkout_session_id = ?
+           OR clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        checkout.sessionId,
+        clerkUserId
+      )
+      .first();
+
+    if (existingRegistration) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That Stripe checkout or Clerk login has already been registered."
+        },
+        409
+      );
+    }
+
+    const planRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM plans
+        WHERE LOWER(plan_code) = ?
+          AND active = 1
+        LIMIT 1
+      `)
+      .bind(
+        requestedPlanCode
+      )
+      .first();
+
+    if (!planRow) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "The selected LiveBridge plan was not found or is inactive."
+        },
+        404
+      );
+    }
+
+    const now =
+      Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO organizations (
+        clerk_user_id,
+        organization_name,
+        account_holder,
+        email,
+        account_email,
+        phone,
+        room_name,
+        terms_accepted_at,
+        privacy_accepted_at,
+        legal_version,
+        plan_code,
+        plan_name,
+        included_minutes,
+        used_minutes,
+        bonus_minutes,
+        viewer_limit,
+        viewer_override,
+        account_status,
+        billing_status,
+        admin_notes,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?,
+        ?, 0, 0,
+        ?, NULL,
+        'active',
+        'active',
+        ?,
+        ?, ?
+      )
+    `)
+    .bind(
+      clerkUserId,
+      organizationName,
+      accountHolder,
+      email,
+      email,
+      phone,
+      roomName,
+      now,
+      now,
+      "admin-recovery-2026-09-22",
+      String(planRow.plan_code || requestedPlanCode),
+      String(planRow.plan_name || requestedPlanCode),
+      Math.max(0, Number(planRow.included_minutes || 0)),
+      Math.max(1, Number(planRow.viewer_limit || 1)),
+      "Created by administrator from verified completed Stripe checkout.",
+      now,
+      now
+    )
+    .run();
+
+    const inserted =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        clerkUserId
+      )
+      .first();
+
+    try {
+
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO stripe_registrations (
+          checkout_session_id,
+          stripe_customer_id,
+          stripe_subscription_id,
+          clerk_user_id,
+          organization_id,
+          plan_code,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        checkout.sessionId,
+        checkout.customerId,
+        checkout.subscriptionId,
+        clerkUserId,
+        Number(inserted?.id || 0),
+        String(planRow.plan_code || requestedPlanCode),
+        now
+      )
+      .run();
+
+      if (checkout.offerToken) {
+        await claimOfferAfterAccountCreation(
+          env,
+          checkout.offerToken,
+          checkout.plan.planCode,
+          email
+        );
+      }
+
+    } catch (linkError) {
+
+      await env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM stripe_registrations
+        WHERE clerk_user_id = ?
+      `)
+      .bind(
+        clerkUserId
+      )
+      .run();
+
+      await env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organizations
+        WHERE clerk_user_id = ?
+      `)
+      .bind(
+        clerkUserId
+      )
+      .run();
+
+      throw linkError;
+    }
+
+    const saved =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        clerkUserId
+      )
+      .first();
+
+    return jsonResponse({
+      success: true,
+      account:
+        buildOrganizationAccount(
+          saved
+        )
+    });
+
+  } catch (error) {
+
+    const message =
+      String(
+        error?.message ||
+        error ||
+        "Unable to create the organization."
+      );
+
+    const conflict =
+      message.toLowerCase()
+        .includes("unique");
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          conflict
+            ? "That Clerk login, Stripe checkout, email or room is already registered."
+            : message
+      },
+      conflict ? 409 : 403
+    );
+  }
+}
+
+
+/*
+=======================================================
 ADMIN - LIST ALL ORGANIZATIONS
 =======================================================
 */
