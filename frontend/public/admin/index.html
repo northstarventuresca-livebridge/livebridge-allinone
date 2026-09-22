@@ -937,11 +937,21 @@ body{
               Organizations
             </div>
 
-            <input
-              id="clientSearch"
-              class="lb-search"
-              placeholder="Search clients..."
-            >
+            <div class="lb-org-header-actions">
+              <button
+                type="button"
+                id="openOrganizationRecovery"
+                class="lb-create-org-button"
+              >
+                + Create Organization
+              </button>
+
+              <input
+                id="clientSearch"
+                class="lb-search"
+                placeholder="Search clients..."
+              >
+            </div>
 
           </div>
 
@@ -9933,6 +9943,419 @@ Does NOT change admin data or Worker logic.
       },
       250
     );
+
+})();
+</script>
+
+
+<!-- LiveBridge administrator organization recovery -->
+<style>
+  .lb-org-header-actions{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .lb-create-org-button{
+    border:0;
+    border-radius:10px;
+    padding:11px 15px;
+    cursor:pointer;
+    background:linear-gradient(135deg,#2588ff,#6f43df);
+    color:#fff;
+    font-weight:900;
+  }
+  .lb-recovery-modal{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:99999;
+    background:rgba(3,12,24,.78);
+    padding:22px;
+    overflow:auto;
+  }
+  .lb-recovery-panel{
+    width:min(680px,100%);
+    margin:40px auto;
+    border:1px solid rgba(148,163,184,.2);
+    border-radius:18px;
+    background:#0d1b2a;
+    color:#fff;
+    box-shadow:0 30px 80px rgba(0,0,0,.45);
+    padding:24px;
+  }
+  .lb-recovery-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+    margin-top:18px;
+  }
+  .lb-recovery-field{
+    display:flex;
+    flex-direction:column;
+    gap:7px;
+  }
+  .lb-recovery-field.full{
+    grid-column:1 / -1;
+  }
+  .lb-recovery-field label{
+    color:#bfd0df;
+    font-size:12px;
+    font-weight:800;
+  }
+  .lb-recovery-field input,
+  .lb-recovery-field select{
+    width:100%;
+    box-sizing:border-box;
+    border:1px solid rgba(148,163,184,.28);
+    border-radius:10px;
+    background:#13283b;
+    color:#fff;
+    padding:12px;
+  }
+  .lb-recovery-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:20px;
+  }
+  .lb-recovery-actions button{
+    border:0;
+    border-radius:10px;
+    padding:11px 16px;
+    cursor:pointer;
+    font-weight:900;
+  }
+  #submitOrganizationRecovery{
+    background:#2588ff;
+    color:#fff;
+  }
+  #cancelOrganizationRecovery{
+    background:#27384a;
+    color:#fff;
+  }
+  #organizationRecoveryStatus{
+    min-height:20px;
+    margin-top:14px;
+    color:#ffd6d6;
+    font-size:13px;
+  }
+  @media(max-width:650px){
+    .lb-recovery-grid{
+      grid-template-columns:1fr;
+    }
+    .lb-recovery-field.full{
+      grid-column:auto;
+    }
+  }
+</style>
+
+<div id="organizationRecoveryModal" class="lb-recovery-modal" aria-hidden="true">
+  <div class="lb-recovery-panel" role="dialog" aria-modal="true" aria-labelledby="organizationRecoveryTitle">
+    <div class="lb-card-title" id="organizationRecoveryTitle">
+      Create Organization
+    </div>
+    <div class="lb-muted" style="margin-top:7px;">
+      Recover a customer whose Stripe Checkout and Clerk signup completed but whose LiveBridge organization was not created.
+    </div>
+
+    <div class="lb-recovery-grid">
+      <div class="lb-recovery-field full">
+        <label for="recoveryClerkUserId">Clerk User ID</label>
+        <input id="recoveryClerkUserId" placeholder="user_...">
+      </div>
+
+      <div class="lb-recovery-field full">
+        <label for="recoveryCheckoutSessionId">Stripe Checkout Session ID</label>
+        <input id="recoveryCheckoutSessionId" placeholder="cs_...">
+      </div>
+
+      <div class="lb-recovery-field">
+        <label for="recoveryOrganizationName">Organization</label>
+        <input id="recoveryOrganizationName">
+      </div>
+
+      <div class="lb-recovery-field">
+        <label for="recoveryAccountHolder">Account holder</label>
+        <input id="recoveryAccountHolder">
+      </div>
+
+      <div class="lb-recovery-field">
+        <label for="recoveryEmail">Email</label>
+        <input id="recoveryEmail" type="email">
+      </div>
+
+      <div class="lb-recovery-field">
+        <label for="recoveryPhone">Phone (optional)</label>
+        <input id="recoveryPhone">
+      </div>
+
+      <div class="lb-recovery-field">
+        <label for="recoveryRoomName">Room name</label>
+        <input id="recoveryRoomName">
+      </div>
+
+      <div class="lb-recovery-field">
+        <label for="recoveryPlanCode">LiveBridge plan</label>
+        <select id="recoveryPlanCode">
+          <option value="">Loading plans...</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="organizationRecoveryStatus"></div>
+
+    <div class="lb-recovery-actions">
+      <button type="button" id="cancelOrganizationRecovery">Cancel</button>
+      <button type="button" id="submitOrganizationRecovery">Create & Link</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  const modal =
+    document.getElementById(
+      "organizationRecoveryModal"
+    );
+
+  const openButton =
+    document.getElementById(
+      "openOrganizationRecovery"
+    );
+
+  const cancelButton =
+    document.getElementById(
+      "cancelOrganizationRecovery"
+    );
+
+  const submitButton =
+    document.getElementById(
+      "submitOrganizationRecovery"
+    );
+
+  const status =
+    document.getElementById(
+      "organizationRecoveryStatus"
+    );
+
+  const planSelect =
+    document.getElementById(
+      "recoveryPlanCode"
+    );
+
+  async function loadRecoveryPlans(){
+
+    planSelect.innerHTML =
+      '<option value="">Loading plans...</option>';
+
+    const response =
+      await adminFetch(
+        "/admin/plans"
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to load plans."
+      );
+    }
+
+    const plans =
+      (data.plans || [])
+        .filter(plan =>
+          plan.active !== false
+        );
+
+    planSelect.innerHTML = "";
+
+    plans.forEach(plan => {
+
+      const option =
+        document.createElement(
+          "option"
+        );
+
+      option.value =
+        plan.planCode;
+
+      option.textContent =
+        plan.planName +
+        " (" +
+        plan.planCode +
+        ")";
+
+      if(
+        String(plan.planCode)
+          .toLowerCase() ===
+        "pro"
+      ){
+        option.selected = true;
+      }
+
+      planSelect.appendChild(
+        option
+      );
+    });
+  }
+
+  openButton.addEventListener(
+    "click",
+    async function(){
+
+      status.textContent = "";
+
+      modal.style.display =
+        "block";
+
+      modal.setAttribute(
+        "aria-hidden",
+        "false"
+      );
+
+      try{
+        await loadRecoveryPlans();
+      }catch(error){
+        status.textContent =
+          error.message ||
+          "Unable to load plans.";
+      }
+    }
+  );
+
+  function closeModal(){
+
+    modal.style.display =
+      "none";
+
+    modal.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+  }
+
+  cancelButton.addEventListener(
+    "click",
+    closeModal
+  );
+
+  modal.addEventListener(
+    "click",
+    function(event){
+      if(event.target === modal){
+        closeModal();
+      }
+    }
+  );
+
+  submitButton.addEventListener(
+    "click",
+    async function(){
+
+      status.textContent = "";
+      submitButton.disabled = true;
+      submitButton.textContent =
+        "Creating...";
+
+      const payload = {
+        clerkUserId:
+          document.getElementById(
+            "recoveryClerkUserId"
+          ).value.trim(),
+
+        checkoutSessionId:
+          document.getElementById(
+            "recoveryCheckoutSessionId"
+          ).value.trim(),
+
+        organizationName:
+          document.getElementById(
+            "recoveryOrganizationName"
+          ).value.trim(),
+
+        accountHolder:
+          document.getElementById(
+            "recoveryAccountHolder"
+          ).value.trim(),
+
+        email:
+          document.getElementById(
+            "recoveryEmail"
+          ).value.trim(),
+
+        phone:
+          document.getElementById(
+            "recoveryPhone"
+          ).value.trim(),
+
+        roomName:
+          document.getElementById(
+            "recoveryRoomName"
+          ).value.trim(),
+
+        planCode:
+          planSelect.value
+      };
+
+      try{
+
+        const response =
+          await adminFetch(
+            "/admin/organization-recover",
+            {
+              method:"POST",
+              body:
+                JSON.stringify(
+                  payload
+                )
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if(
+          !response.ok ||
+          !data.success
+        ){
+          throw new Error(
+            data.error ||
+            "Unable to create the organization."
+          );
+        }
+
+        status.style.color =
+          "#8ff0c9";
+
+        status.textContent =
+          "Organization created and linked successfully.";
+
+        setTimeout(
+          () => window.location.reload(),
+          800
+        );
+
+      }catch(error){
+
+        status.style.color =
+          "#ffd6d6";
+
+        status.textContent =
+          error.message ||
+          "Unable to create the organization.";
+
+      }finally{
+
+        submitButton.disabled = false;
+        submitButton.textContent =
+          "Create & Link";
+      }
+    }
+  );
 
 })();
 </script>
