@@ -2389,6 +2389,7 @@ body{
   nav.className="lb-org-tabs";
   nav.innerHTML=[
     ["overview","Overview"],
+    ["activity","Account Activity"],
     ["stats","Stats & Analytics"],
     ["credits","Credits & Time"],
     ["features","Feature Access"],
@@ -2400,7 +2401,7 @@ body{
 
   const panels=document.createElement("div");
   panels.id="orgTabPanels";
-  panels.innerHTML=["overview","stats","credits","features","system"].map((name,index)=>
+  panels.innerHTML=["overview","activity","stats","credits","features","system"].map((name,index)=>
     '<section class="lb-org-tab-panel'+(index===0?' active':'')+'" data-org-panel="'+name+'"></section>'
   ).join("");
   nav.insertAdjacentElement("afterend",panels);
@@ -2419,6 +2420,13 @@ body{
   move(overviewProfile,"orgProfileFields");
   const overviewPlan=card("Plan & Account Status","overview");
   move(overviewPlan,"orgPlanField","orgStatusField");
+
+  const activity=card("Customer Sign-ins & Dashboard Sessions","activity");
+  activity.innerHTML += `
+    <div id="orgAccountActivity">
+      <div class="lb-empty">Open an organization to load account activity.</div>
+    </div>
+  `;
 
   const statsMarketing=card("Marketing Analytics","stats");
   move(statsMarketing,"orgMarketingAnalytics");
@@ -9947,6 +9955,192 @@ Does NOT change admin data or Worker logic.
 })();
 </script>
 
+
+<style>
+  .lb-account-activity-metrics{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:12px;
+    margin-bottom:18px;
+  }
+  .lb-account-activity-metric{
+    border:1px solid rgba(255,255,255,.09);
+    border-radius:13px;
+    background:#102337;
+    padding:15px;
+  }
+  .lb-account-activity-value{
+    color:white;
+    font-size:19px;
+    font-weight:900;
+    overflow-wrap:anywhere;
+  }
+  .lb-account-activity-label{
+    margin-top:5px;
+    color:#8ea3ba;
+    font-size:11px;
+    font-weight:800;
+  }
+  .lb-account-session-row{
+    display:grid;
+    grid-template-columns:1.5fr 1fr 1.5fr .7fr;
+    gap:12px;
+    align-items:center;
+    padding:12px 4px;
+    border-bottom:1px solid rgba(255,255,255,.07);
+    color:#d9e6f2;
+    font-size:12px;
+  }
+  .lb-account-session-row.head{
+    color:#7f98ae;
+    font-weight:900;
+    text-transform:uppercase;
+    font-size:10px;
+  }
+  .lb-account-session-live{
+    color:#64e6b5;
+    font-weight:900;
+  }
+  @media(max-width:760px){
+    .lb-account-activity-metrics{
+      grid-template-columns:1fr 1fr;
+    }
+    .lb-account-session-row{
+      grid-template-columns:1fr 1fr;
+    }
+    .lb-account-session-row.head{
+      display:none;
+    }
+  }
+</style>
+
+<script>
+(function addOrganizationAccountActivity(){
+
+  function formatActivityDate(value){
+    const timestamp = Number(value || 0);
+    return timestamp
+      ? new Date(timestamp).toLocaleString()
+      : "Never";
+  }
+
+  function formatActivityDuration(value){
+    const totalSeconds = Math.max(
+      0,
+      Math.round(Number(value || 0) / 1000)
+    );
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if(hours){
+      return hours + "h " + minutes + "m";
+    }
+
+    if(minutes){
+      return minutes + "m " + seconds + "s";
+    }
+
+    return seconds + "s";
+  }
+
+  function renderAccountActivity(activity){
+    const root = document.getElementById("orgAccountActivity");
+    if(!root) return;
+
+    const sessions = activity.sessions || [];
+
+    root.innerHTML = `
+      <div class="lb-account-activity-metrics">
+        <div class="lb-account-activity-metric">
+          <div class="lb-account-activity-value">${Number(activity.signInCount || 0)}</div>
+          <div class="lb-account-activity-label">Dashboard Sessions</div>
+        </div>
+        <div class="lb-account-activity-metric">
+          <div class="lb-account-activity-value">${formatActivityDate(activity.lastSignInAt)}</div>
+          <div class="lb-account-activity-label">Last Sign-in</div>
+        </div>
+        <div class="lb-account-activity-metric">
+          <div class="lb-account-activity-value">${formatActivityDate(activity.lastActiveAt)}</div>
+          <div class="lb-account-activity-label">Last Active</div>
+        </div>
+        <div class="lb-account-activity-metric">
+          <div class="lb-account-activity-value">${formatActivityDuration(activity.totalDashboardTimeMs)}</div>
+          <div class="lb-account-activity-label">Approx. Dashboard Time</div>
+        </div>
+      </div>
+
+      <div class="lb-muted" style="margin-bottom:12px;">
+        Active now: <strong style="color:#64e6b5;">${Number(activity.activeSessions || 0)}</strong> · Session time is estimated from one-minute dashboard activity checks.
+      </div>
+
+      <div class="lb-account-session-row head">
+        <div>Signed in</div>
+        <div>Duration</div>
+        <div>Last active</div>
+        <div>Status</div>
+      </div>
+
+      ${sessions.length
+        ? sessions.map(session => `
+          <div class="lb-account-session-row">
+            <div>${formatActivityDate(session.startedAt)}</div>
+            <div>${formatActivityDuration(session.durationMs)}</div>
+            <div>${formatActivityDate(session.lastSeenAt)}</div>
+            <div class="${session.active ? "lb-account-session-live" : ""}">
+              ${session.active ? "Active" : "Ended"}
+            </div>
+          </div>
+        `).join("")
+        : '<div class="lb-empty">No dashboard sessions have been recorded yet.</div>'}
+    `;
+  }
+
+  async function loadOrganizationAccountActivity(id){
+    const root = document.getElementById("orgAccountActivity");
+    if(root){
+      root.innerHTML = '<div class="lb-empty">Loading account activity...</div>';
+    }
+
+    try{
+      const response = await adminFetch(
+        "/admin/organization-activity?id=" +
+        encodeURIComponent(id)
+      );
+
+      const data = await response.json();
+
+      if(!response.ok || !data.success){
+        throw new Error(
+          data.error || "Unable to load account activity."
+        );
+      }
+
+      renderAccountActivity(data.activity || {});
+    }catch(error){
+      if(root){
+        root.innerHTML =
+          '<div class="lb-empty">' +
+          String(error.message || "Unable to load account activity.") +
+          '</div>';
+      }
+    }
+  }
+
+  const originalOpenOrganization =
+    window.openOrganization;
+
+  if(typeof originalOpenOrganization === "function"){
+    window.openOrganization = async function(id){
+      const result = await originalOpenOrganization.apply(this, arguments);
+      await loadOrganizationAccountActivity(id);
+      return result;
+    };
+  }
+
+})();
+</script>
 
 <!-- LiveBridge administrator organization recovery -->
 <style>

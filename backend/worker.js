@@ -19560,6 +19560,244 @@ if (
 }
 
 
+async function ensureAccountActivitySchema(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS account_dashboard_sessions (
+      session_id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      clerk_user_id TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      ended_at INTEGER,
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_account_dashboard_sessions_org_started
+    ON account_dashboard_sessions (organization_id, started_at DESC)
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_account_dashboard_sessions_last_seen
+    ON account_dashboard_sessions (last_seen_at DESC)
+  `).run();
+}
+
+
+function validAccountActivitySessionId(value) {
+  return /^[A-Za-z0-9_-]{16,128}$/.test(
+    String(value || "").trim()
+  );
+}
+
+
+if (
+  request.method === "POST" &&
+  (
+    url.pathname === "/account/activity/start" ||
+    url.pathname === "/account/activity/heartbeat" ||
+    url.pathname === "/account/activity/end"
+  )
+) {
+  try {
+    const auth = await verifyClerkRequest(request);
+    const body = await request.json();
+    const sessionId = String(body.sessionId || "").trim();
+
+    if (!validAccountActivitySessionId(sessionId)) {
+      return jsonResponse({
+        success: false,
+        error: "A valid dashboard session ID is required."
+      }, 400);
+    }
+
+    const organization = await env.TRANSLATIONS_DB.prepare(`
+      SELECT id
+      FROM organizations
+      WHERE clerk_user_id = ?
+      LIMIT 1
+    `).bind(auth.clerkUserId).first();
+
+    if (!organization) {
+      return jsonResponse({
+        success: false,
+        error: "LiveBridge account not found."
+      }, 404);
+    }
+
+    await ensureAccountActivitySchema(env);
+
+    const now = Date.now();
+
+    if (url.pathname === "/account/activity/start") {
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO account_dashboard_sessions (
+          session_id,
+          organization_id,
+          clerk_user_id,
+          started_at,
+          last_seen_at,
+          ended_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, NULL, ?)
+        ON CONFLICT(session_id) DO UPDATE SET
+          last_seen_at = excluded.last_seen_at,
+          ended_at = NULL
+        WHERE clerk_user_id = excluded.clerk_user_id
+          AND organization_id = excluded.organization_id
+      `).bind(
+        sessionId,
+        Number(organization.id),
+        auth.clerkUserId,
+        now,
+        now,
+        now
+      ).run();
+    } else if (url.pathname === "/account/activity/end") {
+      await env.TRANSLATIONS_DB.prepare(`
+        UPDATE account_dashboard_sessions
+        SET last_seen_at = ?, ended_at = ?
+        WHERE session_id = ?
+          AND organization_id = ?
+          AND clerk_user_id = ?
+      `).bind(
+        now,
+        now,
+        sessionId,
+        Number(organization.id),
+        auth.clerkUserId
+      ).run();
+    } else {
+      await env.TRANSLATIONS_DB.prepare(`
+        UPDATE account_dashboard_sessions
+        SET last_seen_at = ?, ended_at = NULL
+        WHERE session_id = ?
+          AND organization_id = ?
+          AND clerk_user_id = ?
+      `).bind(
+        now,
+        sessionId,
+        Number(organization.id),
+        auth.clerkUserId
+      ).run();
+    }
+
+    return jsonResponse({
+      success: true,
+      sessionId,
+      recordedAt: now
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to record account activity."
+    }, 403);
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/organization-activity"
+) {
+  try {
+    await verifyAdminRequest(request, env);
+    await ensureAccountActivitySchema(env);
+
+    const organizationId = Math.max(
+      0,
+      Number(url.searchParams.get("id") || 0)
+    );
+
+    if (!organizationId) {
+      return jsonResponse({
+        success: false,
+        error: "Organization ID is required."
+      }, 400);
+    }
+
+    const organization = await env.TRANSLATIONS_DB.prepare(`
+      SELECT id
+      FROM organizations
+      WHERE id = ?
+      LIMIT 1
+    `).bind(organizationId).first();
+
+    if (!organization) {
+      return jsonResponse({
+        success: false,
+        error: "Organization not found."
+      }, 404);
+    }
+
+    const now = Date.now();
+    const onlineCutoff = now - 120000;
+
+    const totals = await env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        COUNT(*) AS sign_in_count,
+        MAX(started_at) AS last_sign_in_at,
+        MAX(last_seen_at) AS last_active_at,
+        COALESCE(SUM(
+          MAX(0, COALESCE(ended_at, last_seen_at) - started_at)
+        ), 0) AS total_dashboard_time_ms,
+        COALESCE(SUM(
+          CASE
+            WHEN ended_at IS NULL AND last_seen_at >= ? THEN 1
+            ELSE 0
+          END
+        ), 0) AS active_sessions
+      FROM account_dashboard_sessions
+      WHERE organization_id = ?
+    `).bind(
+      onlineCutoff,
+      organizationId
+    ).first();
+
+    const recent = await env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        session_id,
+        started_at,
+        last_seen_at,
+        ended_at,
+        MAX(0, COALESCE(ended_at, last_seen_at) - started_at) AS duration_ms
+      FROM account_dashboard_sessions
+      WHERE organization_id = ?
+      ORDER BY started_at DESC
+      LIMIT 50
+    `).bind(organizationId).all();
+
+    return jsonResponse({
+      success: true,
+      activity: {
+        signInCount: Number(totals?.sign_in_count || 0),
+        lastSignInAt: Number(totals?.last_sign_in_at || 0),
+        lastActiveAt: Number(totals?.last_active_at || 0),
+        totalDashboardTimeMs: Number(totals?.total_dashboard_time_ms || 0),
+        activeSessions: Number(totals?.active_sessions || 0),
+        sessions: (recent.results || []).map(row => ({
+          sessionId: String(row.session_id || ""),
+          startedAt: Number(row.started_at || 0),
+          lastSeenAt: Number(row.last_seen_at || 0),
+          endedAt: Number(row.ended_at || 0),
+          durationMs: Number(row.duration_ms || 0),
+          active:
+            !Number(row.ended_at || 0) &&
+            Number(row.last_seen_at || 0) >= onlineCutoff
+        }))
+      }
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to load account activity."
+    }, 403);
+  }
+}
+
+
 if (
   request.method === "GET" &&
   url.pathname === "/account"
