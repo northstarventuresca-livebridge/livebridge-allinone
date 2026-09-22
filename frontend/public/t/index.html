@@ -4540,7 +4540,14 @@ resolve(email);
 
   let azureVoices = [];
   let azureVoicesLoaded = false;
-  let azureAudio = null;
+  /*
+    Reuse one playback element for the entire listener visit.
+    Mobile and in-app browsers often attach autoplay permission to the
+    individual media element. Creating a new element for every translated
+    sentence can therefore trigger the audio permission prompt repeatedly.
+  */
+  const azureAudio = new Audio();
+  azureAudio.preload = "auto";
   let listenerAudioUnlockOverlay = null;
   let listenerAudioUnlockCancel = null;
 
@@ -4894,16 +4901,12 @@ resolve(email);
       } catch (error) {}
     }
 
-    if (!azureAudio) {
-      return;
-    }
-
     try {
       azureAudio.pause();
+      azureAudio.onended = null;
+      azureAudio.onerror = null;
       azureAudio.src = "";
     } catch (error) {}
-
-    azureAudio = null;
   }
 
 
@@ -5315,13 +5318,24 @@ const cacheStatus =
       resolve => {
 
         const audio =
-          prepared.audio;
+          azureAudio;
 
         const objectUrl =
           prepared.objectUrl;
 
-        azureAudio =
-          audio;
+        try {
+          prepared.audio.pause();
+          prepared.audio.removeAttribute("src");
+          prepared.audio.load();
+        } catch (error) {}
+
+        audio.preload =
+          "auto";
+
+        audio.src =
+          objectUrl;
+
+        audio.load();
 
         let finished =
           false;
@@ -5351,14 +5365,6 @@ const cacheStatus =
                 objectUrl
               );
             } catch (error) {}
-
-            if (
-              azureAudio ===
-              audio
-            ) {
-              azureAudio =
-                null;
-            }
 
             resolve();
           };
@@ -5403,7 +5409,11 @@ const cacheStatus =
                     listenerAudioUnlockCancel =
                       finish;
 
-                    removeListenerAudioUnlockPrompt();
+                    if (
+                      listenerAudioUnlockOverlay
+                    ) {
+                      return;
+                    }
 
                     const overlay =
                       document.createElement(
@@ -5459,9 +5469,6 @@ const cacheStatus =
                         function () {
 
                           attemptPlayback();
-                        },
-                        {
-                          once:true
                         }
                       );
 
