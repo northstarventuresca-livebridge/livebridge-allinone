@@ -2442,6 +2442,15 @@ body{
       panels.querySelectorAll(".lb-org-tab-panel").forEach(x=>x.classList.remove("active"));
       button.classList.add("active");
       panel(button.dataset.orgTab)?.classList.add("active");
+
+      if(
+        typeof window.loadOrganizationTabData ===
+        "function"
+      ){
+        window.loadOrganizationTabData(
+          button.dataset.orgTab
+        );
+      }
     });
   });
 })();
@@ -2478,6 +2487,12 @@ let adminOrganizations = [];
 let selectedOrganization = null;
 let currentReturnMessages = [];
 let adminPlans = [];
+let organizationDetailLoadSerial = 0;
+let organizationLazyDataState = {
+  organizationId: 0,
+  billingLoaded: false,
+  statsLoaded: false
+};
 let selectedPlan = null;
 let lastCreatedOffer = null;
 
@@ -5083,7 +5098,392 @@ function renderAdminBillingHistory(billing){
 }
 
 
+async function loadAdminOrganizationBillingHistory(
+  organizationId,
+  loadSerial
+){
+
+  const history =
+    document.getElementById(
+      "adminBillingHistory"
+    );
+
+  if(history){
+    history.innerHTML =
+      '<div class="lb-muted">Loading payment history...</div>';
+  }
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/organization-billing-history?organizationId=" +
+        encodeURIComponent(
+          organizationId
+        )
+      );
+
+    const data =
+      await response.json();
+
+    if(
+      loadSerial !==
+        organizationDetailLoadSerial ||
+      Number(
+        selectedOrganization?.id ||
+        0
+      ) !==
+        Number(
+          organizationId
+        )
+    ){
+      return;
+    }
+
+    if(
+      !response.ok ||
+      !data.success
+    ){
+      throw new Error(
+        data.error ||
+        "Unable to load payment history."
+      );
+    }
+
+    renderAdminBillingHistory(
+      data.billingHistory ||
+      {}
+    );
+
+  }catch(error){
+
+    if(
+      loadSerial !==
+        organizationDetailLoadSerial ||
+      Number(
+        selectedOrganization?.id ||
+        0
+      ) !==
+        Number(
+          organizationId
+        )
+    ){
+      return;
+    }
+
+    console.error(
+      "Admin billing history load failed:",
+      error
+    );
+
+    if(history){
+      history.innerHTML =
+        '<div class="lb-muted">Payment history is temporarily unavailable.</div>';
+    }
+  }
+}
+
+
+async function loadAdminOrganizationMarketingAnalytics(
+  organizationId,
+  loadSerial
+){
+
+  const root =
+    document.getElementById(
+      "marketingCreditAnalytics"
+    );
+
+  if(root){
+    root.innerHTML =
+      '<div class="lb-muted">Loading marketing analytics...</div>';
+  }
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/organization-marketing-analytics?organizationId=" +
+        encodeURIComponent(
+          organizationId
+        )
+      );
+
+    const data =
+      await response.json();
+
+    if(
+      loadSerial !==
+        organizationDetailLoadSerial ||
+      Number(
+        selectedOrganization?.id ||
+        0
+      ) !==
+        Number(
+          organizationId
+        )
+    ){
+      return;
+    }
+
+    if(
+      !response.ok ||
+      !data.success
+    ){
+      throw new Error(
+        data.error ||
+        "Unable to load marketing analytics."
+      );
+    }
+
+    renderMarketingCreditAnalytics(
+      data.marketingAnalytics ||
+      {}
+    );
+
+  }catch(error){
+
+    if(
+      loadSerial !==
+        organizationDetailLoadSerial ||
+      Number(
+        selectedOrganization?.id ||
+        0
+      ) !==
+        Number(
+          organizationId
+        )
+    ){
+      return;
+    }
+
+    console.error(
+      "Admin marketing analytics load failed:",
+      error
+    );
+
+    if(root){
+      root.innerHTML =
+        '<div class="lb-muted">Marketing analytics are temporarily unavailable.</div>';
+    }
+  }
+}
+
+
+window.loadOrganizationTabData =
+  function(tabName){
+
+    if(!selectedOrganization){
+      return;
+    }
+
+    const organizationId =
+      Number(
+        selectedOrganization.id ||
+        0
+      );
+
+    if(!organizationId){
+      return;
+    }
+
+    const loadSerial =
+      organizationDetailLoadSerial;
+
+    if(
+      tabName ===
+        "credits" &&
+      !organizationLazyDataState
+        .billingLoaded
+    ){
+
+      organizationLazyDataState
+        .billingLoaded =
+        true;
+
+      loadAdminOrganizationBillingHistory(
+        organizationId,
+        loadSerial
+      );
+    }
+
+    if(
+      tabName ===
+        "stats" &&
+      !organizationLazyDataState
+        .statsLoaded
+    ){
+
+      organizationLazyDataState
+        .statsLoaded =
+        true;
+
+      loadAdminOrganizationMarketingAnalytics(
+        organizationId,
+        loadSerial
+      );
+
+      loadAdminBroadcastHistoryRange(
+        "recent"
+      );
+    }
+  };
+
+
 async function openOrganization(id){
+
+  const loadSerial =
+    ++organizationDetailLoadSerial;
+
+  const organizationId =
+    Number(id || 0);
+
+  selectedOrganization =
+    null;
+
+  organizationLazyDataState = {
+    organizationId,
+    billingLoaded: false,
+    statsLoaded: false
+  };
+
+  const cachedAccount =
+    adminOrganizations.find(
+      item =>
+        Number(
+          item.id ||
+          0
+        ) ===
+          organizationId
+    ) ||
+    null;
+
+  document.getElementById(
+    "detailOrganization"
+  ).textContent =
+    cachedAccount
+      ?.organizationName ||
+    "Loading organization...";
+
+  document.getElementById(
+    "detailRoom"
+  ).textContent =
+    cachedAccount
+      ?.roomName
+      ? "Room: " +
+        cachedAccount.roomName
+      : "";
+
+  document.getElementById(
+    "detailIncludedHours"
+  ).textContent =
+    cachedAccount
+      ? hoursFromMinutes(
+          cachedAccount
+            .includedMinutes
+        )
+      : "—";
+
+  document.getElementById(
+    "detailUsedHours"
+  ).textContent =
+    cachedAccount
+      ? hoursFromMinutes(
+          cachedAccount
+            .usedMinutes
+        )
+      : "—";
+
+  document.getElementById(
+    "detailRemainingHours"
+  ).textContent =
+    cachedAccount
+      ? hoursFromMinutes(
+          cachedAccount
+            .remainingMinutes
+        )
+      : "—";
+
+  document.getElementById(
+    "detailViewerLimit"
+  ).textContent =
+    cachedAccount
+      ?.effectiveViewerLimit ??
+    "—";
+
+  document.getElementById(
+    "adminBillingLifetime"
+  ).textContent =
+    "—";
+
+  document.getElementById(
+    "adminBillingSubscriptions"
+  ).textContent =
+    "—";
+
+  document.getElementById(
+    "adminBillingExtras"
+  ).textContent =
+    "—";
+
+  document.getElementById(
+    "adminBillingHistory"
+  ).innerHTML =
+    '<div class="lb-muted">Open Credits & Time to load payment history.</div>';
+
+  const marketingRoot =
+    document.getElementById(
+      "marketingCreditAnalytics"
+    );
+
+  if(marketingRoot){
+    marketingRoot.innerHTML =
+      '<div class="lb-muted">Open Stats & Analytics to load marketing analytics.</div>';
+  }
+
+  const initialHistoryStatus =
+    document.getElementById(
+      "historyRangeStatus"
+    );
+
+  if(initialHistoryStatus){
+    initialHistoryStatus.textContent =
+      "Open Stats & Analytics to load broadcasts.";
+  }
+
+  const historyBox =
+    document.getElementById(
+      "detailHistory"
+    );
+
+  if(historyBox){
+    historyBox.innerHTML =
+      '<div class="lb-empty">Broadcast history loads when Stats & Analytics is opened.</div>';
+  }
+
+  document
+    .querySelectorAll(
+      "#orgTabNav .lb-org-tab"
+    )
+    .forEach(button =>
+      button.classList.toggle(
+        "active",
+        button.dataset.orgTab ===
+          "overview"
+      )
+    );
+
+  document
+    .querySelectorAll(
+      "#orgTabPanels .lb-org-tab-panel"
+    )
+    .forEach(panel =>
+      panel.classList.toggle(
+        "active",
+        panel.dataset.orgPanel ===
+          "overview"
+      )
+    );
 
   document.getElementById(
     "clientListView"
@@ -5115,6 +5515,13 @@ async function openOrganization(id){
   const data =
     await response.json();
 
+  if(
+    loadSerial !==
+      organizationDetailLoadSerial
+  ){
+    return;
+  }
+
   if(!response.ok){
 
     alert(
@@ -5134,11 +5541,6 @@ async function openOrganization(id){
 
   const account =
     data.account;
-
-  renderAdminBillingHistory(
-    data.billingHistory
-  );
-
 
   document.getElementById(
     "detailOrganization"
@@ -5284,10 +5686,6 @@ async function openOrganization(id){
       )
     );
 
-  renderMarketingCreditAnalytics(
-    data.marketingAnalytics || {}
-  );
-
   document.getElementById(
     "editViewerLimit"
   ).value =
@@ -5384,34 +5782,15 @@ async function openOrganization(id){
       "none";
   }
 
-  const historyStatus =
+  const historyStatusAfterLoad =
     document.getElementById(
       "historyRangeStatus"
     );
 
-  if(historyStatus){
-    historyStatus.textContent =
-      "Latest 25 broadcasts · " +
-      Number(
-        data.broadcasts
-          ?.length ||
-        0
-      ) +
-      " broadcast" +
-      (
-        Number(
-          data.broadcasts
-            ?.length ||
-          0
-        ) === 1
-          ? ""
-          : "s"
-      );
+  if(historyStatusAfterLoad){
+    historyStatusAfterLoad.textContent =
+      "Open Stats & Analytics to load broadcasts.";
   }
-
-  renderDetailHistory(
-    data.broadcasts || []
-  );
 }
 
 
@@ -6111,6 +6490,15 @@ async function loadAdminBroadcastHistoryRange(
     return;
   }
 
+  const requestedOrganizationId =
+    Number(
+      selectedOrganization.id ||
+      0
+    );
+
+  const requestedLoadSerial =
+    organizationDetailLoadSerial;
+
   const status =
     document.getElementById(
       "historyRangeStatus"
@@ -6129,7 +6517,7 @@ async function loadAdminBroadcastHistoryRange(
     params.set(
       "organizationId",
       String(
-        selectedOrganization.id
+        requestedOrganizationId
       )
     );
 
@@ -6243,6 +6631,18 @@ async function loadAdminBroadcastHistoryRange(
 
     const data =
       await response.json();
+
+    if(
+      requestedLoadSerial !==
+        organizationDetailLoadSerial ||
+      Number(
+        selectedOrganization?.id ||
+        0
+      ) !==
+        requestedOrganizationId
+    ){
+      return;
+    }
 
     if(
       !response.ok ||

@@ -12922,26 +12922,8 @@ if (
 
   try {
 
-    await ensureBroadcastSafetySchema(
-      env
-    );
-
-    await ensureLiveNotesSchema(
-      env
-    );
-
-    await ensureApiCostSchema(
-      env
-    );
-
-    await ensureRoomAliasSchema(
-      env
-    );
-
-    await ensureAdminOrganizationOrderSchema(
-      env
-    );
-
+    // Production schema is already provisioned. Avoid migration-style
+    // CREATE/ALTER checks on every admin list read.
     await verifyAdminRequest(
       request,
       env
@@ -14620,6 +14602,8 @@ if (
 /*
 =======================================================
 ADMIN - GET ONE ORGANIZATION
+Fast core data only. Stripe billing, marketing analytics
+and broadcast history load separately in the admin UI.
 =======================================================
 */
 
@@ -14629,22 +14613,6 @@ if (
 ) {
 
   try {
-
-    await ensureBroadcastSafetySchema(
-      env
-    );
-
-    await ensureLiveNotesSchema(
-      env
-    );
-
-    await ensureReturnVisitorSchema(
-      env
-    );
-
-    await ensureRoomAliasSchema(
-      env
-    );
 
     await verifyAdminRequest(
       request,
@@ -14656,7 +14624,12 @@ if (
         url.searchParams.get("id")
       );
 
-    if (!organizationId) {
+    if (
+      !Number.isInteger(
+        organizationId
+      ) ||
+      organizationId <= 0
+    ) {
 
       return jsonResponse(
         {
@@ -14667,7 +14640,6 @@ if (
         400
       );
     }
-
 
     const row =
       await env.TRANSLATIONS_DB.prepare(`
@@ -14681,7 +14653,6 @@ if (
       )
       .first();
 
-
     if (!row) {
 
       return jsonResponse(
@@ -14694,476 +14665,62 @@ if (
       );
     }
 
-
-    /*
-    =======================================================
-    ADMIN ORGANIZATION PERFORMANCE
-    Start independent work together, then build the recent
-    broadcast summaries with 2 aggregate listener queries
-    instead of 2-3 queries for every broadcast.
-    =======================================================
-    */
-    const historyPromise =
-      env.TRANSLATIONS_DB.prepare(`
-        SELECT
-          id,
-          room,
-          started_at,
-          ended_at,
-          peak_listeners,
-          heartbeat_requests,
-          status_polls,
-          analytics_requests,
-          audio_chunks,
-          source_final_requests,
-          listener_heartbeats,
-          tts_requests,
-          auto_end_reason
-        FROM broadcast_sessions
-        WHERE room = ?
-        ORDER BY started_at DESC
-        LIMIT 25
-      `)
-      .bind(
-        row.room_name
-      )
-      .all();
-
-    const returnMessagesPromise =
-      env.TRANSLATIONS_DB.prepare(`
-        SELECT
-          visit_number,
-          message
-        FROM organization_return_messages
-        WHERE organization_id = ?
-        ORDER BY visit_number ASC
-      `)
-      .bind(
-        organizationId
-      )
-      .all();
-
-    const visitorStatsPromise =
-      env.TRANSLATIONS_DB.prepare(`
-        SELECT
-          COUNT(*) AS unique_visitors,
-          COALESCE(
-            SUM(
-              CASE
-                WHEN visit_days > 1 THEN 1
-                ELSE 0
-              END
-            ),
-            0
-          ) AS returning_visitors,
-          COALESCE(
-            SUM(visit_days),
-            0
-          ) AS total_visit_days
-        FROM organization_visitors
-        WHERE organization_id = ?
-      `)
-      .bind(
-        organizationId
-      )
-      .first();
-
-    const marketingCreditsPromise =
-      marketingCreditBalance(
-        env,
-        organizationId
-      );
-
-    const billingHistoryPromise =
-      loadOrganizationBillingHistory(
-        env,
-        organizationId
-      );
-
-    const marketingAnalyticsPromise =
-      buildMarketingAdminAnalytics(
-        env,
-        organizationId
-      );
-
-    const historyResult =
-      await historyPromise;
-
-    const historyRows =
-      historyResult.results ||
-      [];
-
-    const broadcastIds =
-      historyRows
-        .map(item =>
-          Number(
-            item.id ||
-            0
-          )
-        )
-        .filter(Boolean);
-
-    let listenerTotalsPromise =
-      Promise.resolve({
-        results: []
-      });
-
-    let languageTotalsPromise =
-      Promise.resolve({
-        results: []
-      });
-
-    if (broadcastIds.length) {
-
-      const placeholders =
-        broadcastIds
-          .map(() => "?")
-          .join(",");
-
-      const now =
-        Date.now();
-
-      listenerTotalsPromise =
-        env.TRANSLATIONS_DB.prepare(`
-          SELECT
-            ls.broadcast_id,
-            COUNT(*) AS total_listeners,
-            COALESCE(
-              SUM(
-                MAX(
-                  0,
-                  COALESCE(
-                    ls.ended_at,
-                    ls.last_seen,
-                    bs.ended_at,
-                    ?
-                  ) -
-                  ls.joined_at
-                )
-              ),
-              0
-            ) AS total_listening_ms,
-            COALESCE(
-              AVG(
-                MAX(
-                  0,
-                  COALESCE(
-                    ls.ended_at,
-                    ls.last_seen,
-                    bs.ended_at,
-                    ?
-                  ) -
-                  ls.joined_at
-                )
-              ),
-              0
-            ) AS average_listening_ms
-          FROM listener_sessions ls
-          JOIN broadcast_sessions bs
-            ON bs.id = ls.broadcast_id
-          WHERE ls.broadcast_id IN (${placeholders})
-          GROUP BY ls.broadcast_id
-        `)
-        .bind(
-          now,
-          now,
-          ...broadcastIds
-        )
-        .all();
-
-      languageTotalsPromise =
-        env.TRANSLATIONS_DB.prepare(`
-          SELECT
-            ls.broadcast_id,
-            ls.language,
-            COUNT(*) AS listeners,
-            COALESCE(
-              SUM(
-                MAX(
-                  0,
-                  COALESCE(
-                    ls.ended_at,
-                    ls.last_seen,
-                    bs.ended_at,
-                    ?
-                  ) -
-                  ls.joined_at
-                )
-              ),
-              0
-            ) AS total_listening_ms,
-            COALESCE(
-              AVG(
-                MAX(
-                  0,
-                  COALESCE(
-                    ls.ended_at,
-                    ls.last_seen,
-                    bs.ended_at,
-                    ?
-                  ) -
-                  ls.joined_at
-                )
-              ),
-              0
-            ) AS average_listening_ms
-          FROM listener_sessions ls
-          JOIN broadcast_sessions bs
-            ON bs.id = ls.broadcast_id
-          WHERE ls.broadcast_id IN (${placeholders})
-          GROUP BY
-            ls.broadcast_id,
-            ls.language
-          ORDER BY
-            ls.broadcast_id ASC,
-            listeners DESC,
-            ls.language ASC
-        `)
-        .bind(
-          now,
-          now,
-          ...broadcastIds
-        )
-        .all();
-    }
-
     const [
+      marketingCreditRow,
       returnMessagesResult,
-      visitorStatsRow,
-      marketingCredits,
-      billingHistory,
-      marketingAnalytics,
-      listenerTotalsResult,
-      languageTotalsResult
+      visitorStatsRow
     ] =
       await Promise.all([
-        returnMessagesPromise,
-        visitorStatsPromise,
-        marketingCreditsPromise,
-        billingHistoryPromise,
-        marketingAnalyticsPromise,
-        listenerTotalsPromise,
-        languageTotalsPromise
+
+        env.TRANSLATIONS_DB.prepare(`
+          SELECT balance
+          FROM marketing_credit_accounts
+          WHERE organization_id = ?
+          LIMIT 1
+        `)
+        .bind(
+          organizationId
+        )
+        .first(),
+
+        env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            visit_number,
+            message
+          FROM organization_return_messages
+          WHERE organization_id = ?
+          ORDER BY visit_number ASC
+        `)
+        .bind(
+          organizationId
+        )
+        .all(),
+
+        env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            COUNT(*) AS unique_visitors,
+            COALESCE(
+              SUM(
+                CASE
+                  WHEN visit_days > 1
+                  THEN 1
+                  ELSE 0
+                END
+              ),
+              0
+            ) AS returning_visitors,
+            COALESCE(
+              SUM(visit_days),
+              0
+            ) AS total_visit_days
+          FROM organization_visitors
+          WHERE organization_id = ?
+        `)
+        .bind(
+          organizationId
+        )
+        .first()
       ]);
-
-    const listenerTotalsByBroadcast =
-      new Map(
-        (
-          listenerTotalsResult.results ||
-          []
-        ).map(item => [
-          Number(
-            item.broadcast_id ||
-            0
-          ),
-          item
-        ])
-      );
-
-    const languagesByBroadcast =
-      new Map();
-
-    for (
-      const item of
-      languageTotalsResult.results ||
-      []
-    ) {
-
-      const broadcastId =
-        Number(
-          item.broadcast_id ||
-          0
-        );
-
-      if (
-        !languagesByBroadcast.has(
-          broadcastId
-        )
-      ) {
-        languagesByBroadcast.set(
-          broadcastId,
-          []
-        );
-      }
-
-      languagesByBroadcast
-        .get(
-          broadcastId
-        )
-        .push({
-          language:
-            item.language,
-          listeners:
-            Number(
-              item.listeners ||
-              0
-            ),
-          totalListeningMs:
-            Number(
-              item.total_listening_ms ||
-              0
-            ),
-          averageListeningMs:
-            Math.round(
-              Number(
-                item.average_listening_ms ||
-                0
-              )
-            )
-        });
-    }
-
-    const now =
-      Date.now();
-
-    const broadcasts =
-      historyRows.map(
-        broadcast => {
-
-          const broadcastId =
-            Number(
-              broadcast.id ||
-              0
-            );
-
-          const effectiveEnd =
-            Number(
-              broadcast.ended_at ||
-              now
-            );
-
-          const totals =
-            listenerTotalsByBroadcast.get(
-              broadcastId
-            ) ||
-            {};
-
-          return {
-            success: true,
-            broadcastId,
-            room:
-              broadcast.room,
-            startedAt:
-              Number(
-                broadcast.started_at
-              ),
-            endedAt:
-              broadcast.ended_at
-                ? Number(
-                    broadcast.ended_at
-                  )
-                : null,
-            durationMs:
-              Math.max(
-                0,
-                effectiveEnd -
-                Number(
-                  broadcast.started_at
-                )
-              ),
-            totalListeners:
-              Number(
-                totals.total_listeners ||
-                0
-              ),
-            peakListeners:
-              Number(
-                broadcast.peak_listeners ||
-                0
-              ),
-            totalListeningMs:
-              Number(
-                totals.total_listening_ms ||
-                0
-              ),
-            averageListeningMs:
-              Math.round(
-                Number(
-                  totals.average_listening_ms ||
-                  0
-                )
-              ),
-
-            requestMetrics: {
-              heartbeatRequests:
-                Number(
-                  broadcast.heartbeat_requests ||
-                  0
-                ),
-              statusPolls:
-                Number(
-                  broadcast.status_polls ||
-                  0
-                ),
-              analyticsRequests:
-                Number(
-                  broadcast.analytics_requests ||
-                  0
-                ),
-              audioChunks:
-                Number(
-                  broadcast.audio_chunks ||
-                  0
-                ),
-              sourceFinalRequests:
-                Number(
-                  broadcast.source_final_requests ||
-                  0
-                ),
-              listenerHeartbeats:
-                Number(
-                  broadcast.listener_heartbeats ||
-                  0
-                ),
-              ttsRequests:
-                Number(
-                  broadcast.tts_requests ||
-                  0
-                ),
-              totalWorkerRequests:
-                Number(
-                  broadcast.heartbeat_requests ||
-                  0
-                ) +
-                Number(
-                  broadcast.status_polls ||
-                  0
-                ) +
-                Number(
-                  broadcast.analytics_requests ||
-                  0
-                ) +
-                Number(
-                  broadcast.audio_chunks ||
-                  0
-                ) +
-                Number(
-                  broadcast.source_final_requests ||
-                  0
-                ) +
-                Number(
-                  broadcast.listener_heartbeats ||
-                  0
-                ) +
-                Number(
-                  broadcast.tts_requests ||
-                  0
-                )
-            },
-
-            autoEndReason:
-              broadcast.auto_end_reason ||
-              "",
-
-            languages:
-              languagesByBroadcast.get(
-                broadcastId
-              ) ||
-              []
-          };
-        }
-      );
-
 
     return jsonResponse({
 
@@ -15173,51 +14730,271 @@ if (
         ...buildOrganizationAccount(
           row
         ),
-        marketingCredits
+        marketingCredits:
+          Math.max(
+            0,
+            Number(
+              marketingCreditRow
+                ?.balance ||
+              0
+            )
+          )
       },
 
-      billingHistory,
-
-      marketingAnalytics,
-
-      broadcasts,
-
       returnMessages:
-        (returnMessagesResult.results || [])
-          .map(item => ({
-            visitNumber:
-              Number(item.visit_number || 0),
-            message:
-              String(item.message || "")
-          })),
+        (
+          returnMessagesResult
+            .results ||
+          []
+        )
+        .map(item => ({
+          visitNumber:
+            Number(
+              item.visit_number ||
+              0
+            ),
+          message:
+            String(
+              item.message ||
+              ""
+            )
+        })),
 
       visitorStats: {
         uniqueVisitors:
           Number(
-            visitorStatsRow?.unique_visitors ||
+            visitorStatsRow
+              ?.unique_visitors ||
             0
           ),
         returningVisitors:
           Number(
-            visitorStatsRow?.returning_visitors ||
+            visitorStatsRow
+              ?.returning_visitors ||
             0
           ),
         totalVisitDays:
           Number(
-            visitorStatsRow?.total_visit_days ||
+            visitorStatsRow
+              ?.total_visit_days ||
             0
           )
       }
-    });;
+    });
 
   } catch (error) {
+
+    console.error(
+      "Admin organization core load failed:",
+      error
+    );
 
     return jsonResponse(
       {
         success: false,
         error:
           error.message ||
-          "Admin access denied."
+          "Unable to load organization."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
+ADMIN - ORGANIZATION BILLING HISTORY
+Loaded separately so Stripe never blocks opening a client.
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname ===
+    "/admin/organization-billing-history"
+) {
+
+  try {
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const organizationId =
+      Number(
+        url.searchParams.get(
+          "organizationId"
+        ) ||
+        0
+      );
+
+    if (
+      !Number.isInteger(
+        organizationId
+      ) ||
+      organizationId <= 0
+    ) {
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID is required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        organizationId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    const billingHistory =
+      await loadOrganizationBillingHistory(
+        env,
+        organizationId
+      );
+
+    return jsonResponse({
+      success: true,
+      organizationId,
+      billingHistory
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin organization billing history failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load billing history."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
+ADMIN - ORGANIZATION MARKETING ANALYTICS
+Loaded separately so analytics never block core profile.
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname ===
+    "/admin/organization-marketing-analytics"
+) {
+
+  try {
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const organizationId =
+      Number(
+        url.searchParams.get(
+          "organizationId"
+        ) ||
+        0
+      );
+
+    if (
+      !Number.isInteger(
+        organizationId
+      ) ||
+      organizationId <= 0
+    ) {
+
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID is required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        organizationId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    const marketingAnalytics =
+      await buildMarketingAdminAnalytics(
+        env,
+        organizationId
+      );
+
+    return jsonResponse({
+      success: true,
+      organizationId,
+      marketingAnalytics
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Admin organization marketing analytics failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load marketing analytics."
       },
       403
     );
