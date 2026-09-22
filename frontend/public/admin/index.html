@@ -8579,7 +8579,43 @@ Keeps the existing admin Embed unchanged.
 
         ensureSpeechCard();
 
-        await loadSpeechRate(id);
+        currentAdminOrganizationId =
+          Number(id || 0);
+
+        if(
+          selectedOrganization &&
+          Number(
+            selectedOrganization.id ||
+            0
+          ) ===
+            currentAdminOrganizationId
+        ){
+
+          currentAdminSpeechRate =
+            clampRate(
+              selectedOrganization
+                .speechRate ??
+              1.15
+            );
+
+          updateSpeechDisplay();
+
+          const status =
+            document.getElementById(
+              "lbAdminSpeechStatus"
+            );
+
+          if(status){
+            status.textContent =
+              "Current organization speed: " +
+              currentAdminSpeechRate.toFixed(2) +
+              "×.";
+          }
+
+        }else{
+
+          await loadSpeechRate(id);
+        }
 
         return result;
       };

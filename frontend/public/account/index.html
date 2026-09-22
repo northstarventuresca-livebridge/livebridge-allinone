@@ -4707,17 +4707,25 @@ async function downloadBroadcastTranscript(
 
 async function getLiveBridgeSessionToken(){
 
+  const clerk =
+    window.Clerk ||
+    null;
+
+  if(!clerk){
+    return null;
+  }
+
   const currentUserId =
-    Clerk.user?.id ||
+    clerk.user?.id ||
     "";
 
   const sessions =
-    Clerk.client?.sessions ||
-    Clerk.client?.signedInSessions ||
+    clerk.client?.sessions ||
+    clerk.client?.signedInSessions ||
     [];
 
   let session =
-    Clerk.session ||
+    clerk.session ||
     null;
 
   if(
@@ -8491,7 +8499,7 @@ window.addEventListener(
 
         setTimeout(
           loadRate,
-          750
+          250
         );
 
         return;
