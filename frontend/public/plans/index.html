@@ -445,6 +445,19 @@ tbody tr:last-child td{border-bottom:0}
       if(!r.ok || !data.success || !data.checkoutUrl){
         throw new Error(data.error || "Unable to start checkout.");
       }
+
+      try{
+        localStorage.setItem(
+          "livebridge_checkout_recovery_v1",
+          JSON.stringify({
+            sessionId:String(data.sessionId||""),
+            planCode:String(planCode||""),
+            offerUrl:"",
+            createdAt:Date.now()
+          })
+        );
+      }catch(_e){}
+
       window.location.href = data.checkoutUrl;
     }catch(e){
       alert(e.message || "Unable to start checkout.");

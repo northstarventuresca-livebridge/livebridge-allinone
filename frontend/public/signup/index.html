@@ -1046,6 +1046,12 @@
   const LB_CHECKOUT_VERIFY_PATH =
     "/stripe/verify-checkout-session";
 
+  const LB_CHECKOUT_RECOVERY_KEY =
+    "livebridge_checkout_recovery_v1";
+
+  const LB_CHECKOUT_RECOVERY_MAX_AGE =
+    24 * 60 * 60 * 1000;
+
   let lbVerifiedCheckout =
     null;
 
@@ -1277,19 +1283,111 @@
         window.location.search
       );
 
-    const sessionId =
+    let sessionId =
       String(
         params.get(
           "session_id"
         ) || ""
       ).trim();
 
-    const checkoutState =
+    let checkoutState =
       String(
         params.get(
           "checkout"
         ) || ""
       ).trim();
+
+    let checkoutRecovery = null;
+
+    try {
+      const rawRecovery =
+        localStorage.getItem(
+          LB_CHECKOUT_RECOVERY_KEY
+        );
+
+      if (rawRecovery) {
+        const parsedRecovery =
+          JSON.parse(rawRecovery);
+
+        const recoveryAge =
+          Date.now() -
+          Number(
+            parsedRecovery?.createdAt || 0
+          );
+
+        if (
+          recoveryAge >= 0 &&
+          recoveryAge <=
+            LB_CHECKOUT_RECOVERY_MAX_AGE
+        ) {
+          checkoutRecovery =
+            parsedRecovery;
+        } else {
+          localStorage.removeItem(
+            LB_CHECKOUT_RECOVERY_KEY
+          );
+        }
+      }
+    } catch (_error) {
+      checkoutRecovery = null;
+    }
+
+    // If the browser lost Stripe's return query, restore the exact Session
+    // LiveBridge created immediately before the customer left for Stripe.
+    if (
+      (
+        checkoutState !== "success" ||
+        !sessionId ||
+        !sessionId.startsWith("cs_")
+      ) &&
+      String(
+        checkoutRecovery?.sessionId || ""
+      ).startsWith("cs_")
+    ) {
+      sessionId =
+        String(
+          checkoutRecovery.sessionId
+        );
+
+      checkoutState =
+        "success";
+
+      const recoveredParams =
+        new URLSearchParams(
+          window.location.search
+        );
+
+      recoveredParams.set(
+        "checkout",
+        "success"
+      );
+
+      recoveredParams.set(
+        "session_id",
+        sessionId
+      );
+
+      if (
+        !recoveredParams.get("plan") &&
+        checkoutRecovery?.planCode
+      ) {
+        recoveredParams.set(
+          "plan",
+          String(
+            checkoutRecovery.planCode
+          )
+        );
+      }
+
+      window.history.replaceState(
+        {},
+        "",
+        window.location.pathname +
+          "?" +
+          recoveredParams.toString() +
+          window.location.hash
+      );
+    }
 
     if (
       checkoutState !==
@@ -1316,20 +1414,77 @@
         );
 
       gateCopy.textContent =
-        "LiveBridge registration opens only after a completed plan checkout.";
+        "Reconnecting you to your LiveBridge registration...";
 
-      gateError.textContent =
-        "No verified Stripe checkout was found for this registration link.";
-
-      gateError.classList.add(
+      gateError.textContent = "";
+      gateError.classList.remove(
         "show"
       );
-
       gateLink.style.display =
-        "inline-flex";
+        "none";
+
+      const recoveryOfferUrl =
+        String(
+          checkoutRecovery?.offerUrl || ""
+        );
+
+      let recoveryDestination =
+        "/#pricing";
+
+      try {
+        if (recoveryOfferUrl) {
+          const offerUrl =
+            new URL(
+              recoveryOfferUrl,
+              window.location.origin
+            );
+
+          if (
+            offerUrl.origin ===
+              window.location.origin &&
+            offerUrl.pathname.startsWith(
+              "/offer/"
+            )
+          ) {
+            recoveryDestination =
+              offerUrl.href;
+          }
+        }
+      } catch (_error) {}
+
+      window.location.replace(
+        recoveryDestination
+      );
 
       return false;
     }
+
+    // Also preserve a valid Stripe return. This protects the registration
+    // flow from later auth-related reloads while the account is being created.
+    try {
+      localStorage.setItem(
+        LB_CHECKOUT_RECOVERY_KEY,
+        JSON.stringify({
+          sessionId,
+          planCode:
+            String(
+              params.get("plan") ||
+              checkoutRecovery?.planCode ||
+              ""
+            ),
+          offerUrl:
+            String(
+              checkoutRecovery?.offerUrl ||
+              ""
+            ),
+          createdAt:
+            Number(
+              checkoutRecovery?.createdAt ||
+              Date.now()
+            )
+        })
+      );
+    } catch (_error) {}
 
     const verifying =
       document.getElementById(
@@ -1410,14 +1565,8 @@
         error
       );
 
-      errorBox.textContent =
-        "We could not verify this Stripe payment. " +
-        (
-          error.message ||
-          "Please return to LiveBridge pricing and try again."
-        );
-
-      errorBox.classList.add(
+      errorBox.textContent = "";
+      errorBox.classList.remove(
         "show"
       );
 
@@ -1437,18 +1586,52 @@
         );
 
       gateCopy.textContent =
-        "Your registration could not be opened because the Stripe checkout could not be verified.";
-
-      gateError.textContent =
-        error.message ||
-        "Please return to plans and complete checkout again.";
-
-      gateError.classList.add(
+        "Reconnecting you to your LiveBridge registration...";
+      gateError.textContent = "";
+      gateError.classList.remove(
         "show"
       );
-
       gateLink.style.display =
-        "inline-flex";
+        "none";
+
+      const recoveryOfferUrl =
+        String(
+          checkoutRecovery?.offerUrl || ""
+        );
+
+      try {
+        localStorage.removeItem(
+          LB_CHECKOUT_RECOVERY_KEY
+        );
+      } catch (_error) {}
+
+      let recoveryDestination =
+        "/#pricing";
+
+      try {
+        if (recoveryOfferUrl) {
+          const offerUrl =
+            new URL(
+              recoveryOfferUrl,
+              window.location.origin
+            );
+
+          if (
+            offerUrl.origin ===
+              window.location.origin &&
+            offerUrl.pathname.startsWith(
+              "/offer/"
+            )
+          ) {
+            recoveryDestination =
+              offerUrl.href;
+          }
+        }
+      } catch (_error) {}
+
+      window.location.replace(
+        recoveryDestination
+      );
 
       return false;
 
@@ -2352,6 +2535,10 @@
         LB_PENDING_KEY
       );
 
+      localStorage.removeItem(
+        LB_CHECKOUT_RECOVERY_KEY
+      );
+
 
       const currentUserId =
         Clerk.user?.id || "";
@@ -3021,6 +3208,10 @@ Purpose:
 
         localStorage.removeItem(
           LB_PENDING_KEY
+        );
+
+        localStorage.removeItem(
+          LB_CHECKOUT_RECOVERY_KEY
         );
 
 

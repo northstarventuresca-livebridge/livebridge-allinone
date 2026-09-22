@@ -1864,6 +1864,18 @@ body{margin:0;background:#07111f;color:#fff;font-family:Arial,Helvetica,sans-ser
         );
       }
 
+      try{
+        localStorage.setItem(
+          "livebridge_checkout_recovery_v1",
+          JSON.stringify({
+            sessionId:String(data.sessionId||""),
+            planCode:String(planCode||""),
+            offerUrl:"",
+            createdAt:Date.now()
+          })
+        );
+      }catch(_e){}
+
       window.location.href =
         data.checkoutUrl;
 

@@ -239,6 +239,21 @@ async function claimOffer(){
     });
     const d=await r.json();
     if(!r.ok||!d.checkoutUrl)throw new Error(d.error||"Unable to open checkout.");
+
+    // Preserve this exact Checkout Session before leaving LiveBridge so
+    // /signup can recover if a mobile browser reloads or strips the return query.
+    try{
+      localStorage.setItem(
+        "livebridge_checkout_recovery_v1",
+        JSON.stringify({
+          sessionId:String(d.sessionId||""),
+          planCode:String(currentOffer?.plan?.planCode||""),
+          offerUrl:location.href,
+          createdAt:Date.now()
+        })
+      );
+    }catch(_e){}
+
     location.href=d.checkoutUrl;
   }catch(e){
     box.innerHTML=`<div class="error">${esc(e.message||"Unable to open checkout.")}</div>`;
