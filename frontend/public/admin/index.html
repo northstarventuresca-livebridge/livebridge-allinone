@@ -7599,11 +7599,11 @@ window.addEventListener(
 
       await verifyAdmin();
 
-      await loadOrganizations();
 
-      await loadPlans();
-
-
+      /*
+        Authentication is the only thing that should block the admin shell.
+        Organization and plan data can fill in after the interface is visible.
+      */
       document.getElementById(
         "adminLoading"
       ).style.display =
@@ -7613,6 +7613,29 @@ window.addEventListener(
         "adminShell"
       ).style.display =
         "grid";
+
+
+      Promise.allSettled([
+        loadOrganizations(),
+        loadPlans()
+      ]).then(results => {
+
+        for(
+          const result of
+          results
+        ){
+
+          if(
+            result.status ===
+            "rejected"
+          ){
+            console.error(
+              "LiveBridge admin background load failed:",
+              result.reason
+            );
+          }
+        }
+      });
 
 
     }catch(error){

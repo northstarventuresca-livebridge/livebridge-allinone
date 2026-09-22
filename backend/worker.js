@@ -12947,41 +12947,47 @@ if (
       env
     );
 
-    const result =
-      await env.TRANSLATIONS_DB.prepare(`
-        SELECT
-          o.*,
-          ao.sort_order AS admin_sort_order
-        FROM organizations o
-        LEFT JOIN organization_admin_order ao
-          ON ao.organization_id = o.id
-        ORDER BY
-          CASE
-            WHEN ao.sort_order IS NULL
-            THEN 1
-            ELSE 0
-          END,
-          ao.sort_order ASC,
-          o.created_at DESC
-      `)
-      .all();
+    const usageMonth =
+      currentUsageMonth();
 
-    const organizations = [];
+    /*
+    =======================================================
+    ADMIN LIST PERFORMANCE
+    Load aggregate statistics in a handful of queries instead
+    of running 4 additional D1 queries for every organization.
+    =======================================================
+    */
+    const [
+      result,
+      broadcastStatsResult,
+      listenerStatsResult,
+      azureUsageResult,
+      openAiUsageResult
+    ] =
+      await Promise.all([
 
-    for (
-      const row of result.results || []
-    ) {
-
-      const account =
-        buildOrganizationAccount(
-          row
-        );
-
-      const broadcastStats =
-        await env.TRANSLATIONS_DB.prepare(`
+        env.TRANSLATIONS_DB.prepare(`
           SELECT
-            COUNT(*) AS broadcast_count,
+            o.*,
+            ao.sort_order AS admin_sort_order
+          FROM organizations o
+          LEFT JOIN organization_admin_order ao
+            ON ao.organization_id = o.id
+          ORDER BY
+            CASE
+              WHEN ao.sort_order IS NULL
+              THEN 1
+              ELSE 0
+            END,
+            ao.sort_order ASC,
+            o.created_at DESC
+        `)
+        .all(),
 
+        env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            room,
+            COUNT(*) AS broadcast_count,
             COALESCE(
               SUM(
                 CASE
@@ -12992,280 +12998,363 @@ if (
               ),
               0
             ) AS broadcast_time_ms,
-
             COALESCE(
               MAX(peak_listeners),
               0
             ) AS highest_peak
-
           FROM broadcast_sessions
-          WHERE room = ?
+          GROUP BY room
         `)
-        .bind(
-          row.room_name
-        )
-        .first();
+        .all(),
 
-
-      const listenerStats =
-        await env.TRANSLATIONS_DB.prepare(`
+        env.TRANSLATIONS_DB.prepare(`
           SELECT
+            room,
             COUNT(*) AS listener_sessions
           FROM listener_sessions
-          WHERE room = ?
+          GROUP BY room
         `)
-        .bind(
-          row.room_name
-        )
-        .first();
+        .all(),
 
-
-      const azureUsage =
-        await env.TRANSLATIONS_DB.prepare(`
+        env.TRANSLATIONS_DB.prepare(`
           SELECT
-            COALESCE(
-              characters,
-              0
-            ) AS characters,
-
-            COALESCE(
-              generations,
-              0
-            ) AS generations
-
+            organization_id,
+            COALESCE(characters, 0) AS characters,
+            COALESCE(generations, 0) AS generations
           FROM azure_tts_usage
-
-          WHERE
-            organization_id = ?
-            AND usage_month = ?
-
-          LIMIT 1
+          WHERE usage_month = ?
         `)
         .bind(
-          Number(
-            row.id
-          ),
-          currentUsageMonth()
+          usageMonth
         )
-        .first();
+        .all(),
 
-
-      const openAiUsageResult =
-        await env.TRANSLATIONS_DB.prepare(`
+        env.TRANSLATIONS_DB.prepare(`
           SELECT
+            organization_id,
             category,
-
             COALESCE(
               SUM(input_tokens),
               0
             ) AS input_tokens,
-
             COALESCE(
               SUM(cached_input_tokens),
               0
             ) AS cached_input_tokens,
-
             COALESCE(
               SUM(output_tokens),
               0
             ) AS output_tokens,
-
             COALESCE(
               SUM(requests),
               0
             ) AS requests,
-
             COALESCE(
               SUM(cost_usd),
               0
             ) AS cost_usd
-
           FROM openai_usage
-
-          WHERE
-            organization_id = ?
-            AND usage_month = ?
-
-          GROUP BY category
+          WHERE usage_month = ?
+          GROUP BY
+            organization_id,
+            category
         `)
         .bind(
-          Number(
-            row.id
-          ),
-          currentUsageMonth()
+          usageMonth
         )
-        .all();
+        .all()
+      ]);
 
 
-      const openAiCostBreakdown = {};
+    const broadcastStatsByRoom =
+      new Map(
+        (
+          broadcastStatsResult.results ||
+          []
+        ).map(item => [
+          String(item.room || ""),
+          item
+        ])
+      );
 
-      let openAiInputTokens = 0;
-      let openAiCachedInputTokens = 0;
-      let openAiOutputTokens = 0;
-      let openAiRequests = 0;
-      let openAiCostUsd = 0;
+    const listenerStatsByRoom =
+      new Map(
+        (
+          listenerStatsResult.results ||
+          []
+        ).map(item => [
+          String(item.room || ""),
+          item
+        ])
+      );
 
-      for (
-        const usageRow of
-        openAiUsageResult.results || []
-      ) {
-
-        const category =
-          String(
-            usageRow.category ||
-            "other"
-          );
-
-        const categoryCost =
+    const azureUsageByOrganization =
+      new Map(
+        (
+          azureUsageResult.results ||
+          []
+        ).map(item => [
           Number(
-            usageRow.cost_usd || 0
-          );
+            item.organization_id ||
+            0
+          ),
+          item
+        ])
+      );
 
-        openAiCostBreakdown[
-          category
-        ] =
-          Math.round(
-            categoryCost *
-            1000000
-          ) / 1000000;
+    const openAiUsageByOrganization =
+      new Map();
 
-        openAiInputTokens +=
-          Number(
-            usageRow.input_tokens || 0
-          );
+    for (
+      const usageRow of
+      openAiUsageResult.results || []
+    ) {
 
-        openAiCachedInputTokens +=
-          Number(
-            usageRow.cached_input_tokens || 0
-          );
-
-        openAiOutputTokens +=
-          Number(
-            usageRow.output_tokens || 0
-          );
-
-        openAiRequests +=
-          Number(
-            usageRow.requests || 0
-          );
-
-        openAiCostUsd +=
-          categoryCost;
-      }
-
-
-      const azureTtsCostUsd =
-        calculateAzureTtsCostUsd(
-          azureUsage
-            ?.characters ||
+      const organizationId =
+        Number(
+          usageRow.organization_id ||
           0
         );
 
+      if (
+        !openAiUsageByOrganization.has(
+          organizationId
+        )
+      ) {
+        openAiUsageByOrganization.set(
+          organizationId,
+          {
+            inputTokens: 0,
+            cachedInputTokens: 0,
+            outputTokens: 0,
+            requests: 0,
+            costUsd: 0,
+            costBreakdown: {}
+          }
+        );
+      }
 
-      const totalApiCostUsd =
-        openAiCostUsd +
-        azureTtsCostUsd;
+      const usage =
+        openAiUsageByOrganization.get(
+          organizationId
+        );
 
+      const category =
+        String(
+          usageRow.category ||
+          "other"
+        );
 
-      organizations.push({
+      const categoryCost =
+        Number(
+          usageRow.cost_usd ||
+          0
+        );
 
-        ...account,
+      usage.costBreakdown[
+        category
+      ] =
+        Math.round(
+          categoryCost *
+          1000000
+        ) / 1000000;
 
-        stats: {
+      usage.inputTokens +=
+        Number(
+          usageRow.input_tokens ||
+          0
+        );
 
-          broadcastCount:
-            Number(
-              broadcastStats
-                ?.broadcast_count ||
-              0
-            ),
+      usage.cachedInputTokens +=
+        Number(
+          usageRow.cached_input_tokens ||
+          0
+        );
 
-          broadcastTimeMs:
-            Number(
-              broadcastStats
-                ?.broadcast_time_ms ||
-              0
-            ),
+      usage.outputTokens +=
+        Number(
+          usageRow.output_tokens ||
+          0
+        );
 
-          broadcastHours:
-            Math.round(
-              (
-                Number(
-                  broadcastStats
-                    ?.broadcast_time_ms ||
-                  0
-                ) /
-                3600000
-              ) *
-              100
-            ) / 100,
+      usage.requests +=
+        Number(
+          usageRow.requests ||
+          0
+        );
 
-          highestPeak:
-            Number(
-              broadcastStats
-                ?.highest_peak ||
-              0
-            ),
-
-          listenerSessions:
-            Number(
-              listenerStats
-                ?.listener_sessions ||
-              0
-            ),
-
-          azureTtsCharacters:
-            Number(
-              azureUsage
-                ?.characters ||
-              0
-            ),
-
-          azureTtsGenerations:
-            Number(
-              azureUsage
-                ?.generations ||
-              0
-            ),
-
-          azureTtsUsageMonth:
-            currentUsageMonth(),
-
-          azureTtsCostUsd:
-            Math.round(
-              azureTtsCostUsd *
-              1000000
-            ) / 1000000,
-
-          openAiInputTokens,
-          openAiCachedInputTokens,
-          openAiOutputTokens,
-          openAiRequests,
-
-          openAiCostUsd:
-            Math.round(
-              openAiCostUsd *
-              1000000
-            ) / 1000000,
-
-          openAiCostBreakdown,
-
-          apiCostUsd:
-            Math.round(
-              totalApiCostUsd *
-              1000000
-            ) / 1000000,
-
-          apiCostCurrency:
-            LIVEBRIDGE_API_COST_PRICING
-              .currency,
-
-          apiCostUsageMonth:
-            currentUsageMonth()
-        }
-      });
+      usage.costUsd +=
+        categoryCost;
     }
 
+
+    const organizations =
+      (
+        result.results ||
+        []
+      ).map(row => {
+
+        const account =
+          buildOrganizationAccount(
+            row
+          );
+
+        const broadcastStats =
+          broadcastStatsByRoom.get(
+            String(
+              row.room_name ||
+              ""
+            )
+          ) ||
+          {};
+
+        const listenerStats =
+          listenerStatsByRoom.get(
+            String(
+              row.room_name ||
+              ""
+            )
+          ) ||
+          {};
+
+        const azureUsage =
+          azureUsageByOrganization.get(
+            Number(
+              row.id ||
+              0
+            )
+          ) ||
+          {};
+
+        const openAiUsage =
+          openAiUsageByOrganization.get(
+            Number(
+              row.id ||
+              0
+            )
+          ) ||
+          {
+            inputTokens: 0,
+            cachedInputTokens: 0,
+            outputTokens: 0,
+            requests: 0,
+            costUsd: 0,
+            costBreakdown: {}
+          };
+
+        const azureTtsCostUsd =
+          calculateAzureTtsCostUsd(
+            azureUsage.characters ||
+            0
+          );
+
+        const totalApiCostUsd =
+          openAiUsage.costUsd +
+          azureTtsCostUsd;
+
+        return {
+          ...account,
+
+          stats: {
+            broadcastCount:
+              Number(
+                broadcastStats
+                  .broadcast_count ||
+                0
+              ),
+
+            broadcastTimeMs:
+              Number(
+                broadcastStats
+                  .broadcast_time_ms ||
+                0
+              ),
+
+            broadcastHours:
+              Math.round(
+                (
+                  Number(
+                    broadcastStats
+                      .broadcast_time_ms ||
+                    0
+                  ) /
+                  3600000
+                ) *
+                100
+              ) / 100,
+
+            highestPeak:
+              Number(
+                broadcastStats
+                  .highest_peak ||
+                0
+              ),
+
+            listenerSessions:
+              Number(
+                listenerStats
+                  .listener_sessions ||
+                0
+              ),
+
+            azureTtsCharacters:
+              Number(
+                azureUsage.characters ||
+                0
+              ),
+
+            azureTtsGenerations:
+              Number(
+                azureUsage.generations ||
+                0
+              ),
+
+            azureTtsUsageMonth:
+              usageMonth,
+
+            azureTtsCostUsd:
+              Math.round(
+                azureTtsCostUsd *
+                1000000
+              ) / 1000000,
+
+            openAiInputTokens:
+              openAiUsage.inputTokens,
+
+            openAiCachedInputTokens:
+              openAiUsage
+                .cachedInputTokens,
+
+            openAiOutputTokens:
+              openAiUsage.outputTokens,
+
+            openAiRequests:
+              openAiUsage.requests,
+
+            openAiCostUsd:
+              Math.round(
+                openAiUsage.costUsd *
+                1000000
+              ) / 1000000,
+
+            openAiCostBreakdown:
+              openAiUsage.costBreakdown,
+
+            apiCostUsd:
+              Math.round(
+                totalApiCostUsd *
+                1000000
+              ) / 1000000,
+
+            apiCostCurrency:
+              LIVEBRIDGE_API_COST_PRICING
+                .currency,
+
+            apiCostUsageMonth:
+              usageMonth
+          }
+        };
+      });
 
     return jsonResponse({
       success: true,
@@ -14606,14 +14695,30 @@ if (
     }
 
 
-    const historyResult =
-      await env.TRANSLATIONS_DB.prepare(`
+    /*
+    =======================================================
+    ADMIN ORGANIZATION PERFORMANCE
+    Start independent work together, then build the recent
+    broadcast summaries with 2 aggregate listener queries
+    instead of 2-3 queries for every broadcast.
+    =======================================================
+    */
+    const historyPromise =
+      env.TRANSLATIONS_DB.prepare(`
         SELECT
           id,
           room,
           started_at,
           ended_at,
-          peak_listeners
+          peak_listeners,
+          heartbeat_requests,
+          status_polls,
+          analytics_requests,
+          audio_chunks,
+          source_final_requests,
+          listener_heartbeats,
+          tts_requests,
+          auto_end_reason
         FROM broadcast_sessions
         WHERE room = ?
         ORDER BY started_at DESC
@@ -14624,30 +14729,8 @@ if (
       )
       .all();
 
-
-    const broadcasts = [];
-
-    for (
-      const broadcast of
-        historyResult.results || []
-    ) {
-
-      const summary =
-        await buildBroadcastSummary(
-          env,
-          broadcast.id
-        );
-
-      if (summary) {
-        broadcasts.push(
-          summary
-        );
-      }
-    }
-
-
-    const returnMessagesResult =
-      await env.TRANSLATIONS_DB.prepare(`
+    const returnMessagesPromise =
+      env.TRANSLATIONS_DB.prepare(`
         SELECT
           visit_number,
           message
@@ -14655,11 +14738,13 @@ if (
         WHERE organization_id = ?
         ORDER BY visit_number ASC
       `)
-      .bind(organizationId)
+      .bind(
+        organizationId
+      )
       .all();
 
-    const visitorStatsRow =
-      await env.TRANSLATIONS_DB.prepare(`
+    const visitorStatsPromise =
+      env.TRANSLATIONS_DB.prepare(`
         SELECT
           COUNT(*) AS unique_visitors,
           COALESCE(
@@ -14671,12 +14756,414 @@ if (
             ),
             0
           ) AS returning_visitors,
-          COALESCE(SUM(visit_days), 0) AS total_visit_days
+          COALESCE(
+            SUM(visit_days),
+            0
+          ) AS total_visit_days
         FROM organization_visitors
         WHERE organization_id = ?
       `)
-      .bind(organizationId)
+      .bind(
+        organizationId
+      )
       .first();
+
+    const marketingCreditsPromise =
+      marketingCreditBalance(
+        env,
+        organizationId
+      );
+
+    const billingHistoryPromise =
+      loadOrganizationBillingHistory(
+        env,
+        organizationId
+      );
+
+    const marketingAnalyticsPromise =
+      buildMarketingAdminAnalytics(
+        env,
+        organizationId
+      );
+
+    const historyResult =
+      await historyPromise;
+
+    const historyRows =
+      historyResult.results ||
+      [];
+
+    const broadcastIds =
+      historyRows
+        .map(item =>
+          Number(
+            item.id ||
+            0
+          )
+        )
+        .filter(Boolean);
+
+    let listenerTotalsPromise =
+      Promise.resolve({
+        results: []
+      });
+
+    let languageTotalsPromise =
+      Promise.resolve({
+        results: []
+      });
+
+    if (broadcastIds.length) {
+
+      const placeholders =
+        broadcastIds
+          .map(() => "?")
+          .join(",");
+
+      const now =
+        Date.now();
+
+      listenerTotalsPromise =
+        env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            ls.broadcast_id,
+            COUNT(*) AS total_listeners,
+            COALESCE(
+              SUM(
+                MAX(
+                  0,
+                  COALESCE(
+                    ls.ended_at,
+                    ls.last_seen,
+                    bs.ended_at,
+                    ?
+                  ) -
+                  ls.joined_at
+                )
+              ),
+              0
+            ) AS total_listening_ms,
+            COALESCE(
+              AVG(
+                MAX(
+                  0,
+                  COALESCE(
+                    ls.ended_at,
+                    ls.last_seen,
+                    bs.ended_at,
+                    ?
+                  ) -
+                  ls.joined_at
+                )
+              ),
+              0
+            ) AS average_listening_ms
+          FROM listener_sessions ls
+          JOIN broadcast_sessions bs
+            ON bs.id = ls.broadcast_id
+          WHERE ls.broadcast_id IN (${placeholders})
+          GROUP BY ls.broadcast_id
+        `)
+        .bind(
+          now,
+          now,
+          ...broadcastIds
+        )
+        .all();
+
+      languageTotalsPromise =
+        env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            ls.broadcast_id,
+            ls.language,
+            COUNT(*) AS listeners,
+            COALESCE(
+              SUM(
+                MAX(
+                  0,
+                  COALESCE(
+                    ls.ended_at,
+                    ls.last_seen,
+                    bs.ended_at,
+                    ?
+                  ) -
+                  ls.joined_at
+                )
+              ),
+              0
+            ) AS total_listening_ms,
+            COALESCE(
+              AVG(
+                MAX(
+                  0,
+                  COALESCE(
+                    ls.ended_at,
+                    ls.last_seen,
+                    bs.ended_at,
+                    ?
+                  ) -
+                  ls.joined_at
+                )
+              ),
+              0
+            ) AS average_listening_ms
+          FROM listener_sessions ls
+          JOIN broadcast_sessions bs
+            ON bs.id = ls.broadcast_id
+          WHERE ls.broadcast_id IN (${placeholders})
+          GROUP BY
+            ls.broadcast_id,
+            ls.language
+          ORDER BY
+            ls.broadcast_id ASC,
+            listeners DESC,
+            ls.language ASC
+        `)
+        .bind(
+          now,
+          now,
+          ...broadcastIds
+        )
+        .all();
+    }
+
+    const [
+      returnMessagesResult,
+      visitorStatsRow,
+      marketingCredits,
+      billingHistory,
+      marketingAnalytics,
+      listenerTotalsResult,
+      languageTotalsResult
+    ] =
+      await Promise.all([
+        returnMessagesPromise,
+        visitorStatsPromise,
+        marketingCreditsPromise,
+        billingHistoryPromise,
+        marketingAnalyticsPromise,
+        listenerTotalsPromise,
+        languageTotalsPromise
+      ]);
+
+    const listenerTotalsByBroadcast =
+      new Map(
+        (
+          listenerTotalsResult.results ||
+          []
+        ).map(item => [
+          Number(
+            item.broadcast_id ||
+            0
+          ),
+          item
+        ])
+      );
+
+    const languagesByBroadcast =
+      new Map();
+
+    for (
+      const item of
+      languageTotalsResult.results ||
+      []
+    ) {
+
+      const broadcastId =
+        Number(
+          item.broadcast_id ||
+          0
+        );
+
+      if (
+        !languagesByBroadcast.has(
+          broadcastId
+        )
+      ) {
+        languagesByBroadcast.set(
+          broadcastId,
+          []
+        );
+      }
+
+      languagesByBroadcast
+        .get(
+          broadcastId
+        )
+        .push({
+          language:
+            item.language,
+          listeners:
+            Number(
+              item.listeners ||
+              0
+            ),
+          totalListeningMs:
+            Number(
+              item.total_listening_ms ||
+              0
+            ),
+          averageListeningMs:
+            Math.round(
+              Number(
+                item.average_listening_ms ||
+                0
+              )
+            )
+        });
+    }
+
+    const now =
+      Date.now();
+
+    const broadcasts =
+      historyRows.map(
+        broadcast => {
+
+          const broadcastId =
+            Number(
+              broadcast.id ||
+              0
+            );
+
+          const effectiveEnd =
+            Number(
+              broadcast.ended_at ||
+              now
+            );
+
+          const totals =
+            listenerTotalsByBroadcast.get(
+              broadcastId
+            ) ||
+            {};
+
+          return {
+            success: true,
+            broadcastId,
+            room:
+              broadcast.room,
+            startedAt:
+              Number(
+                broadcast.started_at
+              ),
+            endedAt:
+              broadcast.ended_at
+                ? Number(
+                    broadcast.ended_at
+                  )
+                : null,
+            durationMs:
+              Math.max(
+                0,
+                effectiveEnd -
+                Number(
+                  broadcast.started_at
+                )
+              ),
+            totalListeners:
+              Number(
+                totals.total_listeners ||
+                0
+              ),
+            peakListeners:
+              Number(
+                broadcast.peak_listeners ||
+                0
+              ),
+            totalListeningMs:
+              Number(
+                totals.total_listening_ms ||
+                0
+              ),
+            averageListeningMs:
+              Math.round(
+                Number(
+                  totals.average_listening_ms ||
+                  0
+                )
+              ),
+
+            requestMetrics: {
+              heartbeatRequests:
+                Number(
+                  broadcast.heartbeat_requests ||
+                  0
+                ),
+              statusPolls:
+                Number(
+                  broadcast.status_polls ||
+                  0
+                ),
+              analyticsRequests:
+                Number(
+                  broadcast.analytics_requests ||
+                  0
+                ),
+              audioChunks:
+                Number(
+                  broadcast.audio_chunks ||
+                  0
+                ),
+              sourceFinalRequests:
+                Number(
+                  broadcast.source_final_requests ||
+                  0
+                ),
+              listenerHeartbeats:
+                Number(
+                  broadcast.listener_heartbeats ||
+                  0
+                ),
+              ttsRequests:
+                Number(
+                  broadcast.tts_requests ||
+                  0
+                ),
+              totalWorkerRequests:
+                Number(
+                  broadcast.heartbeat_requests ||
+                  0
+                ) +
+                Number(
+                  broadcast.status_polls ||
+                  0
+                ) +
+                Number(
+                  broadcast.analytics_requests ||
+                  0
+                ) +
+                Number(
+                  broadcast.audio_chunks ||
+                  0
+                ) +
+                Number(
+                  broadcast.source_final_requests ||
+                  0
+                ) +
+                Number(
+                  broadcast.listener_heartbeats ||
+                  0
+                ) +
+                Number(
+                  broadcast.tts_requests ||
+                  0
+                )
+            },
+
+            autoEndReason:
+              broadcast.auto_end_reason ||
+              "",
+
+            languages:
+              languagesByBroadcast.get(
+                broadcastId
+              ) ||
+              []
+          };
+        }
+      );
+
 
     return jsonResponse({
 
@@ -14686,24 +15173,12 @@ if (
         ...buildOrganizationAccount(
           row
         ),
-        marketingCredits:
-          await marketingCreditBalance(
-            env,
-            organizationId
-          )
+        marketingCredits
       },
 
-      billingHistory:
-        await loadOrganizationBillingHistory(
-          env,
-          organizationId
-        ),
+      billingHistory,
 
-      marketingAnalytics:
-        await buildMarketingAdminAnalytics(
-          env,
-          organizationId
-        ),
+      marketingAnalytics,
 
       broadcasts,
 
@@ -14733,7 +15208,7 @@ if (
             0
           )
       }
-    });
+    });;
 
   } catch (error) {
 
