@@ -724,10 +724,39 @@ body{
   .lb-account-sidebar{
     border-right:none;
     border-bottom:1px solid rgba(255,255,255,.09);
+    padding:18px;
+  }
+
+  .lb-account-brand{
+    margin-bottom:2px;
+  }
+
+  .lb-account-subbrand{
+    margin-bottom:16px;
+  }
+
+  .lb-org-mini{
+    margin-bottom:14px;
   }
 
   .lb-account-nav{
-    grid-template-columns:repeat(4,1fr);
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+
+  .lb-nav-button{
+    width:auto;
+    flex:1 1 155px;
+    min-width:140px;
+    text-align:center;
+    padding:11px 12px;
+    border:1px solid rgba(255,255,255,.07);
+    background:rgba(255,255,255,.025);
+  }
+
+  .lb-nav-divider{
+    display:none;
   }
 
   .lb-grid-4{
@@ -752,8 +781,20 @@ body{
     padding:17px;
   }
 
+  .lb-account-sidebar{
+    padding:14px;
+  }
+
   .lb-account-nav{
+    display:grid;
     grid-template-columns:1fr 1fr;
+    gap:7px;
+  }
+
+  .lb-nav-button{
+    width:100%;
+    min-width:0;
+    text-align:left;
   }
 
   .lb-grid-4,
