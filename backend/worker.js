@@ -2111,11 +2111,8 @@ LIVEBRIDGE CUSTOMER ACCOUNTS
 const CLERK_ISSUER =
   "https://clerk.livebridge.ca";
 
-const CLERK_JWKS_URL =
-  CLERK_ISSUER + "/.well-known/jwks.json";
-
-let clerkJwksCache = null;
-let clerkJwksCacheUntil = 0;
+let clerkJwtCryptoKey = null;
+let clerkJwtKeySource = "";
 
 
 function base64UrlToBytes(value) {
@@ -2159,40 +2156,102 @@ function decodeJwtPart(value) {
 }
 
 
-async function getClerkJwks() {
+function pemPublicKeyToArrayBuffer(
+  pem
+) {
 
-  const now =
-    Date.now();
+  const normalized =
+    String(pem || "")
+      .replace(
+        /-----BEGIN PUBLIC KEY-----/g,
+        ""
+      )
+      .replace(
+        /-----END PUBLIC KEY-----/g,
+        ""
+      )
+      .replace(
+        /\s+/g,
+        ""
+      );
 
-  if (
-    clerkJwksCache &&
-    now < clerkJwksCacheUntil
-  ) {
-    return clerkJwksCache;
-  }
-
-  const response =
-    await fetch(CLERK_JWKS_URL);
-
-  if (!response.ok) {
-
+  if (!normalized) {
     throw new Error(
-      "Unable to load Clerk signing keys."
+      "Clerk JWT public key is empty."
     );
   }
 
-  clerkJwksCache =
-    await response.json();
+  const binary =
+    atob(normalized);
 
-  clerkJwksCacheUntil =
-    now + 5 * 60 * 1000;
+  const bytes =
+    new Uint8Array(
+      binary.length
+    );
 
-  return clerkJwksCache;
+  for (
+    let i = 0;
+    i < binary.length;
+    i++
+  ) {
+    bytes[i] =
+      binary.charCodeAt(i);
+  }
+
+  return bytes.buffer;
+}
+
+
+async function getClerkJwtCryptoKey(
+  env
+) {
+
+  const publicKey =
+    String(
+      env.CLERK_JWT_KEY ||
+      ""
+    ).trim();
+
+  if (!publicKey) {
+    throw new Error(
+      "CLERK_JWT_KEY is not configured."
+    );
+  }
+
+  if (
+    clerkJwtCryptoKey &&
+    clerkJwtKeySource ===
+      publicKey
+  ) {
+    return clerkJwtCryptoKey;
+  }
+
+  clerkJwtCryptoKey =
+    await crypto.subtle.importKey(
+      "spki",
+      pemPublicKeyToArrayBuffer(
+        publicKey
+      ),
+      {
+        name:
+          "RSASSA-PKCS1-v1_5",
+        hash:
+          "SHA-256"
+      },
+      false,
+      ["verify"]
+    );
+
+  clerkJwtKeySource =
+    publicKey;
+
+  return clerkJwtCryptoKey;
 }
 
 
 async function verifyClerkRequest(
-  request
+  request,
+  env
 ) {
 
   const authorization =
@@ -2233,8 +2292,7 @@ async function verifyClerkRequest(
     decodeJwtPart(parts[1]);
 
   if (
-    header.alg !== "RS256" ||
-    !header.kid
+    header.alg !== "RS256"
   ) {
 
     throw new Error(
@@ -2242,36 +2300,9 @@ async function verifyClerkRequest(
     );
   }
 
-  const jwks =
-    await getClerkJwks();
-
-  const jwk =
-    (jwks.keys || [])
-      .find(
-        key =>
-          key.kid ===
-          header.kid
-      );
-
-  if (!jwk) {
-
-    clerkJwksCache = null;
-
-    throw new Error(
-      "Clerk signing key not found."
-    );
-  }
-
   const cryptoKey =
-    await crypto.subtle.importKey(
-      "jwk",
-      jwk,
-      {
-        name: "RSASSA-PKCS1-v1_5",
-        hash: "SHA-256"
-      },
-      false,
-      ["verify"]
+    await getClerkJwtCryptoKey(
+      env
     );
 
   const signingInput =
