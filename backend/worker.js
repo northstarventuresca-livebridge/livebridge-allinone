@@ -890,7 +890,7 @@ function parseAIJson(text) {
 }
 
 async function marketingOrganization(request, env) {
-  const auth = await verifyClerkRequest(request);
+  const auth = await verifyClerkRequest(request, env);
   const organization = await env.TRANSLATIONS_DB.prepare(`
     SELECT *
     FROM organizations
@@ -4435,9 +4435,7 @@ async function verifyAdminRequest(
 ) {
 
   const auth =
-    await verifyClerkRequest(
-      request
-    );
+    await verifyClerkRequest(request, env);
 
   const admin =
     await env.TRANSLATIONS_DB.prepare(`
@@ -5091,9 +5089,7 @@ async function organizationForStatsApiAccount(
   env
 ) {
   const auth =
-    await verifyClerkRequest(
-      request
-    );
+    await verifyClerkRequest(request, env);
 
   const organization =
     await env.TRANSLATIONS_DB.prepare(`
@@ -9815,9 +9811,7 @@ if (
     );
 
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     const body =
       await request.json();
@@ -10446,9 +10440,7 @@ if (
   try {
 
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     const body =
       await request.json();
@@ -11504,9 +11496,7 @@ if (
   try {
 
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     await ensureStripeRegistrationTable(
       env
@@ -16522,9 +16512,7 @@ if (
   try {
 
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     await ensureBroadcastSafetySchema(env);
 
@@ -16608,9 +16596,7 @@ if (
 ) {
   try {
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     await ensureListenerProfileSchema(
       env
@@ -19091,9 +19077,7 @@ if (
   try {
 
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     await ensureAnalyticsTables(
       env
@@ -19488,9 +19472,7 @@ if (
   try {
 
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     await ensureAnalyticsTables(
       env
@@ -19580,7 +19562,7 @@ if (
   url.pathname === "/account/billing-history"
 ) {
   try {
-    const auth = await verifyClerkRequest(request);
+    const auth = await verifyClerkRequest(request, env);
     const organization = await env.TRANSLATIONS_DB.prepare(`
       SELECT id FROM organizations
       WHERE clerk_user_id = ?
@@ -19612,9 +19594,7 @@ if (
   try {
 
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     await ensureBroadcastSafetySchema(env);
 
@@ -20330,9 +20310,7 @@ const audioMuted =
         await ensureAnalyticsTables(env);
 
         const auth =
-          await verifyClerkRequest(
-            request
-          );
+          await verifyClerkRequest(request, env);
 
         const room =
           normalizeRoom(
@@ -20769,9 +20747,7 @@ const audioMuted =
 
       try {
         auth =
-          await verifyClerkRequest(
-            request
-          );
+          await verifyClerkRequest(request, env);
       } catch (error) {
         return jsonResponse(
           {
@@ -21398,9 +21374,7 @@ return jsonResponse({
     ) {
       try {
         const auth =
-          await verifyClerkRequest(
-            request
-          );
+          await verifyClerkRequest(request, env);
 
         const body =
           await request.json();
@@ -21522,9 +21496,7 @@ return jsonResponse({
     ) {
       try {
         const auth =
-          await verifyClerkRequest(
-            request
-          );
+          await verifyClerkRequest(request, env);
 
         const body =
           await request.json();
@@ -21585,9 +21557,7 @@ return jsonResponse({
       try {
 
         const auth =
-          await verifyClerkRequest(
-            request
-          );
+          await verifyClerkRequest(request, env);
 
         const body =
           await request.json();
@@ -21864,9 +21834,7 @@ const now =
       try {
 
         const auth =
-          await verifyClerkRequest(
-            request
-          );
+          await verifyClerkRequest(request, env);
 
         const body =
           await request.json();
@@ -22135,9 +22103,7 @@ const now =
       try {
 
         const auth =
-          await verifyClerkRequest(
-            request
-          );
+          await verifyClerkRequest(request, env);
 
         await ensureAnalyticsTables(env);
 
@@ -22374,9 +22340,7 @@ const now =
   try {
 
     const auth =
-      await verifyClerkRequest(
-        request
-      );
+      await verifyClerkRequest(request, env);
 
     const {
       email,
