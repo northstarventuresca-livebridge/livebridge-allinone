@@ -19678,6 +19678,105 @@ if (
     );
   }
 }
+    if (request.method === "GET" && url.pathname === "/diagnostic-account-speed") {
+      const mode =
+        String(url.searchParams.get("mode") || "optimized")
+          .trim()
+          .toLowerCase();
+
+      const startedAt =
+        Date.now();
+
+      const timings = {};
+
+      try {
+        if (mode === "legacy") {
+          let stepStarted =
+            Date.now();
+
+          await ensureBroadcastSafetySchema(env);
+
+          timings.broadcastSafetySchemaMs =
+            Date.now() - stepStarted;
+
+          stepStarted =
+            Date.now();
+
+          await ensureStripeLifecycleSchema(env);
+
+          timings.stripeLifecycleSchemaMs =
+            Date.now() - stepStarted;
+        }
+
+        let stepStarted =
+          Date.now();
+
+        const organization =
+          await env.TRANSLATIONS_DB.prepare(`
+            SELECT id
+            FROM organizations
+            ORDER BY id ASC
+            LIMIT 1
+          `)
+          .first();
+
+        timings.organizationSelectMs =
+          Date.now() - stepStarted;
+
+        if (!organization) {
+          return jsonResponse({
+            success: false,
+            mode,
+            error: "No organization row found.",
+            timings,
+            totalMs:
+              Date.now() - startedAt
+          }, 404);
+        }
+
+        stepStarted =
+          Date.now();
+
+        await env.TRANSLATIONS_DB.prepare(`
+          SELECT current_period_end
+          FROM stripe_registrations
+          WHERE organization_id = ?
+          ORDER BY id DESC
+          LIMIT 1
+        `)
+        .bind(
+          Number(organization.id)
+        )
+        .first();
+
+        timings.billingPeriodSelectMs =
+          Date.now() - stepStarted;
+
+        return jsonResponse({
+          success: true,
+          mode,
+          timings,
+          totalMs:
+            Date.now() - startedAt
+        });
+
+      } catch (error) {
+        return jsonResponse({
+          success: false,
+          mode,
+          error:
+            String(
+              error?.message ||
+              error ||
+              "Diagnostic failed."
+            ),
+          timings,
+          totalMs:
+            Date.now() - startedAt
+        }, 500);
+      }
+    }
+
     if (request.method === "GET" && url.pathname === "/") {
       return jsonResponse({
         success: true,
