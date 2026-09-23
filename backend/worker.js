@@ -19596,8 +19596,6 @@ if (
     const auth =
       await verifyClerkRequest(request, env);
 
-    await ensureBroadcastSafetySchema(env);
-
     const row =
       await env.TRANSLATIONS_DB.prepare(`
         SELECT *
@@ -19630,10 +19628,30 @@ if (
         row
       );
 
+    const usageResetRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          current_period_end
+        FROM stripe_registrations
+        WHERE organization_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `)
+      .bind(
+        Number(
+          row.id ||
+          0
+        )
+      )
+      .first();
+
     account.broadcastUsageResetAt =
-      await getBroadcastUsageResetAt(
-        env,
-        row.id
+      Math.max(
+        0,
+        Number(
+          usageResetRow?.current_period_end ||
+          0
+        )
       );
 
     return jsonResponse({
