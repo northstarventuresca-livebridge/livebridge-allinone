@@ -3792,7 +3792,8 @@ const LIVEBRIDGE_FEATURE_OVERRIDE_KEYS = [
   "listenerDataDisplay",
   "marketingCampaigns",
   "organizationStatsApi",
-  "organizationStatsApiDisabled"
+  "organizationStatsApiDisabled",
+  "livebridgeAnywherePreview"
 ];
 
 
@@ -15946,7 +15947,8 @@ if (
 
           a.id AS admin_id,
           a.role AS admin_role,
-          a.active AS admin_active
+          a.active AS admin_active,
+          o.feature_overrides_json
 
         FROM organizations o
 
@@ -15994,6 +15996,11 @@ if (
             Number(
               row.admin_active || 0
             ) === 1,
+
+          lbaPreviewAccess:
+            parseFeatureOverrides(
+              row.feature_overrides_json
+            ).livebridgeAnywherePreview === true,
 
           adminRole:
             row.admin_role || ""
@@ -16196,6 +16203,139 @@ if (
   }
 }
 
+
+
+/*
+=======================================================
+ADMIN - LIVEBRIDGE ANYWHERE PREVIEW ACCESS
+Stores one boolean inside the existing organization
+feature_overrides_json. No schema change.
+=======================================================
+*/
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/lba-preview-access"
+) {
+
+  try {
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const targetClerkUserId =
+      String(
+        body.clerkUserId || ""
+      ).trim();
+
+    const enabled =
+      body.enabled === true;
+
+    if (!targetClerkUserId) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Clerk user ID is required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          clerk_user_id,
+          feature_overrides_json
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        targetClerkUserId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That LiveBridge customer account was not found."
+        },
+        404
+      );
+    }
+
+    let overrides = {};
+
+    try {
+      const parsed =
+        JSON.parse(
+          String(
+            organization.feature_overrides_json ||
+            "{}"
+          )
+        );
+
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        overrides = parsed;
+      }
+    } catch {
+      overrides = {};
+    }
+
+    overrides.livebridgeAnywherePreview =
+      enabled;
+
+    await env.TRANSLATIONS_DB.prepare(`
+      UPDATE organizations
+      SET
+        feature_overrides_json = ?,
+        updated_at = ?
+      WHERE clerk_user_id = ?
+    `)
+    .bind(
+      JSON.stringify(overrides),
+      Date.now(),
+      targetClerkUserId
+    )
+    .run();
+
+    return jsonResponse({
+      success: true,
+      clerkUserId:
+        targetClerkUserId,
+      enabled
+    });
+
+  } catch (error) {
+
+    console.error(
+      "LBA preview access update failed:",
+      error
+    );
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to update LiveBridge Anywhere preview access."
+      },
+      403
+    );
+  }
+}
 
 
 /*
