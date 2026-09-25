@@ -928,6 +928,14 @@ body{
       🛡 Administration
     </button>
 
+    <button
+      class="lb-nav-button"
+      id="openLbaPreviewNav"
+      style="display:none;"
+    >
+      🎬 LiveBridge Anywhere
+    </button>
+
     <button class="lb-nav-button" id="logoutButton">
       ↪ Logout
     </button>
@@ -5125,6 +5133,17 @@ async function renderDashboard(
       ? "block"
       : "none";
 
+  const lbaPreviewEnabled =
+    serverAccount?.featureOverrides
+      ?.livebridgeAnywherePreview === true;
+
+  document.getElementById(
+    "openLbaPreviewNav"
+  ).style.display =
+    lbaPreviewEnabled
+      ? "block"
+      : "none";
+
   const marketingNav =
     document.querySelector(
       '.lb-nav-button[data-panel="marketing"]'
@@ -7877,6 +7896,31 @@ document.getElementById(
 
     window.location.href =
       "/admin";
+  }
+);
+
+document.getElementById(
+  "openLbaPreviewNav"
+)?.addEventListener(
+  "click",
+  async function(){
+
+    const token =
+      await getLiveBridgeSessionToken();
+
+    if(!token){
+      alert(
+        "Please sign in again before opening LiveBridge Anywhere."
+      );
+      return;
+    }
+
+    window.open(
+      "https://livebridge-anywhere-preview.northstarventures-ca.workers.dev/anywhere#lbaccess=" +
+      encodeURIComponent(token),
+      "_blank",
+      "noopener,noreferrer"
+    );
   }
 );
 
