@@ -2216,17 +2216,21 @@
         account.email
     },
 
+    /*
+      Return to /signup after Clerk verification so this page can
+      complete the authenticated /account-sync before opening the dashboard.
+    */
     signInUrl:
-      window.location.origin + "/account",
+      window.location.origin + "/signup",
 
     forceRedirectUrl:
-      window.location.origin + "/account",
+      window.location.origin + "/signup",
 
     fallbackRedirectUrl:
-      window.location.origin + "/account",
+      window.location.origin + "/signup",
 
     signInForceRedirectUrl:
-      window.location.origin + "/account"
+      window.location.origin + "/signup"
   }
 );
     

@@ -8842,6 +8842,155 @@ window.addEventListener(
 })();
 </script>
 
+<script>
+(function trackLiveBridgeAccountActivity(){
+
+  const WORKER =
+    "https://livebridge.northstarventures-ca.workers.dev";
+
+  const STORAGE_KEY =
+    "livebridge_account_activity_session_v1";
+
+  let activitySessionId = "";
+  let cachedToken = "";
+  let heartbeatTimer = null;
+
+  function randomSessionId(){
+    if(window.crypto?.randomUUID){
+      return window.crypto.randomUUID().replace(/-/g, "");
+    }
+
+    return (
+      Date.now().toString(36) +
+      Math.random().toString(36).slice(2) +
+      Math.random().toString(36).slice(2)
+    );
+  }
+
+  async function getActivityToken(){
+    if(
+      typeof window.getLiveBridgeSessionToken ===
+      "function"
+    ){
+      const token =
+        await window.getLiveBridgeSessionToken();
+
+      if(token){
+        return token;
+      }
+    }
+
+    return await window.Clerk?.session?.getToken?.() || null;
+  }
+
+  function getActivitySessionId(){
+    const clerkSessionId =
+      String(window.Clerk?.session?.id || "");
+
+    let saved = null;
+
+    try{
+      saved = JSON.parse(
+        sessionStorage.getItem(STORAGE_KEY) || "null"
+      );
+    }catch{}
+
+    if(
+      saved?.clerkSessionId === clerkSessionId &&
+      /^[A-Za-z0-9_-]{16,128}$/.test(
+        String(saved?.activitySessionId || "")
+      )
+    ){
+      return saved.activitySessionId;
+    }
+
+    const next = randomSessionId();
+
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        clerkSessionId,
+        activitySessionId: next
+      })
+    );
+
+    return next;
+  }
+
+  async function sendActivity(action, keepalive=false){
+    if(!activitySessionId || !cachedToken){
+      return;
+    }
+
+    try{
+      await fetch(
+        WORKER + "/account/activity/" + action,
+        {
+          method:"POST",
+          keepalive,
+          headers:{
+            "Authorization":"Bearer " + cachedToken,
+            "Content-Type":"application/json"
+          },
+          body:JSON.stringify({
+            sessionId:activitySessionId
+          })
+        }
+      );
+    }catch(error){
+      console.warn(
+        "LiveBridge account activity update failed:",
+        error
+      );
+    }
+  }
+
+  async function startActivity(){
+    if(!window.Clerk?.user){
+      setTimeout(startActivity, 800);
+      return;
+    }
+
+    cachedToken =
+      await getActivityToken() || "";
+
+    if(!cachedToken){
+      setTimeout(startActivity, 800);
+      return;
+    }
+
+    activitySessionId =
+      getActivitySessionId();
+
+    await sendActivity("start");
+
+    heartbeatTimer = setInterval(
+      async function(){
+        cachedToken =
+          await getActivityToken() || cachedToken;
+
+        await sendActivity("heartbeat");
+      },
+      60000
+    );
+  }
+
+  window.addEventListener(
+    "pagehide",
+    function(){
+      if(heartbeatTimer){
+        clearInterval(heartbeatTimer);
+      }
+
+      sendActivity("end", true);
+    }
+  );
+
+  startActivity();
+
+})();
+</script>
+
 <!-- LiveBridge account data is D1-authoritative. Account creation occurs only through verified signup. -->
 
 <script>

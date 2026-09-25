@@ -12933,6 +12933,410 @@ if (
 
 /*
 =======================================================
+ADMIN - RECOVER / CREATE ORGANIZATION
+For completed Stripe checkouts where Clerk authentication
+succeeded but the normal post-signup account sync did not.
+=======================================================
+*/
+
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/organization-recover"
+) {
+
+  try {
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    await ensureRoomAliasSchema(
+      env
+    );
+
+    await ensureStripeRegistrationTable(
+      env
+    );
+
+    const body =
+      await request.json();
+
+    const clerkUserId =
+      String(
+        body.clerkUserId || ""
+      ).trim();
+
+    const organizationName =
+      String(
+        body.organizationName || ""
+      ).trim();
+
+    const accountHolder =
+      String(
+        body.accountHolder || ""
+      ).trim();
+
+    const email =
+      String(
+        body.email || ""
+      ).trim()
+      .toLowerCase();
+
+    const phone =
+      String(
+        body.phone || ""
+      ).trim();
+
+    const roomName =
+      normalizeRoom(
+        body.roomName
+      );
+
+    const checkoutSessionId =
+      String(
+        body.checkoutSessionId || ""
+      ).trim();
+
+    const requestedPlanCode =
+      normalizePlanCode(
+        body.planCode
+      );
+
+    if (
+      !clerkUserId.startsWith("user_") ||
+      !organizationName ||
+      !accountHolder ||
+      !email ||
+      !email.includes("@") ||
+      !roomName ||
+      !checkoutSessionId.startsWith("cs_") ||
+      !requestedPlanCode
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Clerk user ID, completed Checkout Session ID, organization, account holder, email, room and plan are required."
+        },
+        400
+      );
+    }
+
+    const roomError =
+      roomNameValidationError(
+        roomName
+      );
+
+    if (roomError) {
+      return jsonResponse(
+        {
+          success: false,
+          error: roomError
+        },
+        400
+      );
+    }
+
+    const checkout =
+      await verifyPaidCheckoutForAccountCreation(
+        env,
+        checkoutSessionId
+      );
+
+    if (
+      checkout.customerEmail &&
+      checkout.customerEmail.toLowerCase() !==
+        email
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "The account email must match the email used for Stripe checkout."
+        },
+        409
+      );
+    }
+
+    const existingOrganization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE clerk_user_id = ?
+           OR LOWER(COALESCE(account_email, '')) = ?
+        LIMIT 1
+      `)
+      .bind(
+        clerkUserId,
+        email
+      )
+      .first();
+
+    if (existingOrganization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That Clerk login or account email is already connected to a LiveBridge organization."
+        },
+        409
+      );
+    }
+
+    const existingRoom =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM organizations
+        WHERE UPPER(room_name) = ?
+           OR UPPER(COALESCE(room_alias, '')) = ?
+        LIMIT 1
+      `)
+      .bind(
+        roomName,
+        roomName
+      )
+      .first();
+
+    if (existingRoom) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That LiveBridge room name is already assigned."
+        },
+        409
+      );
+    }
+
+    const existingRegistration =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT id
+        FROM stripe_registrations
+        WHERE checkout_session_id = ?
+           OR clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        checkout.sessionId,
+        clerkUserId
+      )
+      .first();
+
+    if (existingRegistration) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "That Stripe checkout or Clerk login has already been registered."
+        },
+        409
+      );
+    }
+
+    const planRow =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM plans
+        WHERE LOWER(plan_code) = ?
+          AND active = 1
+        LIMIT 1
+      `)
+      .bind(
+        requestedPlanCode
+      )
+      .first();
+
+    if (!planRow) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "The selected LiveBridge plan was not found or is inactive."
+        },
+        404
+      );
+    }
+
+    const now =
+      Date.now();
+
+    await env.TRANSLATIONS_DB.prepare(`
+      INSERT INTO organizations (
+        clerk_user_id,
+        organization_name,
+        account_holder,
+        email,
+        account_email,
+        phone,
+        room_name,
+        terms_accepted_at,
+        privacy_accepted_at,
+        legal_version,
+        plan_code,
+        plan_name,
+        included_minutes,
+        used_minutes,
+        bonus_minutes,
+        viewer_limit,
+        viewer_override,
+        account_status,
+        billing_status,
+        admin_notes,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?,
+        ?, 0, 0,
+        ?, NULL,
+        'active',
+        'active',
+        ?,
+        ?, ?
+      )
+    `)
+    .bind(
+      clerkUserId,
+      organizationName,
+      accountHolder,
+      email,
+      email,
+      phone,
+      roomName,
+      now,
+      now,
+      "admin-recovery-2026-09-22",
+      String(planRow.plan_code || requestedPlanCode),
+      String(planRow.plan_name || requestedPlanCode),
+      Math.max(0, Number(planRow.included_minutes || 0)),
+      Math.max(1, Number(planRow.viewer_limit || 1)),
+      "Created by administrator from verified completed Stripe checkout.",
+      now,
+      now
+    )
+    .run();
+
+    const inserted =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        clerkUserId
+      )
+      .first();
+
+    try {
+
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO stripe_registrations (
+          checkout_session_id,
+          stripe_customer_id,
+          stripe_subscription_id,
+          clerk_user_id,
+          organization_id,
+          plan_code,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        checkout.sessionId,
+        checkout.customerId,
+        checkout.subscriptionId,
+        clerkUserId,
+        Number(inserted?.id || 0),
+        String(planRow.plan_code || requestedPlanCode),
+        now
+      )
+      .run();
+
+      if (checkout.offerToken) {
+        await claimOfferAfterAccountCreation(
+          env,
+          checkout.offerToken,
+          checkout.plan.planCode,
+          email
+        );
+      }
+
+    } catch (linkError) {
+
+      await env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM stripe_registrations
+        WHERE clerk_user_id = ?
+      `)
+      .bind(
+        clerkUserId
+      )
+      .run();
+
+      await env.TRANSLATIONS_DB.prepare(`
+        DELETE FROM organizations
+        WHERE clerk_user_id = ?
+      `)
+      .bind(
+        clerkUserId
+      )
+      .run();
+
+      throw linkError;
+    }
+
+    const saved =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT *
+        FROM organizations
+        WHERE clerk_user_id = ?
+        LIMIT 1
+      `)
+      .bind(
+        clerkUserId
+      )
+      .first();
+
+    return jsonResponse({
+      success: true,
+      account:
+        buildOrganizationAccount(
+          saved
+        )
+    });
+
+  } catch (error) {
+
+    const message =
+      String(
+        error?.message ||
+        error ||
+        "Unable to create the organization."
+      );
+
+    const conflict =
+      message.toLowerCase()
+        .includes("unique");
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          conflict
+            ? "That Clerk login, Stripe checkout, email or room is already registered."
+            : message
+      },
+      conflict ? 409 : 403
+    );
+  }
+}
+
+
+/*
+=======================================================
 ADMIN - LIST ALL ORGANIZATIONS
 =======================================================
 */
@@ -19721,6 +20125,244 @@ if (
     return jsonResponse({
       success: false,
       error: error.message || "Unable to load billing history."
+    }, 403);
+  }
+}
+
+
+async function ensureAccountActivitySchema(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS account_dashboard_sessions (
+      session_id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      clerk_user_id TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      ended_at INTEGER,
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_account_dashboard_sessions_org_started
+    ON account_dashboard_sessions (organization_id, started_at DESC)
+  `).run();
+
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_account_dashboard_sessions_last_seen
+    ON account_dashboard_sessions (last_seen_at DESC)
+  `).run();
+}
+
+
+function validAccountActivitySessionId(value) {
+  return /^[A-Za-z0-9_-]{16,128}$/.test(
+    String(value || "").trim()
+  );
+}
+
+
+if (
+  request.method === "POST" &&
+  (
+    url.pathname === "/account/activity/start" ||
+    url.pathname === "/account/activity/heartbeat" ||
+    url.pathname === "/account/activity/end"
+  )
+) {
+  try {
+    const auth = await verifyClerkRequest(request);
+    const body = await request.json();
+    const sessionId = String(body.sessionId || "").trim();
+
+    if (!validAccountActivitySessionId(sessionId)) {
+      return jsonResponse({
+        success: false,
+        error: "A valid dashboard session ID is required."
+      }, 400);
+    }
+
+    const organization = await env.TRANSLATIONS_DB.prepare(`
+      SELECT id
+      FROM organizations
+      WHERE clerk_user_id = ?
+      LIMIT 1
+    `).bind(auth.clerkUserId).first();
+
+    if (!organization) {
+      return jsonResponse({
+        success: false,
+        error: "LiveBridge account not found."
+      }, 404);
+    }
+
+    await ensureAccountActivitySchema(env);
+
+    const now = Date.now();
+
+    if (url.pathname === "/account/activity/start") {
+      await env.TRANSLATIONS_DB.prepare(`
+        INSERT INTO account_dashboard_sessions (
+          session_id,
+          organization_id,
+          clerk_user_id,
+          started_at,
+          last_seen_at,
+          ended_at,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, NULL, ?)
+        ON CONFLICT(session_id) DO UPDATE SET
+          last_seen_at = excluded.last_seen_at,
+          ended_at = NULL
+        WHERE clerk_user_id = excluded.clerk_user_id
+          AND organization_id = excluded.organization_id
+      `).bind(
+        sessionId,
+        Number(organization.id),
+        auth.clerkUserId,
+        now,
+        now,
+        now
+      ).run();
+    } else if (url.pathname === "/account/activity/end") {
+      await env.TRANSLATIONS_DB.prepare(`
+        UPDATE account_dashboard_sessions
+        SET last_seen_at = ?, ended_at = ?
+        WHERE session_id = ?
+          AND organization_id = ?
+          AND clerk_user_id = ?
+      `).bind(
+        now,
+        now,
+        sessionId,
+        Number(organization.id),
+        auth.clerkUserId
+      ).run();
+    } else {
+      await env.TRANSLATIONS_DB.prepare(`
+        UPDATE account_dashboard_sessions
+        SET last_seen_at = ?, ended_at = NULL
+        WHERE session_id = ?
+          AND organization_id = ?
+          AND clerk_user_id = ?
+      `).bind(
+        now,
+        sessionId,
+        Number(organization.id),
+        auth.clerkUserId
+      ).run();
+    }
+
+    return jsonResponse({
+      success: true,
+      sessionId,
+      recordedAt: now
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to record account activity."
+    }, 403);
+  }
+}
+
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/organization-activity"
+) {
+  try {
+    await verifyAdminRequest(request, env);
+    await ensureAccountActivitySchema(env);
+
+    const organizationId = Math.max(
+      0,
+      Number(url.searchParams.get("id") || 0)
+    );
+
+    if (!organizationId) {
+      return jsonResponse({
+        success: false,
+        error: "Organization ID is required."
+      }, 400);
+    }
+
+    const organization = await env.TRANSLATIONS_DB.prepare(`
+      SELECT id
+      FROM organizations
+      WHERE id = ?
+      LIMIT 1
+    `).bind(organizationId).first();
+
+    if (!organization) {
+      return jsonResponse({
+        success: false,
+        error: "Organization not found."
+      }, 404);
+    }
+
+    const now = Date.now();
+    const onlineCutoff = now - 120000;
+
+    const totals = await env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        COUNT(*) AS sign_in_count,
+        MAX(started_at) AS last_sign_in_at,
+        MAX(last_seen_at) AS last_active_at,
+        COALESCE(SUM(
+          MAX(0, COALESCE(ended_at, last_seen_at) - started_at)
+        ), 0) AS total_dashboard_time_ms,
+        COALESCE(SUM(
+          CASE
+            WHEN ended_at IS NULL AND last_seen_at >= ? THEN 1
+            ELSE 0
+          END
+        ), 0) AS active_sessions
+      FROM account_dashboard_sessions
+      WHERE organization_id = ?
+    `).bind(
+      onlineCutoff,
+      organizationId
+    ).first();
+
+    const recent = await env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        session_id,
+        started_at,
+        last_seen_at,
+        ended_at,
+        MAX(0, COALESCE(ended_at, last_seen_at) - started_at) AS duration_ms
+      FROM account_dashboard_sessions
+      WHERE organization_id = ?
+      ORDER BY started_at DESC
+      LIMIT 50
+    `).bind(organizationId).all();
+
+    return jsonResponse({
+      success: true,
+      activity: {
+        signInCount: Number(totals?.sign_in_count || 0),
+        lastSignInAt: Number(totals?.last_sign_in_at || 0),
+        lastActiveAt: Number(totals?.last_active_at || 0),
+        totalDashboardTimeMs: Number(totals?.total_dashboard_time_ms || 0),
+        activeSessions: Number(totals?.active_sessions || 0),
+        sessions: (recent.results || []).map(row => ({
+          sessionId: String(row.session_id || ""),
+          startedAt: Number(row.started_at || 0),
+          lastSeenAt: Number(row.last_seen_at || 0),
+          endedAt: Number(row.ended_at || 0),
+          durationMs: Number(row.duration_ms || 0),
+          active:
+            !Number(row.ended_at || 0) &&
+            Number(row.last_seen_at || 0) >= onlineCutoff
+        }))
+      }
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: error.message || "Unable to load account activity."
     }, 403);
   }
 }
