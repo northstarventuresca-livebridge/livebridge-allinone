@@ -989,7 +989,7 @@ body{
             </div>
 
             <div class="lb-subtitle">
-              Grant or remove access to the LiveBridge administration dashboard.
+              Grant administrator access or LiveBridge Anywhere preview access.
             </div>
           </div>
 
@@ -1005,7 +1005,7 @@ body{
           </div>
 
           <div class="lb-muted" style="margin-bottom:16px;">
-            Any LiveBridge customer account can be granted administrator access.
+            Admin access and LiveBridge Anywhere preview access are separate permissions. LBA preview only opens the isolated testing version and does not change normal LiveBridge access.
           </div>
 
           <div id="adminAccessRows" class="lb-admin-access-list">
@@ -2781,11 +2781,16 @@ function renderAdminCandidates(list){
             </div>
           </div>
 
-          <div class="lb-admin-access-status ${item.isAdmin ? "on" : "off"}">
-            ${item.isAdmin ? "✓ Administrator" : "Customer Only"}
+          <div>
+            <div class="lb-admin-access-status ${item.isAdmin ? "on" : "off"}">
+              ${item.isAdmin ? "✓ Administrator" : "Customer Only"}
+            </div>
+            <div class="lb-admin-access-status ${item.lbaPreviewAccess ? "on" : "off"}" style="margin-top:6px;">
+              ${item.lbaPreviewAccess ? "✓ LBA Preview" : "LBA Preview Off"}
+            </div>
           </div>
 
-          <div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
             <button
               class="lb-button ${item.isAdmin ? "secondary" : "primary"}"
               onclick="setAdministratorAccess(
@@ -2794,6 +2799,16 @@ function renderAdminCandidates(list){
               )"
             >
               ${item.isAdmin ? "Remove Admin" : "Make Admin"}
+            </button>
+
+            <button
+              class="lb-button ${item.lbaPreviewAccess ? "secondary" : "green"}"
+              onclick="setLbaPreviewAccess(
+                '${escapeHtml(item.clerkUserId)}',
+                ${item.lbaPreviewAccess ? "false" : "true"}
+              )"
+            >
+              ${item.lbaPreviewAccess ? "Remove LBA" : "Give LBA Access"}
             </button>
           </div>
 
@@ -2861,6 +2876,66 @@ async function setAdministratorAccess(
     alert(
       error.message ||
       "Unable to update administrator access."
+    );
+  }
+}
+
+
+async function setLbaPreviewAccess(
+  clerkUserId,
+  enabled
+){
+
+  const action =
+    enabled
+      ? "grant LiveBridge Anywhere preview access"
+      : "remove LiveBridge Anywhere preview access";
+
+  if(
+    !confirm(
+      "Are you sure you want to " +
+      action +
+      "?"
+    )
+  ){
+    return;
+  }
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/lba-preview-access",
+        {
+          method:"POST",
+          headers:{
+            "Content-Type":
+              "application/json"
+          },
+          body:JSON.stringify({
+            clerkUserId,
+            enabled
+          })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to update LiveBridge Anywhere preview access."
+      );
+    }
+
+    await loadAdminCandidates();
+
+  }catch(error){
+
+    alert(
+      error.message ||
+      "Unable to update LiveBridge Anywhere preview access."
     );
   }
 }
