@@ -3790,6 +3790,7 @@ const LIVEBRIDGE_FEATURE_OVERRIDE_KEYS = [
   "prioritySupport",
   "customOnboarding",
   "listenerDataDisplay",
+  "listenerTimingDiagnostic",
   "marketingCampaigns",
   "organizationStatsApi",
   "organizationStatsApiDisabled",
@@ -7414,6 +7415,25 @@ var LiveBridgeRoom = class {
       }
       const sourceLanguage = String(body.sourceLanguage || "en").trim().toLowerCase();
       const chunkId = String(body.chunkId || "").trim() || await sha256(text);
+
+      const broadcastStartedAt =
+        Math.max(
+          0,
+          Number(
+            body.broadcastStartedAt ||
+            0
+          )
+        );
+
+      const sourceElapsedMs =
+        Math.max(
+          0,
+          Number(
+            body.sourceElapsedMs ||
+            0
+          )
+        );
+
       const sockets = this.state.getWebSockets();
       const activeLanguages = /* @__PURE__ */ new Set();
       for (const socket of sockets) {
@@ -7459,7 +7479,9 @@ var LiveBridgeRoom = class {
               sourceLanguage,
               language,
               text: translatedText,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              broadcastStartedAt,
+              sourceElapsedMs
             });
             for (const socket of languageSockets) {
               try {
@@ -12933,6 +12955,83 @@ if (
 
 /*
 =======================================================
+ADMIN - CURRENT LIVE BROADCASTS
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/live-broadcasts"
+) {
+
+  try {
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const cutoff =
+      Date.now() - 90000;
+
+    const result =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          room,
+          started_at,
+          last_seen
+        FROM active_broadcasts
+        WHERE last_seen >= ?
+        ORDER BY started_at ASC
+      `)
+      .bind(
+        cutoff
+      )
+      .all();
+
+    return jsonResponse({
+      success: true,
+      broadcasts:
+        (
+          result.results ||
+          []
+        )
+        .map(item => ({
+          room:
+            String(
+              item.room ||
+              ""
+            ),
+          startedAt:
+            Number(
+              item.started_at ||
+              0
+            ),
+          lastSeen:
+            Number(
+              item.last_seen ||
+              0
+            )
+        }))
+    });
+
+  } catch (error) {
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load live broadcasts."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
 ADMIN - LIST ALL ORGANIZATIONS
 =======================================================
 */
@@ -12966,7 +13065,8 @@ if (
       broadcastStatsResult,
       listenerStatsResult,
       azureUsageResult,
-      openAiUsageResult
+      openAiUsageResult,
+      activeBroadcastsResult
     ] =
       await Promise.all([
 
@@ -13065,6 +13165,19 @@ if (
         `)
         .bind(
           usageMonth
+        )
+        .all(),
+
+        env.TRANSLATIONS_DB.prepare(`
+          SELECT
+            room,
+            started_at,
+            last_seen
+          FROM active_broadcasts
+          WHERE last_seen >= ?
+        `)
+        .bind(
+          Date.now() - 90000
         )
         .all()
       ]);
@@ -13192,6 +13305,21 @@ if (
     }
 
 
+    const activeBroadcastRooms =
+      new Set(
+        (
+          activeBroadcastsResult.results ||
+          []
+        )
+        .map(item =>
+          normalizeRoom(
+            item.room
+          )
+        )
+        .filter(Boolean)
+      );
+
+
     const organizations =
       (
         result.results ||
@@ -13256,8 +13384,35 @@ if (
           openAiUsage.costUsd +
           azureTtsCostUsd;
 
+        const organizationRooms =
+          [
+            normalizeRoom(
+              row.room_name
+            ),
+            normalizeRoom(
+              row.room_alias ||
+              ""
+            )
+          ]
+          .filter(Boolean);
+
+        const isLive =
+          [...activeBroadcastRooms]
+            .some(activeRoom =>
+              organizationRooms
+                .some(baseRoom =>
+                  activeRoom ===
+                    baseRoom ||
+                  activeRoom.startsWith(
+                    baseRoom +
+                    "-"
+                  )
+                )
+            );
+
         return {
           ...account,
+          isLive,
 
           stats: {
             broadcastCount:
@@ -14556,14 +14711,60 @@ if (
     const truncated =
       rows.length > limit;
 
+    const visibleRows =
+      rows.slice(
+        0,
+        limit
+      );
+
+    const transcriptAvailableIds =
+      new Set();
+
+    if (visibleRows.length) {
+
+      const placeholders =
+        visibleRows
+          .map(() => "?")
+          .join(",");
+
+      const transcriptResult =
+        await env.TRANSLATIONS_DB.prepare(`
+          SELECT broadcast_id
+          FROM broadcast_transcripts
+          WHERE expires_at > ?
+            AND broadcast_id IN (${placeholders})
+        `)
+        .bind(
+          Date.now(),
+          ...visibleRows.map(
+            item =>
+              String(
+                item.id ||
+                ""
+              )
+          )
+        )
+        .all();
+
+      for (
+        const item of
+        transcriptResult.results ||
+        []
+      ) {
+        transcriptAvailableIds.add(
+          String(
+            item.broadcast_id ||
+            ""
+          )
+        );
+      }
+    }
+
     const broadcasts = [];
 
     for (
       const broadcast of
-      rows.slice(
-        0,
-        limit
-      )
+      visibleRows
     ) {
 
       const summary =
@@ -14573,9 +14774,16 @@ if (
         );
 
       if (summary) {
-        broadcasts.push(
-          summary
-        );
+        broadcasts.push({
+          ...summary,
+          transcriptAvailable:
+            transcriptAvailableIds.has(
+              String(
+                broadcast.id ||
+                ""
+              )
+            )
+        });
       }
     }
 
@@ -14614,6 +14822,235 @@ if (
         error:
           error.message ||
           "Unable to load broadcast history."
+      },
+      403
+    );
+  }
+}
+
+
+/*
+=======================================================
+ADMIN - VIEW SAVED BROADCAST TRANSCRIPT
+=======================================================
+*/
+
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/broadcast-transcript"
+) {
+
+  try {
+
+    await verifyAdminRequest(
+      request,
+      env
+    );
+
+    const organizationId =
+      Number(
+        url.searchParams.get(
+          "organizationId"
+        ) ||
+        0
+      );
+
+    const broadcastId =
+      String(
+        url.searchParams.get(
+          "broadcastId"
+        ) ||
+        ""
+      )
+      .trim();
+
+    if (
+      !Number.isInteger(
+        organizationId
+      ) ||
+      organizationId <= 0 ||
+      !broadcastId
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization ID and broadcast ID are required."
+        },
+        400
+      );
+    }
+
+    const organization =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          organization_name,
+          room_name,
+          room_alias
+        FROM organizations
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        organizationId
+      )
+      .first();
+
+    if (!organization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Organization not found."
+        },
+        404
+      );
+    }
+
+    const broadcast =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          id,
+          room,
+          started_at,
+          ended_at
+        FROM broadcast_sessions
+        WHERE id = ?
+        LIMIT 1
+      `)
+      .bind(
+        broadcastId
+      )
+      .first();
+
+    if (!broadcast) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "Broadcast not found."
+        },
+        404
+      );
+    }
+
+    const allowedRooms =
+      [
+        normalizeRoom(
+          organization.room_name
+        ),
+        normalizeRoom(
+          organization.room_alias ||
+          ""
+        )
+      ]
+      .filter(Boolean);
+
+    const broadcastRoom =
+      normalizeRoom(
+        broadcast.room
+      );
+
+    const belongsToOrganization =
+      allowedRooms
+        .some(baseRoom =>
+          broadcastRoom ===
+            baseRoom ||
+          broadcastRoom.startsWith(
+            baseRoom +
+            "-"
+          )
+        );
+
+    if (!belongsToOrganization) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "This broadcast does not belong to the selected organization."
+        },
+        403
+      );
+    }
+
+    const transcript =
+      await env.TRANSLATIONS_DB.prepare(`
+        SELECT
+          transcript_text,
+          created_at,
+          expires_at
+        FROM broadcast_transcripts
+        WHERE broadcast_id = ?
+          AND expires_at > ?
+        LIMIT 1
+      `)
+      .bind(
+        broadcastId,
+        Date.now()
+      )
+      .first();
+
+    if (!transcript) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            "This saved transcript has expired or is no longer available."
+        },
+        404
+      );
+    }
+
+    return jsonResponse({
+      success: true,
+      transcript: {
+        broadcastId,
+        organizationId,
+        organizationName:
+          String(
+            organization.organization_name ||
+            ""
+          ),
+        room:
+          broadcastRoom,
+        startedAt:
+          Number(
+            broadcast.started_at ||
+            0
+          ),
+        endedAt:
+          broadcast.ended_at
+            ? Number(
+                broadcast.ended_at
+              )
+            : null,
+        text:
+          String(
+            transcript.transcript_text ||
+            ""
+          ),
+        createdAt:
+          Number(
+            transcript.created_at ||
+            0
+          ),
+        expiresAt:
+          Number(
+            transcript.expires_at ||
+            0
+          )
+      }
+    });
+
+  } catch (error) {
+
+    return jsonResponse(
+      {
+        success: false,
+        error:
+          error.message ||
+          "Unable to load saved transcript."
       },
       403
     );
@@ -19895,6 +20332,8 @@ if (
             currentListeners,
             viewerLimit: null,
             listenerDataDisplayEnabled:
+              false,
+            listenerTimingDiagnosticEnabled:
               false
           });
         }
@@ -19983,6 +20422,10 @@ if (
             parseFeatureOverrides(
               organization.feature_overrides_json
             ).listenerDataDisplay === true,
+          listenerTimingDiagnosticEnabled:
+            parseFeatureOverrides(
+              organization.feature_overrides_json
+            ).listenerTimingDiagnostic === true,
           remainingCapacity:
             effectiveViewerLimit > 0
               ? Math.max(
@@ -20990,6 +21433,23 @@ const audioMuted =
         );
       }
 
+      const sourceFinalNow =
+        Date.now();
+
+      const broadcastStartedAt =
+        Number(
+          authorizedActiveBroadcast
+            .started_at ||
+          sourceFinalNow
+        );
+
+      const sourceElapsedMs =
+        Math.max(
+          0,
+          sourceFinalNow -
+          broadcastStartedAt
+        );
+
       await incrementBroadcastMetric(
         env,
         room,
@@ -21088,7 +21548,9 @@ const audioMuted =
               room,
               text,
               chunkId: body.chunkId || null,
-              sourceLanguage: body.sourceLanguage || "en"
+              sourceLanguage: body.sourceLanguage || "en",
+              broadcastStartedAt,
+              sourceElapsedMs
             })
           }
         )
