@@ -2760,7 +2760,7 @@ function createBroadcastSessionId() {
   );
 }
 
-function showLiveBridgeAccountNotice(message) {
+function showLiveBridgeAccountNotice(message, simpleNotice = false) {
 
   const oldModal =
     document.getElementById(
@@ -2830,7 +2830,7 @@ function showLiveBridgeAccountNotice(message) {
         letter-spacing:.08em;
         margin-bottom:18px;
       ">
-        Account Notice
+        ${simpleNotice ? "Terms Confirmation Required" : "Account Notice"}
       </div>
 
       <div style="
@@ -2842,6 +2842,7 @@ function showLiveBridgeAccountNotice(message) {
         ${message}
       </div>
 
+      ${simpleNotice ? "" : `
       <div style="
         color:#94a9bf;
         font-size:13px;
@@ -2870,6 +2871,7 @@ function showLiveBridgeAccountNotice(message) {
       >
         Have Someone From Our Team Contact Me
       </button>
+      `}
 
       <button
         id="liveBridgeNoticeClose"
@@ -2903,9 +2905,13 @@ function showLiveBridgeAccountNotice(message) {
   };
 
 
-  document.getElementById(
-    "liveBridgeRequestContact"
-  ).onclick = () => {
+  const liveBridgeRequestContact =
+    document.getElementById(
+      "liveBridgeRequestContact"
+    );
+
+  if (liveBridgeRequestContact) {
+    liveBridgeRequestContact.onclick = () => {
 
     const subject =
       encodeURIComponent(
@@ -2931,7 +2937,8 @@ function showLiveBridgeAccountNotice(message) {
       subject +
       "&body=" +
       body;
-  };
+    };
+  }
 }
 
 function openLiveBridgeBilling(){
@@ -3683,7 +3690,8 @@ async function toggleBroadcast() {
     ){
 
       showLiveBridgeAccountNotice(
-        "Before starting your broadcast, please check the Terms confirmation box above, then tap Start Broadcasting again."
+        "Before starting your broadcast, please check the Terms confirmation box above, then tap Start Broadcasting again.",
+        true
       );
 
       return;
