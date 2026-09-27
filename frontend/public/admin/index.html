@@ -265,6 +265,43 @@ body{
   color:white;
 }
 
+.lb-org-name-line{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+
+.lb-live-broadcast-dot{
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  background:#ff3b4d;
+  box-shadow:0 0 0 0 rgba(255,59,77,.7);
+  display:none;
+  flex:0 0 auto;
+}
+
+.lb-live-broadcast-dot.live{
+  display:inline-block;
+  animation:lbLiveBroadcastPulse 1.15s infinite;
+}
+
+@keyframes lbLiveBroadcastPulse{
+  0%{
+    opacity:1;
+    box-shadow:0 0 0 0 rgba(255,59,77,.65);
+  }
+  60%{
+    opacity:.7;
+    box-shadow:0 0 0 7px rgba(255,59,77,0);
+  }
+  100%{
+    opacity:1;
+    box-shadow:0 0 0 0 rgba(255,59,77,0);
+  }
+}
+
 .lb-room{
   color:#7ee3c4;
   font-size:10px;
@@ -430,7 +467,7 @@ body{
 
 .lb-history-row{
   display:grid;
-  grid-template-columns:1.4fr .8fr .7fr .7fr .8fr;
+  grid-template-columns:1.4fr .8fr .7fr .7fr .8fr .8fr;
   gap:12px;
   padding:12px 0;
   border-bottom:1px solid rgba(255,255,255,.07);
@@ -1954,11 +1991,11 @@ body{
 <div class="lb-card" id="orgListenerDataCard" style="margin-top:16px;">
 
               <div class="lb-card-title" style="margin-bottom:7px;">
-                Listener Data Usage Display
+                Listener Diagnostics
               </div>
 
               <div class="lb-muted" style="line-height:1.5;margin-bottom:14px;">
-                Site Admin only. When enabled, listeners for this organization see a small “Data this visit” estimate on /t. The organization cannot change this setting from its account.
+                Site Admin only. These troubleshooting displays can be enabled per organization. The organization cannot turn them on or off from its own account.
               </div>
 
               <label style="
@@ -1977,12 +2014,40 @@ body{
                     Show data counter to listeners
                   </div>
                   <div class="lb-muted">
-                    Default is off.
+                    Displays “Data this visit”. Default is off.
                   </div>
                 </div>
 
                 <input
                   id="editListenerDataDisplay"
+                  type="checkbox"
+                  style="width:19px;height:19px;flex:0 0 auto;"
+                >
+              </label>
+
+              <label style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:14px;
+                padding:12px;
+                margin-top:10px;
+                border:1px solid rgba(255,176,32,.22);
+                border-radius:11px;
+                background:rgba(255,176,32,.06);
+                cursor:pointer;
+              ">
+                <div>
+                  <div style="font-weight:900;color:#f5e4bf;margin-bottom:3px;">
+                    Show live timing / delay diagnostic
+                  </div>
+                  <div class="lb-muted">
+                    Shows each displayed chunk’s broadcast timestamp, current live position and calculated delay. Default is off.
+                  </div>
+                </div>
+
+                <input
+                  id="editListenerTimingDiagnostic"
                   type="checkbox"
                   style="width:19px;height:19px;flex:0 0 auto;"
                 >
@@ -2265,6 +2330,7 @@ body{
                 <div>Listeners</div>
                 <div>Peak</div>
                 <div>Requests</div>
+                <div>Transcript</div>
               </div>
 
               <div id="detailHistory">
@@ -4806,8 +4872,16 @@ function renderOrganizations(list){
               aria-label="Drag organization to reorder"
             >⋮⋮</span>
 
-            <div class="lb-org-name">
-              ${escapeHtml(item.organizationName)}
+            <div class="lb-org-name-line">
+              <span
+                class="lb-live-broadcast-dot ${item.isLive ? "live" : ""}"
+                data-live-organization-id="${Number(item.id)}"
+                title="Broadcasting live"
+                aria-label="Broadcasting live"
+              ></span>
+              <div class="lb-org-name">
+                ${escapeHtml(item.organizationName)}
+              </div>
             </div>
 
             <div class="lb-room">
@@ -4856,6 +4930,103 @@ function renderOrganizations(list){
     }).join("");
 
   initializeOrganizationReorder();
+}
+
+
+async function refreshLiveBroadcastIndicators(){
+
+  try{
+
+    const response =
+      await adminFetch(
+        "/admin/live-broadcasts"
+      );
+
+    const data =
+      await response.json();
+
+    if(
+      !response.ok ||
+      !data.success
+    ){
+      return;
+    }
+
+    const activeRooms =
+      (
+        data.broadcasts ||
+        []
+      )
+      .map(item =>
+        String(
+          item.room ||
+          ""
+        )
+        .trim()
+        .toUpperCase()
+      )
+      .filter(Boolean);
+
+    for(
+      const organization of
+      adminOrganizations
+    ){
+
+      const baseRooms =
+        [
+          organization.roomName,
+          organization.roomAlias
+        ]
+        .map(value =>
+          String(
+            value ||
+            ""
+          )
+          .trim()
+          .toUpperCase()
+        )
+        .filter(Boolean);
+
+      const isLive =
+        activeRooms.some(
+          activeRoom =>
+            baseRooms.some(
+              baseRoom =>
+                activeRoom ===
+                  baseRoom ||
+                activeRoom.startsWith(
+                  baseRoom +
+                  "-"
+                )
+            )
+        );
+
+      organization.isLive =
+        isLive;
+
+      document
+        .querySelectorAll(
+          '[data-live-organization-id="' +
+          Number(
+            organization.id
+          ) +
+          '"]'
+        )
+        .forEach(dot =>
+          dot.classList.toggle(
+            "live",
+            isLive
+          )
+        );
+    }
+
+  }catch(error){
+
+    console.error(
+      "Live broadcast indicator refresh failed:",
+      error
+    );
+  }
 }
 
 
@@ -5796,6 +5967,11 @@ async function openOrganization(id){
   ).checked =
     !!featureOverrides.listenerDataDisplay;
 
+  document.getElementById(
+    "editListenerTimingDiagnostic"
+  ).checked =
+    !!featureOverrides.listenerTimingDiagnostic;
+
   document.getElementById("overrideTranscriptAccess").checked =
     !!featureOverrides.transcriptAccess;
 
@@ -6235,6 +6411,11 @@ function collectFeatureOverrides(){
         "editListenerDataDisplay"
       )?.checked === true,
 
+    listenerTimingDiagnostic:
+      document.getElementById(
+        "editListenerTimingDiagnostic"
+      )?.checked === true,
+
     transcriptAccess:
       document.getElementById("overrideTranscriptAccess")?.checked === true,
 
@@ -6297,6 +6478,8 @@ function renderFeatureOverrideSummary(){
   const labels = {
     listenerDataDisplay:
       "Listener Data Usage Display",
+    listenerTimingDiagnostic:
+      "Listener Timing / Delay Diagnostic",
     transcriptAccess:"Transcripts",
     transcriptEmail:"Transcript Email + AI Summary",
     scheduledBroadcasts:"Scheduled Broadcasts",
@@ -6860,6 +7043,21 @@ function renderDetailHistory(
             ${totalRequests.toLocaleString()}
           </div>
 
+          <div>
+            ${
+              item.transcriptAvailable
+                ? '<button type="button" class="lb-button secondary lb-view-transcript" data-broadcast-id="' +
+                  escapeHtml(
+                    String(
+                      item.broadcastId ||
+                      ""
+                    )
+                  ) +
+                  '" style="padding:7px 9px;font-size:10px;">View</button>'
+                : '<span class="lb-muted" style="font-size:10px;">—</span>'
+            }
+          </div>
+
         </div>
 
         <div class="lb-history-advanced-row">
@@ -6913,6 +7111,250 @@ function renderDetailHistory(
       `;
 
     }).join("");
+
+  box
+    .querySelectorAll(
+      ".lb-view-transcript"
+    )
+    .forEach(button =>
+      button.addEventListener(
+        "click",
+        () =>
+          openAdminBroadcastTranscript(
+            button.dataset.broadcastId
+          )
+      )
+    );
+}
+
+
+async function openAdminBroadcastTranscript(
+  broadcastId
+){
+
+  if(
+    !selectedOrganization ||
+    !broadcastId
+  ){
+    return;
+  }
+
+  try{
+
+    const params =
+      new URLSearchParams({
+        organizationId:
+          String(
+            selectedOrganization.id
+          ),
+        broadcastId:
+          String(
+            broadcastId
+          )
+      });
+
+    const response =
+      await adminFetch(
+        "/admin/broadcast-transcript?" +
+        params.toString()
+      );
+
+    const data =
+      await response.json();
+
+    if(
+      !response.ok ||
+      !data.success
+    ){
+      throw new Error(
+        data.error ||
+        "Unable to load transcript."
+      );
+    }
+
+    showAdminTranscriptViewer(
+      data.transcript
+    );
+
+  }catch(error){
+
+    await liveBridgeAdminModal({
+      title:
+        "Transcript Unavailable",
+      message:
+        error.message ||
+        "Unable to load saved transcript.",
+      confirmText:
+        "Close",
+      success:
+        true
+    });
+  }
+}
+
+
+function showAdminTranscriptViewer(
+  transcript
+){
+
+  const overlay =
+    document.createElement(
+      "div"
+    );
+
+  overlay.style.cssText = `
+    position:fixed;
+    inset:0;
+    z-index:999999;
+    background:rgba(2,8,18,.88);
+    backdrop-filter:blur(5px);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:18px;
+  `;
+
+  const startedAt =
+    Number(
+      transcript?.startedAt ||
+      0
+    );
+
+  const titleDate =
+    startedAt
+      ? new Date(
+          startedAt
+        ).toLocaleString()
+      : "Saved broadcast";
+
+  overlay.innerHTML = `
+    <div style="
+      width:min(920px,100%);
+      max-height:90vh;
+      display:flex;
+      flex-direction:column;
+      background:#0d1b2c;
+      border:1px solid rgba(255,255,255,.13);
+      border-radius:18px;
+      box-shadow:0 28px 80px rgba(0,0,0,.55);
+      overflow:hidden;
+      color:white;
+    ">
+      <div style="
+        padding:18px 20px;
+        border-bottom:1px solid rgba(255,255,255,.09);
+        display:flex;
+        gap:12px;
+        align-items:center;
+        justify-content:space-between;
+      ">
+        <div>
+          <div style="font-size:18px;font-weight:900;">
+            Saved Broadcast Transcript
+          </div>
+          <div style="color:#8fa7bf;font-size:11px;margin-top:4px;">
+            ${escapeHtml(titleDate)}
+            · ${escapeHtml(transcript?.room || "")}
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button
+            type="button"
+            id="lbCopyAdminTranscript"
+            class="lb-button secondary"
+          >
+            Copy
+          </button>
+          <button
+            type="button"
+            id="lbCloseAdminTranscript"
+            class="lb-button primary"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      <pre
+        id="lbAdminTranscriptText"
+        style="
+          margin:0;
+          padding:20px;
+          overflow:auto;
+          white-space:pre-wrap;
+          word-break:break-word;
+          font-family:Arial,Helvetica,sans-serif;
+          line-height:1.6;
+          font-size:14px;
+          color:#e8f0f7;
+          background:#081421;
+        "
+      ></pre>
+    </div>
+  `;
+
+  document.body.appendChild(
+    overlay
+  );
+
+  const transcriptText =
+    String(
+      transcript?.text ||
+      ""
+    );
+
+  overlay
+    .querySelector(
+      "#lbAdminTranscriptText"
+    )
+    .textContent =
+      transcriptText;
+
+  overlay
+    .querySelector(
+      "#lbCloseAdminTranscript"
+    )
+    .addEventListener(
+      "click",
+      () => overlay.remove()
+    );
+
+  overlay
+    .querySelector(
+      "#lbCopyAdminTranscript"
+    )
+    .addEventListener(
+      "click",
+      async function(){
+
+        try{
+          await navigator.clipboard
+            .writeText(
+              transcriptText
+            );
+
+          this.textContent =
+            "✓ Copied";
+
+        }catch{
+          this.textContent =
+            "Copy failed";
+        }
+      }
+    );
+
+  overlay.addEventListener(
+    "click",
+    event => {
+      if(
+        event.target ===
+        overlay
+      ){
+        overlay.remove();
+      }
+    }
+  );
 }
 
 
@@ -8111,6 +8553,13 @@ window.addEventListener(
           }
         }
       });
+
+      refreshLiveBroadcastIndicators();
+
+      setInterval(
+        refreshLiveBroadcastIndicators,
+        10000
+      );
 
 
     }catch(error){
