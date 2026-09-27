@@ -13320,6 +13320,30 @@ if (
       );
 
 
+    const matchesOrganizationRoom =
+      (
+        activityRoom,
+        organizationRooms
+      ) => {
+
+        const normalizedActivityRoom =
+          normalizeRoom(
+            activityRoom
+          );
+
+        return organizationRooms
+          .some(baseRoom =>
+            normalizedActivityRoom ===
+              baseRoom ||
+            normalizedActivityRoom
+              .startsWith(
+                baseRoom +
+                "-"
+              )
+          );
+      };
+
+
     const organizations =
       (
         result.results ||
@@ -13331,23 +13355,95 @@ if (
             row
           );
 
-        const broadcastStats =
-          broadcastStatsByRoom.get(
-            String(
-              row.room_name ||
+        const organizationRooms =
+          [
+            normalizeRoom(
+              row.room_name
+            ),
+            normalizeRoom(
+              row.room_alias ||
               ""
             )
-          ) ||
-          {};
+          ]
+          .filter(Boolean);
 
-        const listenerStats =
-          listenerStatsByRoom.get(
-            String(
-              row.room_name ||
-              ""
+        const broadcastStats = {
+          broadcast_count: 0,
+          broadcast_time_ms: 0,
+          highest_peak: 0
+        };
+
+        for (
+          const [
+            statsRoom,
+            stats
+          ] of
+            broadcastStatsByRoom.entries()
+        ) {
+
+          if (
+            !matchesOrganizationRoom(
+              statsRoom,
+              organizationRooms
             )
-          ) ||
-          {};
+          ) {
+            continue;
+          }
+
+          broadcastStats
+            .broadcast_count +=
+            Number(
+              stats.broadcast_count ||
+              0
+            );
+
+          broadcastStats
+            .broadcast_time_ms +=
+            Number(
+              stats.broadcast_time_ms ||
+              0
+            );
+
+          broadcastStats
+            .highest_peak =
+            Math.max(
+              broadcastStats
+                .highest_peak,
+              Number(
+                stats.highest_peak ||
+                0
+              )
+            );
+        }
+
+        const listenerStats = {
+          listener_sessions: 0
+        };
+
+        for (
+          const [
+            statsRoom,
+            stats
+          ] of
+            listenerStatsByRoom.entries()
+        ) {
+
+          if (
+            !matchesOrganizationRoom(
+              statsRoom,
+              organizationRooms
+            )
+          ) {
+            continue;
+          }
+
+          listenerStats
+            .listener_sessions +=
+            Number(
+              stats.listener_sessions ||
+              0
+            );
+        }
 
         const azureUsage =
           azureUsageByOrganization.get(
@@ -13384,30 +13480,13 @@ if (
           openAiUsage.costUsd +
           azureTtsCostUsd;
 
-        const organizationRooms =
-          [
-            normalizeRoom(
-              row.room_name
-            ),
-            normalizeRoom(
-              row.room_alias ||
-              ""
-            )
-          ]
-          .filter(Boolean);
-
         const isLive =
           [...activeBroadcastRooms]
             .some(activeRoom =>
-              organizationRooms
-                .some(baseRoom =>
-                  activeRoom ===
-                    baseRoom ||
-                  activeRoom.startsWith(
-                    baseRoom +
-                    "-"
-                  )
-                )
+              matchesOrganizationRoom(
+                activeRoom,
+                organizationRooms
+              )
             );
 
         return {
@@ -14544,7 +14623,8 @@ if (
       await env.TRANSLATIONS_DB.prepare(`
         SELECT
           id,
-          room_name
+          room_name,
+          room_alias
         FROM organizations
         WHERE id = ?
         LIMIT 1
@@ -14646,10 +14726,35 @@ if (
         )
       );
 
-    const room =
-      normalizeRoom(
-        organization.room_name
+    const organizationRooms =
+      [
+        normalizeRoom(
+          organization.room_name
+        ),
+        normalizeRoom(
+          organization.room_alias ||
+          ""
+        )
+      ]
+      .filter(Boolean);
+
+    const roomConditions = [];
+    const bindings = [];
+
+    for (
+      const baseRoom of
+        organizationRooms
+    ) {
+      roomConditions.push(
+        "room = ?",
+        "room LIKE ?"
       );
+
+      bindings.push(
+        baseRoom,
+        baseRoom + "-%"
+      );
+    }
 
     let sql = `
       SELECT
@@ -14659,12 +14764,12 @@ if (
         ended_at,
         peak_listeners
       FROM broadcast_sessions
-      WHERE room = ?
+      WHERE (
+        ${roomConditions.join(
+          " OR "
+        )}
+      )
     `;
-
-    const bindings = [
-      room
-    ];
 
     if (hasStart) {
       sql += `
