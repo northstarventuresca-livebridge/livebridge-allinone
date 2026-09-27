@@ -1124,6 +1124,7 @@
   let listenerAssignedName = "";
   let listenerChatOpen = false;
   let listenerDataCounterEnabled = false;
+  let listenerTimingDiagnosticEnabled = false;
   let listenerDataBytes = 0;
   let listenerDataBaselineCaptured = false;
 
@@ -3390,6 +3391,11 @@ if (listenerReconnectTimer) {
         true
     );
 
+    listenerTimingDiagnosticEnabled =
+      access.data
+        ?.listenerTimingDiagnosticEnabled ===
+        true;
+
     if (!access.allowed) {
 
       listenerConnectionWanted = false;
@@ -3593,7 +3599,23 @@ if (listenerReconnectTimer) {
           const queueItem = {
             text: translatedText,
             ttsLang,
-            preparedPromise: null
+            preparedPromise: null,
+            broadcastStartedAt:
+              Math.max(
+                0,
+                Number(
+                  data.broadcastStartedAt ||
+                  0
+                )
+              ),
+            sourceElapsedMs:
+              Math.max(
+                0,
+                Number(
+                  data.sourceElapsedMs ||
+                  0
+                )
+              )
           };
 
           /*
@@ -5508,6 +5530,65 @@ const cacheStatus =
   }
 
 
+  function formatListenerDiagnosticElapsed(
+    milliseconds
+  ) {
+
+    const totalSeconds =
+      Math.max(
+        0,
+        Math.round(
+          Number(
+            milliseconds ||
+            0
+          ) /
+          1000
+        )
+      );
+
+    const hours =
+      Math.floor(
+        totalSeconds /
+        3600
+      );
+
+    const minutes =
+      Math.floor(
+        (
+          totalSeconds %
+          3600
+        ) /
+        60
+      );
+
+    const seconds =
+      totalSeconds %
+      60;
+
+    const pad =
+      value =>
+        String(value)
+          .padStart(
+            2,
+            "0"
+          );
+
+    return hours > 0
+      ? (
+          hours +
+          ":" +
+          pad(minutes) +
+          ":" +
+          pad(seconds)
+        )
+      : (
+          minutes +
+          ":" +
+          pad(seconds)
+        );
+  }
+
+
   /*
     KEEP THE EXISTING ONE-AT-A-TIME QUEUE,
     but prepare the Azure MP3 BEFORE displaying the sentence.
@@ -5638,8 +5719,89 @@ const cacheStatus =
               "div"
             );
 
-          line.textContent =
-            translatedText;
+          if (
+            listenerTimingDiagnosticEnabled &&
+            typeof queueItem !==
+              "string" &&
+            Number(
+              queueItem
+                ?.broadcastStartedAt ||
+              0
+            ) > 0
+          ) {
+
+            const chunkElapsedMs =
+              Math.max(
+                0,
+                Number(
+                  queueItem
+                    ?.sourceElapsedMs ||
+                  0
+                )
+              );
+
+            const liveElapsedMs =
+              Math.max(
+                0,
+                Date.now() -
+                Number(
+                  queueItem
+                    .broadcastStartedAt
+                )
+              );
+
+            const delayMs =
+              Math.max(
+                0,
+                liveElapsedMs -
+                chunkElapsedMs
+              );
+
+            const timing =
+              document.createElement(
+                "div"
+              );
+
+            timing.style.cssText =
+              "font-size:10px;font-weight:900;color:#ffbf57;letter-spacing:.02em;margin-bottom:3px;opacity:.95;";
+
+            timing.textContent =
+              "Chunk " +
+              formatListenerDiagnosticElapsed(
+                chunkElapsedMs
+              ) +
+              " · Live " +
+              formatListenerDiagnosticElapsed(
+                liveElapsedMs
+              ) +
+              " · Delay " +
+              Math.round(
+                delayMs /
+                1000
+              ) +
+              "s";
+
+            line.appendChild(
+              timing
+            );
+
+            const text =
+              document.createElement(
+                "div"
+              );
+
+            text.textContent =
+              translatedText;
+
+            line.appendChild(
+              text
+            );
+
+          } else {
+
+            line.textContent =
+              translatedText;
+          }
 
           output.appendChild(
             line
