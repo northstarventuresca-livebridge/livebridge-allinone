@@ -23064,29 +23064,191 @@ const now =
     if (request.method === "POST" && url.pathname === "/email-transcript") {
   try {
 
-    const auth =
-      await verifyClerkRequest(request, env);
-
     const {
       email,
       transcript,
       language,
-      room
+      room,
+      listenerId
     } =
       await request.json();
 
 
-    const ownedRoom =
-      await getOwnedBroadcastOrganization(
-        env,
-        auth.clerkUserId,
-        room
+    if (!email || !transcript) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Missing email or transcript."
+        },
+        400
       );
+    }
+
+
+    const normalizedEmail =
+      String(email)
+        .trim()
+        .toLowerCase();
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        .test(normalizedEmail)
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Please enter a valid email address."
+        },
+        400
+      );
+    }
+
+
+    const normalizedRoom =
+      normalizeRoom(room);
+
+    const authorization =
+      String(
+        request.headers.get(
+          "Authorization"
+        ) || ""
+      ).trim();
+
+    let emailOrganization =
+      null;
+
+
+    if (
+      authorization
+        .toLowerCase()
+        .startsWith(
+          "bearer "
+        )
+    ) {
+
+      /*
+        Broadcaster path: retain normal Clerk ownership verification.
+      */
+      const auth =
+        await verifyClerkRequest(
+          request,
+          env
+        );
+
+      const ownedRoom =
+        await getOwnedBroadcastOrganization(
+          env,
+          auth.clerkUserId,
+          normalizedRoom
+        );
+
+      emailOrganization =
+        ownedRoom.organization;
+
+    } else {
+
+      /*
+        Listener path: a public listener is not signed into Clerk, so verify
+        that this browser has a recent listener session for this room.
+        This restores listener transcript email without reopening the endpoint
+        as an unauthenticated general-purpose email relay.
+      */
+      const normalizedListenerId =
+        String(
+          listenerId || ""
+        ).trim();
+
+      if (
+        !normalizedRoom ||
+        !normalizedListenerId
+      ) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Your LiveBridge listener session could not be verified."
+          },
+          403
+        );
+      }
+
+      await ensureAnalyticsTables(
+        env
+      );
+
+      const listenerSuffix =
+        ":" +
+        normalizedListenerId;
+
+      const listenerSession =
+        await env.TRANSLATIONS_DB
+          .prepare(`
+            SELECT
+              id,
+              last_seen,
+              ended_at
+            FROM listener_sessions
+            WHERE room = ?
+              AND substr(
+                id,
+                length(id) -
+                length(?) + 1
+              ) = ?
+            ORDER BY last_seen DESC
+            LIMIT 1
+          `)
+          .bind(
+            normalizedRoom,
+            listenerSuffix,
+            listenerSuffix
+          )
+          .first();
+
+      const listenerSessionAge =
+        Date.now() -
+        Number(
+          listenerSession
+            ?.last_seen ||
+          0
+        );
+
+      if (
+        !listenerSession ||
+        listenerSessionAge >
+          2 * 60 * 60 * 1000
+      ) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "Your LiveBridge listener session has expired. Rejoin the room and try again."
+          },
+          403
+        );
+      }
+
+      emailOrganization =
+        await getOrganizationForRoom(
+          env,
+          normalizedRoom
+        );
+
+      if (!emailOrganization) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              "This LiveBridge organization could not be found."
+          },
+          404
+        );
+      }
+    }
 
 
     const emailEntitlements =
       buildEffectivePlanEntitlements(
-        ownedRoom.organization
+        emailOrganization
       );
 
 
@@ -23110,13 +23272,11 @@ const now =
     }
 
 
-    if (!email || !transcript) {
-      return jsonResponse(
-        {
-          success: false,
-          error: "Missing email or transcript."
-        },
-        400
+    if (
+      !env.GMAIL_WEB_APP_URL
+    ) {
+      throw new Error(
+        "LiveBridge email service is not configured."
       );
     }
 
@@ -23158,7 +23318,7 @@ const now =
     try {
       await recordOpenAiUsageByOrganization(
         env,
-        ownedRoom.organization.id,
+        emailOrganization.id,
         "transcript_notes",
         "gpt-4.1-mini",
         summaryData.usage
@@ -23200,7 +23360,8 @@ const now =
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email,
+          email:
+            normalizedEmail,
 
           subject:
             "Your LiveBridge Transcript & AI Notes",
