@@ -1375,6 +1375,19 @@ const AUDIO_ACTIVITY_THRESHOLD = 0.012;
 const TRANSCRIPTION_SILENCE_HOLD_MS = 15000;
 
 /*
+  Sentence-friendly broadcaster chunking:
+  - preserve low latency for normal speech
+  - prefer a natural pause after the minimum window
+  - force a hard cutoff for speakers who do not pause
+  - fall back to the legacy 7-second timing when audio analysis is unavailable
+*/
+const ADAPTIVE_CHUNK_MIN_MS = 5500;
+const ADAPTIVE_CHUNK_SILENCE_MS = 400;
+const ADAPTIVE_CHUNK_HARD_MAX_MS = 9500;
+const ADAPTIVE_CHUNK_FALLBACK_MS = 7000;
+const ADAPTIVE_CHUNK_CHECK_MS = 125;
+
+/*
   Cross-browser broadcast mute state.
   Safari may continue feeding an already-running MediaRecorder even when
   MediaStreamTrack.enabled is toggled, so recorder chunks also honor this gate.
@@ -4955,6 +4968,56 @@ function stopAudioSafetyMonitoring() {
     null;
 }
 
+function getCurrentBroadcastRms() {
+
+  if (
+    !audioSafetyAnalyser ||
+    !audioSafetyContext ||
+    audioSafetyContext.state !==
+      "running"
+  ) {
+    return null;
+  }
+
+  try {
+
+    const samples =
+      new Uint8Array(
+        audioSafetyAnalyser.fftSize
+      );
+
+    audioSafetyAnalyser
+      .getByteTimeDomainData(
+        samples
+      );
+
+    let sumSquares = 0;
+
+    for (
+      let i = 0;
+      i < samples.length;
+      i += 1
+    ) {
+
+      const normalized =
+        (samples[i] - 128) / 128;
+
+      sumSquares +=
+        normalized * normalized;
+    }
+
+    return Math.sqrt(
+      sumSquares /
+      samples.length
+    );
+
+  } catch (error) {
+
+    return null;
+  }
+}
+
+
 /* =====================================================
    RECORDING
 ===================================================== */
@@ -5321,27 +5384,106 @@ function recordNextChunk() {
 
   recorder.start();
 
-  chunkStopTimer =
-    setTimeout(
-      () => {
+  const chunkStartedAt =
+    Date.now();
+
+  let quietSince =
+    null;
+
+  const checkChunkBoundary =
+    () => {
+
+      if (
+        generation !==
+          mediaRecorderGeneration ||
+        recorder.state !==
+          "recording"
+      ) {
+        return;
+      }
+
+      const now =
+        Date.now();
+
+      const elapsed =
+        now -
+        chunkStartedAt;
+
+      const rms =
+        getCurrentBroadcastRms();
+
+      /*
+        If Safari/browser audio analysis is unavailable,
+        preserve the known-safe legacy seven-second cutoff.
+      */
+      if (rms === null) {
 
         if (
-          generation !==
-          mediaRecorderGeneration
-        ) {
-          return;
-        }
-
-        if (
-          recorder.state ===
-            "recording"
+          elapsed >=
+            ADAPTIVE_CHUNK_FALLBACK_MS
         ) {
 
           recorder.stop();
+
+          return;
         }
 
-      },
-      7000
+      } else {
+
+        if (
+          rms <
+            AUDIO_ACTIVITY_THRESHOLD
+        ) {
+
+          if (!quietSince) {
+            quietSince =
+              now;
+          }
+
+        } else {
+
+          quietSince =
+            null;
+        }
+
+        const naturalPauseReady =
+          elapsed >=
+            ADAPTIVE_CHUNK_MIN_MS &&
+          quietSince !==
+            null &&
+          now -
+            quietSince >=
+            ADAPTIVE_CHUNK_SILENCE_MS;
+
+        const hardLimitReached =
+          elapsed >=
+            ADAPTIVE_CHUNK_HARD_MAX_MS;
+
+        if (
+          naturalPauseReady ||
+          hardLimitReached
+        ) {
+
+          recorder.stop();
+
+          return;
+        }
+      }
+
+      chunkStopTimer =
+        setTimeout(
+          checkChunkBoundary,
+          ADAPTIVE_CHUNK_CHECK_MS
+        );
+
+      mediaRecorderStopTimer =
+        chunkStopTimer;
+    };
+
+  chunkStopTimer =
+    setTimeout(
+      checkChunkBoundary,
+      ADAPTIVE_CHUNK_CHECK_MS
     );
 
   mediaRecorderStopTimer =
