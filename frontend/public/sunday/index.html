@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- LiveBridge v1.0.18 event-driven watchdog + localized livebridge.ca share links -->
+<!-- LiveBridge v1.0.19 iOS broadcaster recorder compatibility + diagnostics -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -655,6 +655,20 @@ body{
         Loading audio devices...
       </option>
     </select>
+
+    <div
+      id="audioCaptureDiagnostic"
+      style="
+        margin-top:-10px;
+        margin-bottom:14px;
+        color:#8fa5bc;
+        font-size:10px;
+        line-height:1.45;
+        min-height:14px;
+      "
+    >
+      Audio: waiting
+    </div>
 
 
     <div class="lb-status-card">
@@ -2664,6 +2678,131 @@ lbCancelSchedule.addEventListener(
    AUDIO INPUTS
 ===================================================== */
 
+function isAppleMobileBrowser() {
+
+  const ua =
+    String(
+      navigator.userAgent || ""
+    );
+
+  return (
+    /iPad|iPhone|iPod/i.test(
+      ua
+    ) ||
+    (
+      /Macintosh/i.test(
+        ua
+      ) &&
+      Number(
+        navigator.maxTouchPoints || 0
+      ) > 1
+    )
+  );
+}
+
+
+function setAudioDiagnostic(
+  message,
+  state = "normal"
+) {
+
+  const element =
+    document.getElementById(
+      "audioCaptureDiagnostic"
+    );
+
+  if (!element) {
+    return;
+  }
+
+  element.textContent =
+    "Audio: " +
+    message;
+
+  element.style.color =
+    state === "good"
+      ? "#66ebb2"
+      : state === "bad"
+        ? "#ff9b9b"
+        : "#8fa5bc";
+}
+
+
+function getAppleRecorderMimeType() {
+
+  if (
+    typeof MediaRecorder ===
+      "undefined"
+  ) {
+    return "";
+  }
+
+  const candidates = [
+    "audio/mp4;codecs=mp4a.40.2",
+    "audio/mp4"
+  ];
+
+  for (
+    const candidate of
+      candidates
+  ) {
+
+    try {
+
+      if (
+        MediaRecorder
+          .isTypeSupported(
+            candidate
+          )
+      ) {
+        return candidate;
+      }
+
+    } catch (error) {
+    }
+  }
+
+  return "";
+}
+
+
+function getBroadcasterAudioConstraints(
+  selectedAudioDevice
+) {
+
+  if (
+    isAppleMobileBrowser()
+  ) {
+
+    const appleAudio = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false
+    };
+
+    if (
+      selectedAudioDevice
+    ) {
+      appleAudio.deviceId = {
+        ideal:
+          selectedAudioDevice
+      };
+    }
+
+    return appleAudio;
+  }
+
+  return selectedAudioDevice
+    ? {
+        deviceId: {
+          exact:
+            selectedAudioDevice
+        }
+      }
+    : true;
+}
+
+
 async function loadAudioInputs() {
 
   const audioSelect =
@@ -2673,21 +2812,41 @@ async function loadAudioInputs() {
 
   try {
 
-    const permissionStream =
-      await navigator.mediaDevices
-        .getUserMedia({
-          audio: true
-        });
+    let devices = [];
 
-    const devices =
-      await navigator.mediaDevices
-        .enumerateDevices();
+    if (
+      isAppleMobileBrowser()
+    ) {
 
-    permissionStream
-      .getTracks()
-      .forEach(
-        track => track.stop()
-      );
+      /*
+        Safari/iPad can behave badly when a permission stream
+        is opened, stopped, then immediately replaced by the
+        real broadcast capture stream. On Apple mobile devices,
+        enumerate first and acquire the mic only when the user
+        starts broadcasting.
+      */
+      devices =
+        await navigator.mediaDevices
+          .enumerateDevices();
+
+    } else {
+
+      const permissionStream =
+        await navigator.mediaDevices
+          .getUserMedia({
+            audio: true
+          });
+
+      devices =
+        await navigator.mediaDevices
+          .enumerateDevices();
+
+      permissionStream
+        .getTracks()
+        .forEach(
+          track => track.stop()
+        );
+    }
 
     const audioInputs =
       devices.filter(
@@ -2704,7 +2863,11 @@ async function loadAudioInputs() {
     ) {
 
       audioSelect.innerHTML =
-        '<option value="">No audio inputs found</option>';
+        '<option value="">Default microphone</option>';
+
+      setAudioDiagnostic(
+        "default microphone"
+      );
 
       return;
     }
@@ -2722,13 +2885,23 @@ async function loadAudioInputs() {
 
         option.textContent =
           device.label ||
-          "Audio Input " +
-          (index + 1);
+          (
+            isAppleMobileBrowser()
+              ? "Default microphone"
+              : "Audio Input " +
+                (index + 1)
+          );
 
         audioSelect.appendChild(
           option
         );
       }
+    );
+
+    setAudioDiagnostic(
+      isAppleMobileBrowser()
+        ? "Safari microphone ready"
+        : "microphone ready"
     );
 
   } catch (error) {
@@ -2739,10 +2912,13 @@ async function loadAudioInputs() {
     );
 
     audioSelect.innerHTML =
-      '<option value="">Microphone permission required</option>';
+      '<option value="">Default microphone</option>';
+
+    setAudioDiagnostic(
+      "microphone will be requested when broadcasting"
+    );
   }
 }
-
 
 /* =====================================================
    BROADCAST
@@ -3854,18 +4030,30 @@ async function toggleBroadcast() {
         mediaStream =
           await navigator.mediaDevices
             .getUserMedia({
-
               audio:
-                selectedAudioDevice
-                  ? {
-                      deviceId: {
-                        exact:
-                          selectedAudioDevice
-                      }
-                    }
-                  : true
-
+                getBroadcasterAudioConstraints(
+                  selectedAudioDevice
+                )
             });
+
+        const activeTrack =
+          mediaStream
+            .getAudioTracks?.()[0];
+
+        setAudioDiagnostic(
+          activeTrack
+            ? (
+                "mic stream live · " +
+                (
+                  activeTrack.label ||
+                  "microphone"
+                )
+              )
+            : "no audio track returned",
+          activeTrack
+            ? "good"
+            : "bad"
+        );
 
       } catch (micError) {
 
@@ -4831,16 +5019,86 @@ function recordNextChunk() {
 
   const chunks = [];
 
-  const recorder =
-    new MediaRecorder(
-      mediaStream
+  const preferredMimeType =
+    isAppleMobileBrowser()
+      ? getAppleRecorderMimeType()
+      : "";
+
+  let recorder = null;
+
+  try {
+
+    recorder =
+      preferredMimeType
+        ? new MediaRecorder(
+            mediaStream,
+            {
+              mimeType:
+                preferredMimeType
+            }
+          )
+        : new MediaRecorder(
+            mediaStream
+          );
+
+  } catch (recorderError) {
+
+    console.error(
+      "MediaRecorder creation failed:",
+      recorderError
     );
+
+    setAudioDiagnostic(
+      "recorder could not start · " +
+      (
+        recorderError.message ||
+        recorderError.name ||
+        "unknown error"
+      ),
+      "bad"
+    );
+
+    return;
+  }
 
   mediaRecorder =
     recorder;
 
   let chunkStopTimer =
     null;
+
+  setAudioDiagnostic(
+    "recorder active · " +
+    (
+      recorder.mimeType ||
+      preferredMimeType ||
+      "browser default"
+    ),
+    "good"
+  );
+
+  recorder.onerror =
+    function(event) {
+
+      const error =
+        event.error ||
+        event;
+
+      console.error(
+        "MediaRecorder error:",
+        error
+      );
+
+      setAudioDiagnostic(
+        "recorder error · " +
+        (
+          error?.message ||
+          error?.name ||
+          "unknown"
+        ),
+        "bad"
+      );
+    };
 
   recorder.ondataavailable =
     function(event) {
@@ -4852,8 +5110,27 @@ function recordNextChunk() {
         return;
       }
 
+      const size =
+        Number(
+          event.data?.size || 0
+        );
+
+      setAudioDiagnostic(
+        "chunk " +
+        size +
+        " bytes · " +
+        (
+          event.data?.type ||
+          recorder.mimeType ||
+          "unknown type"
+        ),
+        size > 0
+          ? "good"
+          : "bad"
+      );
+
       if (
-        event.data.size > 0
+        size > 0
       ) {
 
         chunks.push(
@@ -4903,13 +5180,21 @@ function recordNextChunk() {
         chunks.length > 0
       ) {
 
+        const recordedMimeType =
+          recorder.mimeType ||
+          chunks[0]?.type ||
+          (
+            isAppleMobileBrowser()
+              ? "audio/mp4"
+              : "audio/webm"
+          );
+
         const audioBlob =
           new Blob(
             chunks,
             {
               type:
-                recorder.mimeType ||
-                "audio/webm"
+                recordedMimeType
             }
           );
 
@@ -4920,6 +5205,14 @@ function recordNextChunk() {
             audioBlob
           );
         }
+      } else if (
+        broadcasting
+      ) {
+
+        setAudioDiagnostic(
+          "recorder produced 0 bytes",
+          "bad"
+        );
       }
 
       if (
@@ -4979,10 +5272,59 @@ async function sendAudioChunk(
         "inputLanguage"
       ).value;
 
+    const audioType =
+      String(
+        audioBlob.type || ""
+      )
+      .toLowerCase();
+
+    let audioFileName =
+      "broadcast.webm";
+
+    if (
+      audioType.includes(
+        "mp4"
+      )
+    ) {
+      audioFileName =
+        "broadcast.mp4";
+    } else if (
+      audioType.includes(
+        "mpeg"
+      ) ||
+      audioType.includes(
+        "mp3"
+      )
+    ) {
+      audioFileName =
+        "broadcast.mp3";
+    } else if (
+      audioType.includes(
+        "wav"
+      )
+    ) {
+      audioFileName =
+        "broadcast.wav";
+    } else if (
+      audioType.includes(
+        "ogg"
+      )
+    ) {
+      audioFileName =
+        "broadcast.ogg";
+    }
+
+    setAudioDiagnostic(
+      "uploading " +
+      audioBlob.size +
+      " bytes · " +
+      audioFileName
+    );
+
     formData.append(
       "audio",
       audioBlob,
-      "broadcast.webm"
+      audioFileName
     );
 
     formData.append(
@@ -5013,6 +5355,38 @@ async function sendAudioChunk(
       "TRANSCRIPTION:",
       data
     );
+
+    if (!response.ok) {
+
+      setAudioDiagnostic(
+        "transcription API " +
+        response.status +
+        " · " +
+        (
+          data.details ||
+          data.error ||
+          "error"
+        ),
+        "bad"
+      );
+
+    } else if (
+      data.success &&
+      data.text
+    ) {
+
+      setAudioDiagnostic(
+        "transcription received",
+        "good"
+      );
+
+    } else {
+
+      setAudioDiagnostic(
+        "API OK · no speech text returned",
+        "bad"
+      );
+    }
 
     if (
       !response.ok ||
