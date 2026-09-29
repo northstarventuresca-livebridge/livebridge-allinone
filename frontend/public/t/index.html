@@ -4152,8 +4152,14 @@ resolve(email);
         },
         body: JSON.stringify({
           email,
-          transcript: fullTranslatedTranscript,
-          language: translateLang
+          transcript:
+            fullTranslatedTranscript,
+          language:
+            translateLang,
+          room:
+            ROOM_ID,
+          listenerId:
+            listenerSessionId
         })
       }
     );
@@ -4178,7 +4184,11 @@ resolve(email);
     );
 
     alert(
-      "The email could not be sent. Please try again."
+      "The email could not be sent. " +
+      (
+        error.message ||
+        "Please try again."
+      )
     );
 
   } finally {
