@@ -1,0 +1,20 @@
+{
+  "id": "/sunday/",
+  "name": "LiveBridge Broadcaster",
+  "short_name": "LiveBridge",
+  "description": "LiveBridge Broadcaster",
+  "start_url": "/sunday/?app=1",
+  "scope": "/sunday/",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/assets/livebridge-logo.jpg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
