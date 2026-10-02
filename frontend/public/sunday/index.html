@@ -8466,8 +8466,16 @@ window.addEventListener(
 
       if (isIOS()) {
         help.innerHTML =
-          "<strong>On iPhone/iPad:</strong> tap the Share button in Safari, choose <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.";
-        button.textContent = "Ready";
+          "<strong>Install on iPhone/iPad:</strong><br>" +
+          "1. Tap the <strong>Share</strong> button in Safari.<br>" +
+          "2. Scroll down and tap <strong>Add to Home Screen</strong>.<br>" +
+          "3. Tap <strong>Add</strong> in the top-right.<br><br>" +
+          "<span style=\"color:#91a5bc\">Apple does not allow websites to open the Add to Home Screen screen automatically.</span>";
+        button.textContent = "Got it";
+        button.onclick = () => {
+          localStorage.setItem(DISMISS_KEY, String(Date.now()));
+          modal.remove();
+        };
         return;
       }
 
