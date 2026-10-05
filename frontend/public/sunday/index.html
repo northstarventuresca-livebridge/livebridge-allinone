@@ -1378,7 +1378,19 @@ let realtimeSpeechActive = false;
 let realtimeSpeechStartedAt = 0;
 let realtimeLastVoiceAt = 0;
 let realtimeLastCommitAt = 0;
-let realtimeFlushResolver = null;
+
+/*
+  OpenAI notes that completion events from different committed turns
+  are not guaranteed to arrive in order. Keep commit order explicitly
+  and serialize delivery so listeners never receive sentence 2 before
+  sentence 1.
+*/
+let realtimeCommitSequence = 0;
+let realtimePendingCommitMeta = [];
+let realtimeCommittedOrder = [];
+let realtimeCompletedByItem = new Map();
+let realtimeDeliveryQueue = Promise.resolve();
+let realtimeFlushWaiters = new Map();
 
 const REALTIME_COMMIT_SILENCE_MS = 1250;
 const REALTIME_HARD_COMMIT_MS = 14000;
@@ -5087,15 +5099,31 @@ function commitRealtimeTranscriptionTurn(
     realtimeTranscriptionDc.readyState !==
       "open"
   ) {
-    return false;
+    return null;
   }
 
   try {
 
+    realtimeCommitSequence += 1;
+
+    const sequence =
+      realtimeCommitSequence;
+
+    realtimePendingCommitMeta.push({
+      sequence,
+      reason,
+      committedAt:
+        Date.now()
+    });
+
     realtimeTranscriptionDc.send(
       JSON.stringify({
         type:
-          "input_audio_buffer.commit"
+          "input_audio_buffer.commit",
+
+        event_id:
+          "livebridge-commit-" +
+          sequence
       })
     );
 
@@ -5117,16 +5145,18 @@ function commitRealtimeTranscriptionTurn(
       "good"
     );
 
-    return true;
+    return sequence;
 
   } catch (error) {
+
+    realtimePendingCommitMeta.pop();
 
     console.error(
       "Realtime transcription commit failed:",
       error
     );
 
-    return false;
+    return null;
   }
 }
 
@@ -5354,11 +5384,129 @@ async function deliverRealtimeTranscript(
 }
 
 
+function resolveRealtimeFlushWaiter(
+  sequence
+) {
+
+  const resolver =
+    realtimeFlushWaiters.get(
+      sequence
+    );
+
+  if (!resolver) {
+    return;
+  }
+
+  realtimeFlushWaiters.delete(
+    sequence
+  );
+
+  resolver();
+}
+
+
+function flushCompletedRealtimeTranscripts() {
+
+  while (
+    realtimeCommittedOrder.length > 0
+  ) {
+
+    const next =
+      realtimeCommittedOrder[0];
+
+    if (
+      !realtimeCompletedByItem.has(
+        next.itemId
+      )
+    ) {
+      break;
+    }
+
+    realtimeCommittedOrder.shift();
+
+    const completed =
+      realtimeCompletedByItem.get(
+        next.itemId
+      );
+
+    realtimeCompletedByItem.delete(
+      next.itemId
+    );
+
+    const transcript =
+      String(
+        completed?.transcript ||
+        ""
+      ).trim();
+
+    /*
+      Serialize delivery all the way through /source-final.
+      This protects transcript order and prevents network timing
+      from reordering translation context downstream.
+    */
+    realtimeDeliveryQueue =
+      realtimeDeliveryQueue
+        .then(
+          async () => {
+
+            if (transcript) {
+
+              setAudioDiagnostic(
+                "realtime transcript finalized",
+                "good"
+              );
+
+              await deliverRealtimeTranscript(
+                transcript
+              );
+            }
+
+          }
+        )
+        .catch(
+          error => {
+
+            console.error(
+              "Realtime transcript delivery failed:",
+              error
+            );
+          }
+        )
+        .finally(
+          () => {
+
+            resolveRealtimeFlushWaiter(
+              next.sequence
+            );
+          }
+        );
+  }
+}
+
+
 async function startRealtimeTranscription() {
 
   await stopRealtimeTranscription(
     false
   );
+
+  realtimeCommitSequence =
+    0;
+
+  realtimePendingCommitMeta =
+    [];
+
+  realtimeCommittedOrder =
+    [];
+
+  realtimeCompletedByItem =
+    new Map();
+
+  realtimeDeliveryQueue =
+    Promise.resolve();
+
+  realtimeFlushWaiters =
+    new Map();
 
   if (!mediaStream) {
     throw new Error(
@@ -5483,36 +5631,87 @@ async function startRealtimeTranscription() {
 
       if (
         data.type ===
+        "input_audio_buffer.committed"
+      ) {
+
+        const meta =
+          realtimePendingCommitMeta.shift() ||
+          {
+            sequence:
+              ++realtimeCommitSequence,
+            reason:
+              "unknown",
+            committedAt:
+              Date.now()
+          };
+
+        realtimeCommittedOrder.push({
+          ...meta,
+          itemId:
+            String(
+              data.item_id || ""
+            )
+        });
+
+        flushCompletedRealtimeTranscripts();
+
+        return;
+      }
+
+      if (
+        data.type ===
         "conversation.item.input_audio_transcription.completed"
       ) {
 
-        const transcript =
+        const itemId =
           String(
-            data.transcript || ""
-          ).trim();
-
-        if (transcript) {
-
-          setAudioDiagnostic(
-            "realtime transcript finalized",
-            "good"
+            data.item_id || ""
           );
 
-          await deliverRealtimeTranscript(
-            transcript
+        if (!itemId) {
+          return;
+        }
+
+        realtimeCompletedByItem.set(
+          itemId,
+          {
+            transcript:
+              data.transcript || ""
+          }
+        );
+
+        flushCompletedRealtimeTranscripts();
+
+        return;
+      }
+
+      if (
+        data.type ===
+        "conversation.item.input_audio_transcription.failed"
+      ) {
+
+        const itemId =
+          String(
+            data.item_id || ""
           );
+
+        if (itemId) {
+
+          realtimeCompletedByItem.set(
+            itemId,
+            {
+              transcript:
+                ""
+            }
+          );
+
+          flushCompletedRealtimeTranscripts();
         }
 
-        if (realtimeFlushResolver) {
-
-          const resolve =
-            realtimeFlushResolver;
-
-          realtimeFlushResolver =
-            null;
-
-          resolve();
-        }
+        console.error(
+          "OpenAI realtime transcription item failed:",
+          data
+        );
 
         return;
       }
@@ -5659,19 +5858,21 @@ async function stopRealtimeTranscription(
     realtimeSpeechActive
   ) {
 
-    const flushed =
+    const flushSequence =
       commitRealtimeTranscriptionTurn(
         "broadcast end"
       );
 
-    if (flushed) {
+    if (flushSequence) {
 
       await Promise.race([
         new Promise(
           resolve => {
 
-            realtimeFlushResolver =
-              resolve;
+            realtimeFlushWaiters.set(
+              flushSequence,
+              resolve
+            );
           }
         ),
 
@@ -5679,13 +5880,14 @@ async function stopRealtimeTranscription(
           resolve =>
             setTimeout(
               resolve,
-              1600
+              3500
             )
         )
       ]);
 
-      realtimeFlushResolver =
-        null;
+      realtimeFlushWaiters.delete(
+        flushSequence
+      );
     }
   }
 
