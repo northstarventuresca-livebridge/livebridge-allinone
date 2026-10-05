@@ -21788,6 +21788,162 @@ return jsonResponse({
   activeListeners
 });
     }
+    if (
+      request.method === "POST" &&
+      url.pathname === "/realtime-transcription-token"
+    ) {
+      if (!env.OPENAI_API_KEY) {
+        return jsonResponse(
+          {
+            success: false,
+            error: "OPENAI_API_KEY is not configured."
+          },
+          500
+        );
+      }
+
+      try {
+        const auth =
+          await verifyClerkRequest(
+            request,
+            env
+          );
+
+        const body =
+          await request.json();
+
+        const room =
+          normalizeRoom(
+            body.room
+          );
+
+        const language =
+          String(
+            body.language || "en"
+          )
+          .trim()
+          .toLowerCase();
+
+        if (!room) {
+          return jsonResponse(
+            {
+              success: false,
+              error: "room is required."
+            },
+            400
+          );
+        }
+
+        await getOwnedBroadcastOrganization(
+          env,
+          auth.clerkUserId,
+          room
+        );
+
+        const safetyIdentifier =
+          (
+            await sha256(
+              "livebridge:" +
+              auth.clerkUserId
+            )
+          ).slice(0, 64);
+
+        const sessionResponse =
+          await fetch(
+            "https://api.openai.com/v1/realtime/client_secrets",
+            {
+              method: "POST",
+              headers: {
+                "Authorization":
+                  `Bearer ${env.OPENAI_API_KEY}`,
+
+                "Content-Type":
+                  "application/json",
+
+                "OpenAI-Safety-Identifier":
+                  safetyIdentifier
+              },
+              body: JSON.stringify({
+                expires_after: {
+                  anchor: "created_at",
+                  seconds: 600
+                },
+
+                session: {
+                  type: "transcription",
+
+                  audio: {
+                    input: {
+                      transcription: {
+                        model:
+                          "gpt-live-transcribe",
+
+                        languages: [
+                          language
+                        ],
+
+                        delay:
+                          "low",
+
+                        prompt:
+                          "Live church or event speech. Preserve names, numbers, Scripture references, sentence meaning, and natural punctuation."
+                      },
+
+                      turn_detection:
+                        null
+                    }
+                  }
+                }
+              })
+            }
+          );
+
+        const sessionData =
+          await sessionResponse.json();
+
+        if (!sessionResponse.ok) {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "OpenAI realtime transcription session could not be created.",
+              details:
+                sessionData
+            },
+            sessionResponse.status
+          );
+        }
+
+        return jsonResponse({
+          success: true,
+          value:
+            sessionData.value || "",
+          expiresAt:
+            sessionData.expires_at ||
+            null,
+          session:
+            sessionData.session ||
+            null
+        });
+
+      } catch (error) {
+        console.error(
+          "Realtime transcription token error:",
+          error
+        );
+
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              error.message ||
+              "Unable to create realtime transcription session."
+          },
+          403
+        );
+      }
+    }
+
     if (request.method === "POST" && url.pathname === "/transcribe-audio") {
       if (!env.OPENAI_API_KEY) {
         return jsonResponse(
