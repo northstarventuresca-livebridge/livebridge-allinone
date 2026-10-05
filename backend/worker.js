@@ -21881,105 +21881,6 @@ return jsonResponse({
 });
     }
     if (
-      request.method === "GET" &&
-      url.pathname === "/__lb_rt_diag_7d8f4b11"
-    ) {
-      if (!env.OPENAI_API_KEY) {
-        return jsonResponse({
-          success: false,
-          stage: "config",
-          error: "OPENAI_API_KEY is not configured."
-        }, 500);
-      }
-
-      try {
-        const response =
-          await fetch(
-            "https://api.openai.com/v1/realtime/client_secrets",
-            {
-              method: "POST",
-              headers: {
-                "Authorization":
-                  `Bearer ${env.OPENAI_API_KEY}`,
-                "Content-Type":
-                  "application/json"
-              },
-              body: JSON.stringify({
-                expires_after: {
-                  anchor: "created_at",
-                  seconds: 60
-                },
-                session: {
-                  type: "transcription",
-                  audio: {
-                    input: {
-                      transcription: {
-                        model:
-                          "gpt-live-transcribe",
-                        languages: [
-                          "en"
-                        ],
-                        delay:
-                          "low",
-                        prompt:
-                          "Live church or event speech."
-                      },
-                      turn_detection:
-                        null
-                    }
-                  }
-                }
-              })
-            }
-          );
-
-        const data =
-          await response.json();
-
-        return jsonResponse({
-          success:
-            response.ok,
-          stage:
-            "openai-client-secret",
-          openaiStatus:
-            response.status,
-          error:
-            data?.error
-              ? {
-                  message:
-                    data.error.message ||
-                    "",
-                  type:
-                    data.error.type ||
-                    "",
-                  code:
-                    data.error.code ||
-                    "",
-                  param:
-                    data.error.param ||
-                    ""
-                }
-              : null,
-          sessionType:
-            data?.session?.type ||
-            null
-        }, 200);
-
-      } catch (error) {
-        return jsonResponse({
-          success: false,
-          stage: "diagnostic-exception",
-          error:
-            String(
-              error?.message ||
-              error ||
-              "Unknown diagnostic error"
-            )
-        }, 500);
-      }
-    }
-
-    if (
       request.method === "POST" &&
       url.pathname === "/realtime-transcription-token"
     ) {
@@ -22070,45 +21971,42 @@ return jsonResponse({
           );
         }
 
-        const roomResponse =
-          await fetch(
-            productionBackend +
-            "/room-selection",
-            {
-              headers: {
-                "Authorization":
-                  authorization
-              }
-            }
+        const accountBaseRoom =
+          normalizeRoom(
+            accountData.account.roomName
           );
 
-        const roomData =
-          await roomResponse.json();
-
-        if (
-          !roomResponse.ok ||
-          !roomData.success
-        ) {
-          throw new Error(
-            roomData.error ||
-            "LiveBridge room authorization failed."
+        const accountAlias =
+          normalizeRoom(
+            accountData.account.roomAlias ||
+            ""
           );
-        }
 
-        const allowedRooms =
-          new Set(
-            [
-              roomData.baseRoom,
-              roomData.effectiveRoom,
-              accountData.account.roomName
-            ]
-            .map(
-              normalizeRoom
+        const roomBelongsToAccount =
+          (
+            accountBaseRoom &&
+            (
+              room ===
+                accountBaseRoom ||
+              room.startsWith(
+                accountBaseRoom +
+                "-"
+              )
             )
-            .filter(Boolean)
+          ) ||
+          (
+            accountAlias &&
+            (
+              room ===
+                accountAlias ||
+              room.startsWith(
+                accountAlias +
+                "-"
+              )
+            )
           );
 
-        if (!allowedRooms.has(room)) {
+        if (!roomBelongsToAccount) {
           throw new Error(
             "You are not authorized to broadcast to this LiveBridge room."
           );
@@ -22176,15 +22074,30 @@ return jsonResponse({
           await sessionResponse.json();
 
         if (!sessionResponse.ok) {
+          console.error(
+            "OpenAI realtime client secret failed:",
+            sessionResponse.status,
+            sessionData?.error?.code || "",
+            sessionData?.error?.message || ""
+          );
+
           return jsonResponse(
             {
               success: false,
+              code:
+                "REALTIME_OPENAI_SESSION_FAILED",
+              stage:
+                "openai",
               error:
+                sessionData?.error?.message ||
                 "OpenAI realtime transcription session could not be created.",
-              details:
-                sessionData
+              openaiStatus:
+                sessionResponse.status,
+              openaiCode:
+                sessionData?.error?.code ||
+                null
             },
-            sessionResponse.status
+            502
           );
         }
 
@@ -22209,6 +22122,10 @@ return jsonResponse({
         return jsonResponse(
           {
             success: false,
+            code:
+              "REALTIME_AUTH_FAILED",
+            stage:
+              "authorization",
             error:
               error.message ||
               "Unable to create realtime transcription session."
