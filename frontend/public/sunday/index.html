@@ -5582,8 +5582,34 @@ async function startRealtimeTranscription() {
       }
     );
 
-  const tokenData =
-    await tokenResponse.json();
+  const tokenResponseText =
+    await tokenResponse.text();
+
+  let tokenData = {};
+
+  try {
+    tokenData =
+      tokenResponseText
+        ? JSON.parse(
+            tokenResponseText
+          )
+        : {};
+  } catch {
+    tokenData = {
+      success: false,
+      stage:
+        "transport",
+      code:
+        "REALTIME_NON_JSON_RESPONSE",
+      error:
+        tokenResponseText ||
+        (
+          "Realtime transcription service returned HTTP " +
+          tokenResponse.status +
+          "."
+        )
+    };
+  }
 
   if (
     !tokenResponse.ok ||
