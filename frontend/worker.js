@@ -518,8 +518,27 @@ export default {
         request.url
       );
 
-    const path =
+    const requestedPath =
       url.pathname;
+
+    const testPrefix =
+      "/realtime-test";
+
+    const path =
+      requestedPath ===
+        testPrefix
+        ? "/"
+        : (
+            requestedPath.startsWith(
+              testPrefix + "/"
+            )
+              ? (
+                  requestedPath.slice(
+                    testPrefix.length
+                  ) || "/"
+                )
+              : requestedPath
+          );
 
     const redirectTarget =
       REDIRECTS.get(
@@ -566,9 +585,31 @@ export default {
       );
     }
 
+    let directRequest =
+      request;
+
+    if (
+      path !==
+      requestedPath
+    ) {
+      const directUrl =
+        new URL(
+          request.url
+        );
+
+      directUrl.pathname =
+        path;
+
+      directRequest =
+        new Request(
+          directUrl.toString(),
+          request
+        );
+    }
+
     const direct =
       await env.ASSETS.fetch(
-        request
+        directRequest
       );
 
     if(
