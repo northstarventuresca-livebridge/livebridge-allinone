@@ -7416,6 +7416,27 @@ var LiveBridgeRoom = class {
       const sourceLanguage = String(body.sourceLanguage || "en").trim().toLowerCase();
       const chunkId = String(body.chunkId || "").trim() || await sha256(text);
 
+      /*
+        Realtime translation continuity:
+        keep only a short previous SOURCE segment as context. It is never
+        listener output; it exists only so a forced speech-turn boundary
+        can preserve sentence meaning across the next translation.
+      */
+      const previousSourceText =
+        String(
+          await this.state.storage.get(
+            "translation-context-source"
+          ) ||
+          ""
+        )
+        .trim()
+        .slice(-700);
+
+      await this.state.storage.put(
+        "translation-context-source",
+        text.slice(-700)
+      );
+
       const broadcastStartedAt =
         Math.max(
           0,
@@ -7464,7 +7485,8 @@ var LiveBridgeRoom = class {
               chunkId,
               sourceLanguage,
               targetLanguage: language,
-              room
+              room,
+              previousSourceText
             });
             translations.push({
               language,
@@ -9357,7 +9379,8 @@ Scripture rules:
     chunkId,
     sourceLanguage,
     targetLanguage,
-    room
+    room,
+    previousSourceText = ""
   }) {
     if (sourceLanguage === targetLanguage) {
       return text;
@@ -9373,7 +9396,8 @@ Scripture rules:
     const translationPromise = this.translateWithOpenAI(
       text,
       targetLanguage,
-      room
+      room,
+      previousSourceText
     );
     this.inFlightTranslations.set(
       cacheKey,
@@ -9393,7 +9417,8 @@ Scripture rules:
   async translateWithOpenAI(
     text,
     targetLanguage,
-    room
+    room,
+    previousSourceText = ""
   ) {
     if (!this.env.OPENAI_API_KEY) {
       throw new Error(
@@ -9421,11 +9446,18 @@ Scripture rules:
           messages: [
             {
               role: "system",
-              content: `You are LiveBridge's real-time translation engine. Translate the provided spoken text naturally and accurately into ${targetLanguageName} (requested language code "${targetLanguage}"). Preserve meaning, names, Scripture references, numbers, tone, and sentence intent. Return only the translated text with no explanation.`
+              content: `You are LiveBridge's real-time translation engine. Translate ONLY the NEW SEGMENT into ${targetLanguageName} (requested language code "${targetLanguage}"). The PREVIOUS CONTEXT is supplied only so you can preserve sentence meaning across a live speech boundary. Never repeat, retranslate, summarize, quote, or output any PREVIOUS CONTEXT. Preserve meaning, names, Scripture references, numbers, tone, and sentence intent. Return only the translation of the NEW SEGMENT with no explanation.`
             },
             {
               role: "user",
-              content: text
+              content:
+                "PREVIOUS CONTEXT (DO NOT OUTPUT):\n" +
+                (
+                  previousSourceText ||
+                  "[none]"
+                ) +
+                "\n\nNEW SEGMENT (TRANSLATE ONLY THIS):\n" +
+                text
             }
           ]
         })
@@ -9454,12 +9486,72 @@ Scripture rules:
       );
     }
 
-    const translatedText = data.choices?.[0]?.message?.content?.trim();
+    let translatedText =
+      data.choices?.[0]
+        ?.message
+        ?.content
+        ?.trim();
+
     if (!translatedText) {
       throw new Error(
         "OpenAI returned an empty translation."
       );
     }
+
+    /*
+      Defensive anti-repeat guard:
+      if the model accidentally prepends the complete previous translated
+      segment, strip only that exact substantial prefix. Short intentional
+      repetitions such as "Amen" are left alone.
+    */
+    const previousTranslationKey =
+      "translation-context-target:" +
+      targetLanguage;
+
+    const previousTranslatedText =
+      String(
+        await this.state.storage.get(
+          previousTranslationKey
+        ) ||
+        ""
+      )
+      .trim();
+
+    if (
+      previousTranslatedText.length >= 40 &&
+      translatedText.length >
+        previousTranslatedText.length &&
+      translatedText
+        .toLocaleLowerCase()
+        .startsWith(
+          previousTranslatedText
+            .toLocaleLowerCase()
+        )
+    ) {
+
+      translatedText =
+        translatedText
+          .slice(
+            previousTranslatedText.length
+          )
+          .replace(
+            /^[\s\-–—:;,.]+/,
+            ""
+          )
+          .trim();
+    }
+
+    if (!translatedText) {
+      throw new Error(
+        "OpenAI returned only repeated context."
+      );
+    }
+
+    await this.state.storage.put(
+      previousTranslationKey,
+      translatedText.slice(-900)
+    );
+
     return translatedText;
   }
   /*
