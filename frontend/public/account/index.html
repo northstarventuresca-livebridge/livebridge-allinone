@@ -5276,13 +5276,21 @@ function showLogin(){
       window.location.search
     );
 
-  const returnTo =
+  const requestedReturnTo =
     params.get(
       "returnTo"
-    ) ===
-    "/admin"
+    );
+
+  const returnTo =
+    requestedReturnTo ===
+      "/admin"
       ? "/admin"
-      : "/account";
+      : (
+          requestedReturnTo ===
+            "/realtime-test/sunday/"
+            ? "/realtime-test/sunday/"
+            : "/account"
+        );
 
   Clerk.mountSignIn(
     document.getElementById(
@@ -8089,15 +8097,30 @@ window.addEventListener(
           window.location.search
         );
 
-      if(
+      const requestedReturnTo =
         params.get(
           "returnTo"
-        ) ===
+        );
+
+      if(
+        requestedReturnTo ===
         "/admin"
       ){
 
         window.location.replace(
           "/admin"
+        );
+
+        return;
+      }
+
+      if(
+        requestedReturnTo ===
+        "/realtime-test/sunday/"
+      ){
+
+        window.location.replace(
+          "/realtime-test/sunday/"
         );
 
         return;
