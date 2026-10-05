@@ -1357,6 +1357,27 @@ let mediaStream = null;
 let mediaRecorder = null;
 let mediaRecorderStopTimer = null;
 let mediaRecorderGeneration = 0;
+
+/*
+  Experimental branch: continuous OpenAI Realtime transcription.
+  The microphone stays connected continuously; we only commit logical
+  speech turns. MediaRecorder chunking remains below as a fallback but
+  is not used by this branch's normal broadcast path.
+*/
+let realtimeTranscriptionPc = null;
+let realtimeTranscriptionDc = null;
+let realtimeTranscriptionCommitTimer = null;
+let realtimeSpeechActive = false;
+let realtimeSpeechStartedAt = 0;
+let realtimeLastVoiceAt = 0;
+let realtimeLastCommitAt = 0;
+let realtimeFlushResolver = null;
+
+const REALTIME_COMMIT_SILENCE_MS = 1250;
+const REALTIME_HARD_COMMIT_MS = 14000;
+const REALTIME_FALLBACK_COMMIT_MS = 6000;
+const REALTIME_VAD_CHECK_MS = 100;
+
 let broadcasting = false;
 let broadcastStartedAt = null;
 let broadcastTimer = null;
@@ -3736,6 +3757,11 @@ async function endBroadcastForTimeLimit(){
     true;
 
 
+  await stopRealtimeTranscription(
+    true
+  );
+
+
   broadcasting =
     false;
 
@@ -4133,7 +4159,7 @@ async function toggleBroadcast() {
 
       startAudioSafetyMonitoring();
 
-      recordNextChunk();
+      await startRealtimeTranscription();
 
       startBroadcastTimer();
 
@@ -4193,6 +4219,10 @@ async function toggleBroadcast() {
     }
 
   } else {
+
+    await stopRealtimeTranscription(
+      true
+    );
 
     broadcasting =
       false;
@@ -5026,6 +5056,660 @@ function getCurrentBroadcastRms() {
 
 
 /* =====================================================
+   REALTIME CONTINUOUS TRANSCRIPTION — TEST BRANCH
+===================================================== */
+
+function clearRealtimeTranscriptionCommitTimer() {
+  if (realtimeTranscriptionCommitTimer) {
+    clearInterval(
+      realtimeTranscriptionCommitTimer
+    );
+
+    realtimeTranscriptionCommitTimer =
+      null;
+  }
+}
+
+
+function commitRealtimeTranscriptionTurn(
+  reason = "pause"
+) {
+
+  if (
+    !realtimeTranscriptionDc ||
+    realtimeTranscriptionDc.readyState !==
+      "open"
+  ) {
+    return false;
+  }
+
+  try {
+
+    realtimeTranscriptionDc.send(
+      JSON.stringify({
+        type:
+          "input_audio_buffer.commit"
+      })
+    );
+
+    realtimeLastCommitAt =
+      Date.now();
+
+    realtimeSpeechActive =
+      false;
+
+    realtimeSpeechStartedAt =
+      0;
+
+    realtimeLastVoiceAt =
+      0;
+
+    setAudioDiagnostic(
+      "realtime commit · " +
+      reason,
+      "good"
+    );
+
+    return true;
+
+  } catch (error) {
+
+    console.error(
+      "Realtime transcription commit failed:",
+      error
+    );
+
+    return false;
+  }
+}
+
+
+function startRealtimeCommitWatcher() {
+
+  clearRealtimeTranscriptionCommitTimer();
+
+  realtimeLastCommitAt =
+    Date.now();
+
+  realtimeTranscriptionCommitTimer =
+    setInterval(
+      () => {
+
+        if (
+          !broadcasting ||
+          window.__liveBridgeMicMuted ===
+            true ||
+          !realtimeTranscriptionDc ||
+          realtimeTranscriptionDc.readyState !==
+            "open"
+        ) {
+          return;
+        }
+
+        const now =
+          Date.now();
+
+        const rms =
+          getCurrentBroadcastRms();
+
+        /*
+          The audio stream itself never stops. These commits only tell
+          transcription where a logical turn can finalize, so no recorder
+          restart can lose words at a chunk boundary.
+        */
+        if (rms === null) {
+
+          if (
+            now -
+              realtimeLastCommitAt >=
+            REALTIME_FALLBACK_COMMIT_MS
+          ) {
+
+            commitRealtimeTranscriptionTurn(
+              "fallback"
+            );
+          }
+
+          return;
+        }
+
+        if (
+          rms >=
+            AUDIO_ACTIVITY_THRESHOLD
+        ) {
+
+          if (!realtimeSpeechActive) {
+
+            realtimeSpeechActive =
+              true;
+
+            realtimeSpeechStartedAt =
+              now;
+          }
+
+          realtimeLastVoiceAt =
+            now;
+
+          return;
+        }
+
+        if (!realtimeSpeechActive) {
+          return;
+        }
+
+        const pauseReady =
+          realtimeLastVoiceAt > 0 &&
+          now -
+            realtimeLastVoiceAt >=
+            REALTIME_COMMIT_SILENCE_MS;
+
+        const hardLimitReady =
+          realtimeSpeechStartedAt > 0 &&
+          now -
+            realtimeSpeechStartedAt >=
+            REALTIME_HARD_COMMIT_MS;
+
+        if (
+          pauseReady ||
+          hardLimitReady
+        ) {
+
+          commitRealtimeTranscriptionTurn(
+            pauseReady
+              ? "natural pause"
+              : "long speech"
+          );
+        }
+
+      },
+      REALTIME_VAD_CHECK_MS
+    );
+}
+
+
+async function deliverRealtimeTranscript(
+  text
+) {
+
+  const finalText =
+    String(
+      text || ""
+    ).trim();
+
+  if (
+    !finalText ||
+    !broadcasting
+  ) {
+    return;
+  }
+
+  lastTranscriptionUploadAt =
+    Date.now();
+
+  showTranscription(
+    finalText
+  );
+
+  broadcastMessageId++;
+
+  const chunkId =
+    broadcastSessionId +
+    "-rt-" +
+    broadcastMessageId;
+
+  const inputLanguage =
+    document.getElementById(
+      "inputLanguage"
+    ).value;
+
+  const sourceToken =
+    await getBroadcasterSessionToken();
+
+  if (!sourceToken) {
+
+    console.error(
+      "LiveBridge session could not be verified for realtime shared feed delivery."
+    );
+
+    return;
+  }
+
+  lastBroadcastAuthToken =
+    sourceToken;
+
+  const feedResponse =
+    await fetch(
+      WORKER_URL +
+      "/source-final",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "Authorization":
+            "Bearer " +
+            sourceToken
+        },
+
+        body: JSON.stringify({
+          room:
+            ROOM_ID,
+
+          text:
+            finalText,
+
+          chunkId,
+
+          sourceLanguage:
+            inputLanguage
+        })
+      }
+    );
+
+  const feedData =
+    await feedResponse.json();
+
+  console.log(
+    "LIVEBRIDGE REALTIME SHARED FEED:",
+    feedData
+  );
+
+  if (
+    !feedResponse.ok ||
+    !feedData.success
+  ) {
+
+    console.error(
+      "Realtime shared feed delivery failed:",
+      feedData
+    );
+
+    return;
+  }
+
+  const listeners =
+    Number(
+      feedData.listeners ||
+      0
+    );
+
+  if (listeners > 0) {
+
+    messagesSentCount++;
+
+    document.getElementById(
+      "messagesSent"
+    ).textContent =
+      messagesSentCount;
+  }
+}
+
+
+async function startRealtimeTranscription() {
+
+  await stopRealtimeTranscription(
+    false
+  );
+
+  if (!mediaStream) {
+    throw new Error(
+      "Microphone stream is not available."
+    );
+  }
+
+  const audioTrack =
+    mediaStream
+      .getAudioTracks?.()[0];
+
+  if (!audioTrack) {
+    throw new Error(
+      "No live microphone audio track is available."
+    );
+  }
+
+  const authToken =
+    await getBroadcasterSessionToken();
+
+  if (!authToken) {
+    throw new Error(
+      "LiveBridge session could not be verified."
+    );
+  }
+
+  const inputLanguage =
+    document.getElementById(
+      "inputLanguage"
+    ).value;
+
+  setAudioDiagnostic(
+    "connecting realtime transcription..."
+  );
+
+  const tokenResponse =
+    await fetch(
+      WORKER_URL +
+      "/realtime-transcription-token",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "Authorization":
+            "Bearer " +
+            authToken
+        },
+
+        body: JSON.stringify({
+          room:
+            ROOM_ID,
+
+          language:
+            inputLanguage
+        })
+      }
+    );
+
+  const tokenData =
+    await tokenResponse.json();
+
+  if (
+    !tokenResponse.ok ||
+    !tokenData.success ||
+    !tokenData.value
+  ) {
+    throw new Error(
+      tokenData.error ||
+      "Realtime transcription token could not be created."
+    );
+  }
+
+  const pc =
+    new RTCPeerConnection();
+
+  const dc =
+    pc.createDataChannel(
+      "oai-events"
+    );
+
+  realtimeTranscriptionPc =
+    pc;
+
+  realtimeTranscriptionDc =
+    dc;
+
+  pc.addTrack(
+    audioTrack,
+    mediaStream
+  );
+
+  dc.addEventListener(
+    "message",
+    async event => {
+
+      let data;
+
+      try {
+        data =
+          JSON.parse(
+            event.data
+          );
+      } catch {
+        return;
+      }
+
+      if (
+        data.type ===
+        "conversation.item.input_audio_transcription.delta"
+      ) {
+
+        setAudioDiagnostic(
+          "realtime transcription receiving...",
+          "good"
+        );
+
+        return;
+      }
+
+      if (
+        data.type ===
+        "conversation.item.input_audio_transcription.completed"
+      ) {
+
+        const transcript =
+          String(
+            data.transcript || ""
+          ).trim();
+
+        if (transcript) {
+
+          setAudioDiagnostic(
+            "realtime transcript finalized",
+            "good"
+          );
+
+          await deliverRealtimeTranscript(
+            transcript
+          );
+        }
+
+        if (realtimeFlushResolver) {
+
+          const resolve =
+            realtimeFlushResolver;
+
+          realtimeFlushResolver =
+            null;
+
+          resolve();
+        }
+
+        return;
+      }
+
+      if (
+        data.type ===
+        "error"
+      ) {
+
+        console.error(
+          "OpenAI realtime transcription error:",
+          data
+        );
+
+        setAudioDiagnostic(
+          "realtime transcription error",
+          "bad"
+        );
+      }
+    }
+  );
+
+  const dataChannelOpened =
+    new Promise(
+      (resolve, reject) => {
+
+        const timeout =
+          setTimeout(
+            () => reject(
+              new Error(
+                "Realtime transcription connection timed out."
+              )
+            ),
+            12000
+          );
+
+        dc.addEventListener(
+          "open",
+          () => {
+
+            clearTimeout(
+              timeout
+            );
+
+            resolve();
+
+          },
+          {
+            once: true
+          }
+        );
+
+        dc.addEventListener(
+          "error",
+          () => {
+
+            clearTimeout(
+              timeout
+            );
+
+            reject(
+              new Error(
+                "Realtime transcription data channel failed."
+              )
+            );
+
+          },
+          {
+            once: true
+          }
+        );
+      }
+    );
+
+  const offer =
+    await pc.createOffer();
+
+  await pc.setLocalDescription(
+    offer
+  );
+
+  const sdpResponse =
+    await fetch(
+      "https://api.openai.com/v1/realtime/calls",
+      {
+        method: "POST",
+
+        body:
+          pc.localDescription
+            ?.sdp ||
+          offer.sdp,
+
+        headers: {
+          "Authorization":
+            "Bearer " +
+            tokenData.value,
+
+          "Content-Type":
+            "application/sdp"
+        }
+      }
+    );
+
+  const answerSdp =
+    await sdpResponse.text();
+
+  if (!sdpResponse.ok) {
+    throw new Error(
+      "OpenAI realtime connection failed: " +
+      answerSdp
+    );
+  }
+
+  await pc.setRemoteDescription({
+    type:
+      "answer",
+
+    sdp:
+      answerSdp
+  });
+
+  await dataChannelOpened;
+
+  startRealtimeCommitWatcher();
+
+  setAudioDiagnostic(
+    "realtime transcription connected · continuous audio",
+    "good"
+  );
+}
+
+
+async function stopRealtimeTranscription(
+  flush = true
+) {
+
+  clearRealtimeTranscriptionCommitTimer();
+
+  if (
+    flush &&
+    realtimeTranscriptionDc &&
+    realtimeTranscriptionDc.readyState ===
+      "open" &&
+    realtimeSpeechActive
+  ) {
+
+    const flushed =
+      commitRealtimeTranscriptionTurn(
+        "broadcast end"
+      );
+
+    if (flushed) {
+
+      await Promise.race([
+        new Promise(
+          resolve => {
+
+            realtimeFlushResolver =
+              resolve;
+          }
+        ),
+
+        new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              1600
+            )
+        )
+      ]);
+
+      realtimeFlushResolver =
+        null;
+    }
+  }
+
+  try {
+    realtimeTranscriptionDc
+      ?.close();
+  } catch {}
+
+  try {
+    realtimeTranscriptionPc
+      ?.close();
+  } catch {}
+
+  realtimeTranscriptionDc =
+    null;
+
+  realtimeTranscriptionPc =
+    null;
+
+  realtimeSpeechActive =
+    false;
+
+  realtimeSpeechStartedAt =
+    0;
+
+  realtimeLastVoiceAt =
+    0;
+}
+
+
+/* =====================================================
    RECORDING
 ===================================================== */
 
@@ -5102,9 +5786,23 @@ function setLiveBridgeBroadcastMuted(
   );
 
   /*
-    End the current chunk immediately whenever mute state changes.
-    recordNextChunk() will start a clean chunk from the new state.
-    The old chunk is discarded because its mute revision no longer matches.
+    Realtime branch: muting does not tear down the microphone session.
+    Finalize any speech already buffered, then the disabled media track
+    naturally sends silence until the broadcaster unmutes.
+  */
+  if (
+    broadcasting &&
+    window.__liveBridgeMicMuted ===
+      true
+  ) {
+    commitRealtimeTranscriptionTurn(
+      "mute"
+    );
+  }
+
+  /*
+    Legacy recorder fallback remains available but is not used by the
+    normal realtime branch broadcast path.
   */
   if (
     broadcasting &&
