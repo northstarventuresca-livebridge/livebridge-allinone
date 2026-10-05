@@ -4236,7 +4236,17 @@ async function toggleBroadcast() {
         "Start Broadcasting";
 
       alert(
-        "The broadcast could not be started. Please try again."
+        window.location.pathname.startsWith(
+          "/realtime-test/"
+        )
+          ? (
+              "Test broadcast could not start:\n\n" +
+              (
+                error?.message ||
+                "Unknown realtime test error."
+              )
+            )
+          : "The broadcast could not be started. Please try again."
       );
     }
 
@@ -5528,6 +5538,7 @@ async function startRealtimeTranscription() {
   }
 
   const authToken =
+    lastBroadcastAuthToken ||
     await getBroadcasterSessionToken();
 
   if (!authToken) {
@@ -5579,9 +5590,34 @@ async function startRealtimeTranscription() {
     !tokenData.success ||
     !tokenData.value
   ) {
-    throw new Error(
+    const realtimeTokenError =
       tokenData.error ||
-      "Realtime transcription token could not be created."
+      "Realtime transcription token could not be created.";
+
+    console.error(
+      "Realtime token request failed:",
+      {
+        status:
+          tokenResponse.status,
+        stage:
+          tokenData.stage ||
+          null,
+        code:
+          tokenData.code ||
+          null,
+        openaiStatus:
+          tokenData.openaiStatus ||
+          null,
+        openaiCode:
+          tokenData.openaiCode ||
+          null,
+        error:
+          realtimeTokenError
+      }
+    );
+
+    throw new Error(
+      realtimeTokenError
     );
   }
 
@@ -9184,6 +9220,21 @@ window.addEventListener(
 
 
   async function init(){
+
+    /*
+      Realtime transcription test:
+      skip the optional admin-mute verification helper entirely.
+      That helper retries Clerk repeatedly for non-admin users and can
+      trigger Clerk rate limits, which then interferes with the real
+      broadcaster authentication flow. Production /sunday is unchanged.
+    */
+    if (
+      window.location.pathname.startsWith(
+        "/realtime-test/"
+      )
+    ) {
+      return;
+    }
 
     createMuteButton();
 
