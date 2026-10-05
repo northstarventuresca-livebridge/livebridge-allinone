@@ -21942,19 +21942,30 @@ return jsonResponse({
           );
         }
 
-        const productionBackend =
-          "https://livebridge.northstarventures-ca.workers.dev";
+        if (
+          !env.LIVEBRIDGE_PRODUCTION ||
+          typeof env.LIVEBRIDGE_PRODUCTION.fetch !==
+            "function"
+        ) {
+          throw new Error(
+            "Production LiveBridge service binding is not configured."
+          );
+        }
 
         const accountResponse =
-          await fetch(
-            productionBackend +
-            "/account",
-            {
-              headers: {
-                "Authorization":
-                  authorization
+          await env.LIVEBRIDGE_PRODUCTION.fetch(
+            new Request(
+              "https://livebridge.internal/account",
+              {
+                method:
+                  "GET",
+
+                headers: {
+                  "Authorization":
+                    authorization
+                }
               }
-            }
+            )
           );
 
         const accountData =
