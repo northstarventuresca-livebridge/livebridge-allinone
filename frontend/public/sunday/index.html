@@ -9261,6 +9261,18 @@ window.addEventListener(
 <!-- LiveBridge Broadcaster PWA Install -->
 <script>
 (() => {
+  /*
+    The realtime test runs under the production livebridge.ca origin.
+    Never register/install the production /sunday PWA from the test route.
+  */
+  if (
+    window.location.pathname.startsWith(
+      "/realtime-test/"
+    )
+  ) {
+    return;
+  }
+
   const DISMISS_KEY = "lbBroadcasterInstallDismissedAt";
   const DISMISS_MS = 30 * 24 * 60 * 60 * 1000;
   let deferredInstallPrompt = null;
