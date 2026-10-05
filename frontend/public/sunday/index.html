@@ -2123,7 +2123,10 @@ async function initializeLiveBridgeBroadcaster() {
 
     if (!user) {
       window.location.href =
-        "/account";
+        "/realtime-test/account/?returnTo=" +
+        encodeURIComponent(
+          "/realtime-test/sunday/"
+        );
       return;
     }
 
