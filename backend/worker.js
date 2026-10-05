@@ -21895,11 +21895,27 @@ return jsonResponse({
       }
 
       try {
-        const auth =
-          await verifyClerkRequest(
-            request,
-            env
+        /*
+          This test Worker intentionally does not duplicate the production
+          Clerk JWT secret. Validate the broadcaster's existing production
+          Clerk session against the production LiveBridge account API, then
+          authorize the requested room from the production room-selection API.
+          No production code or configuration is changed by this.
+        */
+        const authorization =
+          request.headers.get(
+            "Authorization"
+          ) || "";
+
+        if (
+          !authorization.startsWith(
+            "Bearer "
+          )
+        ) {
+          throw new Error(
+            "Missing Clerk authorization token."
           );
+        }
 
         const body =
           await request.json();
@@ -21926,17 +21942,84 @@ return jsonResponse({
           );
         }
 
-        await getOwnedBroadcastOrganization(
-          env,
-          auth.clerkUserId,
-          room
-        );
+        const productionBackend =
+          "https://livebridge.northstarventures-ca.workers.dev";
+
+        const accountResponse =
+          await fetch(
+            productionBackend +
+            "/account",
+            {
+              headers: {
+                "Authorization":
+                  authorization
+              }
+            }
+          );
+
+        const accountData =
+          await accountResponse.json();
+
+        if (
+          !accountResponse.ok ||
+          !accountData.success ||
+          !accountData.account
+        ) {
+          throw new Error(
+            accountData.error ||
+            "LiveBridge account authentication failed."
+          );
+        }
+
+        const roomResponse =
+          await fetch(
+            productionBackend +
+            "/room-selection",
+            {
+              headers: {
+                "Authorization":
+                  authorization
+              }
+            }
+          );
+
+        const roomData =
+          await roomResponse.json();
+
+        if (
+          !roomResponse.ok ||
+          !roomData.success
+        ) {
+          throw new Error(
+            roomData.error ||
+            "LiveBridge room authorization failed."
+          );
+        }
+
+        const allowedRooms =
+          new Set(
+            [
+              roomData.baseRoom,
+              roomData.effectiveRoom,
+              accountData.account.roomName
+            ]
+            .map(
+              normalizeRoom
+            )
+            .filter(Boolean)
+          );
+
+        if (!allowedRooms.has(room)) {
+          throw new Error(
+            "You are not authorized to broadcast to this LiveBridge room."
+          );
+        }
 
         const safetyIdentifier =
           (
             await sha256(
-              "livebridge:" +
-              auth.clerkUserId
+              "livebridge-realtime:" +
+              room
             )
           ).slice(0, 64);
 
