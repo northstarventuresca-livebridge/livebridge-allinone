@@ -21,6 +21,13 @@
     }
   ],
 
+  "services": [
+    {
+      "binding": "LIVEBRIDGE_PRODUCTION",
+      "service": "livebridge"
+    }
+  ],
+
   "d1_databases": [
     {
       "binding": "TRANSLATIONS_DB",
