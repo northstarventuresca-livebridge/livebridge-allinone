@@ -1341,10 +1341,17 @@ const BROADCASTER_PREVIEW =
   BROADCASTER_HOST.includes("livebridge-allinone-frontend-test") ||
   BROADCASTER_HOST.includes("livebridge-promoter-frontend-test");
 
+/*
+  Realtime transcription test branch:
+  - ALL normal LiveBridge control/delivery traffic stays on production.
+  - ONLY the ephemeral OpenAI Realtime token is requested from the test Worker.
+  This lets real listeners use the normal production Listener page.
+*/
 const WORKER_URL =
-  BROADCASTER_PREVIEW
-    ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
-    : "https://livebridge.northstarventures-ca.workers.dev";
+  "https://livebridge.northstarventures-ca.workers.dev";
+
+const REALTIME_TOKEN_WORKER_URL =
+  "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev";
 
 const LISTENER_BASE_URL =
   window.location.origin + "/t/";
@@ -5389,7 +5396,7 @@ async function startRealtimeTranscription() {
 
   const tokenResponse =
     await fetch(
-      WORKER_URL +
+      REALTIME_TOKEN_WORKER_URL +
       "/realtime-transcription-token",
       {
         method: "POST",
