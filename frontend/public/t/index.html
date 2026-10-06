@@ -1582,6 +1582,54 @@
     }
   }
 
+  function listenerChatContainsLink(
+    value
+  ) {
+    return /(?:https?:\/\/|www\.|(?:^|\s)[a-z0-9-]+\.(?:com|ca|org|net|io|co|me|app|dev|info|biz|tv)(?:\b|\/))/i.test(
+      String(value || "")
+    );
+  }
+
+  function filterListenerChatProfanity(
+    value
+  ) {
+    const blockedWords = [
+      "fuck","fucking","fucker","fucked","motherfucker",
+      "shit","shitty","bullshit",
+      "bitch","bitches","bastard",
+      "asshole","dick","dicks","cock","cocks",
+      "pussy","cunt","slut","whore",
+      "damn","goddamn"
+    ];
+
+    let filtered =
+      String(value || "");
+
+    blockedWords.forEach(word => {
+      const pattern =
+        new RegExp(
+          "\\b" +
+          word +
+          "\\b",
+          "gi"
+        );
+
+      filtered =
+        filtered.replace(
+          pattern,
+          match =>
+            "*".repeat(
+              Math.max(
+                3,
+                match.length
+              )
+            )
+        );
+    });
+
+    return filtered;
+  }
+
   function sendListenerChatMessage() {
     const input =
       document.getElementById(
@@ -1592,14 +1640,30 @@
       return;
     }
 
-    const messageText =
+    const rawMessageText =
       input.value
         .trim()
         .slice(0, 500);
 
-    if (!messageText) {
+    if (!rawMessageText) {
       return;
     }
+
+    if (
+      listenerChatContainsLink(
+        rawMessageText
+      )
+    ) {
+      alert(
+        "Links are disabled in LiveBridge chat."
+      );
+      return;
+    }
+
+    const messageText =
+      filterListenerChatProfanity(
+        rawMessageText
+      );
 
     if (
       !listenerSocket ||
