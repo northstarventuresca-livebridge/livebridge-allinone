@@ -48,7 +48,7 @@ async function ensureDiagnosticAudioSchema(
     return;
   }
 
-  await env.TRANSLATIONS_DB.prepare(\`
+  await env.TRANSLATIONS_DB.prepare(`
     CREATE TABLE IF NOT EXISTS diagnostic_audio_segments (
       id TEXT PRIMARY KEY,
       organization_id INTEGER NOT NULL,
@@ -62,30 +62,30 @@ async function ensureDiagnosticAudioSchema(
       created_at INTEGER NOT NULL,
       expires_at INTEGER NOT NULL
     )
-  \`).run();
+  `).run();
 
-  await env.TRANSLATIONS_DB.prepare(\`
+  await env.TRANSLATIONS_DB.prepare(`
     CREATE INDEX IF NOT EXISTS idx_diagnostic_audio_broadcast
     ON diagnostic_audio_segments (
       broadcast_id,
       sequence
     )
-  \`).run();
+  `).run();
 
-  await env.TRANSLATIONS_DB.prepare(\`
+  await env.TRANSLATIONS_DB.prepare(`
     CREATE INDEX IF NOT EXISTS idx_diagnostic_audio_org_created
     ON diagnostic_audio_segments (
       organization_id,
       created_at DESC
     )
-  \`).run();
+  `).run();
 
-  await env.TRANSLATIONS_DB.prepare(\`
+  await env.TRANSLATIONS_DB.prepare(`
     CREATE INDEX IF NOT EXISTS idx_diagnostic_audio_expiry
     ON diagnostic_audio_segments (
       expires_at
     )
-  \`).run();
+  `).run();
 
   diagnosticAudioSchemaReady =
     true;
@@ -134,7 +134,7 @@ async function purgeExpiredDiagnosticAudio(
   );
 
   const rows =
-    await env.TRANSLATIONS_DB.prepare(\`
+    await env.TRANSLATIONS_DB.prepare(`
       SELECT
         id,
         object_key
@@ -142,7 +142,7 @@ async function purgeExpiredDiagnosticAudio(
       WHERE expires_at <= ?
       ORDER BY expires_at ASC
       LIMIT ?
-    \`)
+    `)
     .bind(
       Date.now(),
       Math.max(
@@ -182,10 +182,10 @@ async function purgeExpiredDiagnosticAudio(
   await env.TRANSLATIONS_DB.batch(
     expired.map(
       item =>
-        env.TRANSLATIONS_DB.prepare(\`
+        env.TRANSLATIONS_DB.prepare(`
           DELETE FROM diagnostic_audio_segments
           WHERE id = ?
-        \`)
+        `)
         .bind(
           String(item.id)
         )
@@ -9900,7 +9900,7 @@ var index_default = {
           Date.now();
 
         const broadcast =
-          await env.TRANSLATIONS_DB.prepare(\`
+          await env.TRANSLATIONS_DB.prepare(`
             SELECT
               started_at,
               last_seen
@@ -9908,7 +9908,7 @@ var index_default = {
             WHERE room = ?
             ORDER BY last_seen DESC
             LIMIT 1
-          \`)
+          `)
           .bind(room)
           .first();
 
@@ -10140,7 +10140,7 @@ var index_default = {
           }
         );
 
-        await env.TRANSLATIONS_DB.prepare(\`
+        await env.TRANSLATIONS_DB.prepare(`
           INSERT OR REPLACE INTO diagnostic_audio_segments (
             id,
             organization_id,
@@ -10157,7 +10157,7 @@ var index_default = {
           VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
           )
-        \`)
+        `)
         .bind(
           segmentId,
           Number(
@@ -10247,7 +10247,7 @@ var index_default = {
             : "";
 
         const statement =
-          env.TRANSLATIONS_DB.prepare(\`
+          env.TRANSLATIONS_DB.prepare(`
             SELECT
               organization_id,
               room,
@@ -10270,7 +10270,7 @@ var index_default = {
               broadcast_id
             ORDER BY started_at DESC
             LIMIT 100
-          \`);
+          `);
 
         const result =
           organizationId
@@ -10393,7 +10393,7 @@ var index_default = {
 
         if (broadcastId) {
           result =
-            await env.TRANSLATIONS_DB.prepare(\`
+            await env.TRANSLATIONS_DB.prepare(`
               SELECT
                 id,
                 room,
@@ -10409,7 +10409,7 @@ var index_default = {
                 AND expires_at > ?
               ORDER BY sequence ASC
               LIMIT 5000
-            \`)
+            `)
             .bind(
               broadcastId,
               Date.now()
@@ -10418,7 +10418,7 @@ var index_default = {
 
         } else if (room) {
           result =
-            await env.TRANSLATIONS_DB.prepare(\`
+            await env.TRANSLATIONS_DB.prepare(`
               SELECT
                 id,
                 room,
@@ -10436,7 +10436,7 @@ var index_default = {
                 AND created_at >= ?
               ORDER BY created_at ASC
               LIMIT 40
-            \`)
+            `)
             .bind(
               room,
               afterSequence,
@@ -10559,7 +10559,7 @@ var index_default = {
         }
 
         const row =
-          await env.TRANSLATIONS_DB.prepare(\`
+          await env.TRANSLATIONS_DB.prepare(`
             SELECT
               object_key,
               content_type,
@@ -10567,7 +10567,7 @@ var index_default = {
             FROM diagnostic_audio_segments
             WHERE id = ?
             LIMIT 1
-          \`)
+          `)
           .bind(
             segmentId
           )
