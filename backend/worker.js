@@ -10406,12 +10406,14 @@ var index_default = {
                 expires_at
               FROM diagnostic_audio_segments
               WHERE broadcast_id = ?
+                AND sequence > ?
                 AND expires_at > ?
               ORDER BY sequence ASC
               LIMIT 5000
             `)
             .bind(
               broadcastId,
+              afterSequence,
               Date.now()
             )
             .all();
