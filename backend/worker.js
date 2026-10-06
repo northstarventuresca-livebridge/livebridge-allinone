@@ -9401,11 +9401,19 @@ Scripture rules:
       );
     }
 
-    const targetLanguageName =
+    const normalizedTargetLanguage =
       String(targetLanguage || "")
-        .toLowerCase() === "yue"
-          ? "Cantonese Chinese (Hong Kong; natural spoken Cantonese; Traditional Chinese)"
-          : String(targetLanguage || "");
+        .trim()
+        .toLowerCase();
+
+    const targetLanguageName =
+      normalizedTargetLanguage === "yue"
+        ? "Cantonese Chinese (Hong Kong; natural spoken Cantonese; Traditional Chinese)"
+        : normalizedTargetLanguage === "rw"
+          ? "Kinyarwanda (Ikinyarwanda)"
+          : normalizedTargetLanguage === "ln"
+            ? "Lingala (Democratic Republic of the Congo)"
+            : String(targetLanguage || "");
 
     const response = await fetch(
       OPENAI_CHAT_URL,
