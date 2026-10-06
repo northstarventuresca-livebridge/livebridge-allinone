@@ -31,6 +31,8 @@ const REDIRECTS = new Map([
 ]);
 
 
+const REALTIME_TEST_RW_LN_LANGUAGE_PATCH = "<script>\n(() => {\n  if (\n    !window.location.pathname.startsWith(\"/realtime-test/\") ||\n    window.__lbRwLnLanguagePatch\n  ) {\n    return;\n  }\n\n  window.__lbRwLnLanguagePatch = true;\n\n  function installLanguages() {\n    const select =\n      document.getElementById(\"listenerLanguage\");\n\n    if (select) {\n      const existing =\n        new Set(\n          Array.from(select.options)\n            .map(option =>\n              String(option.value || \"\")\n                .split(\"|\")[0]\n                .toLowerCase()\n            )\n        );\n\n      if (!existing.has(\"rw\")) {\n        const option =\n          document.createElement(\"option\");\n        option.value = \"rw|rw-RW\";\n        option.textContent =\n          \"Kinyarwanda — Ikinyarwanda\";\n        select.insertBefore(\n          option,\n          Array.from(select.options)\n            .find(item =>\n              String(item.value || \"\")\n                .startsWith(\"zh|\")\n            ) || null\n        );\n      }\n\n      if (!existing.has(\"ln\")) {\n        const option =\n          document.createElement(\"option\");\n        option.value = \"ln|ln-CD\";\n        option.textContent =\n          \"Lingala (Congo) — Lingála\";\n        select.insertBefore(\n          option,\n          Array.from(select.options)\n            .find(item =>\n              String(item.value || \"\")\n                .startsWith(\"zh|\")\n            ) || null\n        );\n      }\n    }\n\n    try {\n      if (\n        typeof languages !== \"undefined\" &&\n        Array.isArray(languages)\n      ) {\n        if (!languages.some(item => item.code === \"rw\")) {\n          languages.splice(\n            Math.max(0, languages.findIndex(item => item.code === \"zh\")),\n            0,\n            {\n              code:\"rw\",\n              flag:\"🇷🇼\",\n              native:\"Kanda hano wumve mu Kinyarwanda\",\n              english:\"Kinyarwanda\"\n            }\n          );\n        }\n\n        if (!languages.some(item => item.code === \"ln\")) {\n          languages.splice(\n            Math.max(0, languages.findIndex(item => item.code === \"zh\")),\n            0,\n            {\n              code:\"ln\",\n              flag:\"🇨🇩\",\n              native:\"Finá awa mpo na koyoka na Lingála\",\n              english:\"Lingala (Congo)\"\n            }\n          );\n        }\n      }\n    } catch {}\n\n    try {\n      if (\n        typeof changeLanguageLabels !== \"undefined\"\n      ) {\n        changeLanguageLabels.rw =\n          \"Hindura ururimi\";\n        changeLanguageLabels.ln =\n          \"Bongola monɔkɔ\";\n      }\n    } catch {}\n\n    try {\n      if (\n        typeof renderLanguageGate === \"function\"\n      ) {\n        renderLanguageGate();\n      }\n    } catch {}\n  }\n\n  installLanguages();\n  setTimeout(installLanguages, 250);\n})();\n</script>";
+
 const REALTIME_TEST_LISTENER_PATCH = `<script>
 (() => {
   if (
@@ -821,6 +823,13 @@ function protectListenerPage(
 
           element.append(
             REALTIME_TEST_LISTENER_PATCH,
+            {
+              html:true
+            }
+          );
+
+          element.append(
+            REALTIME_TEST_RW_LN_LANGUAGE_PATCH,
             {
               html:true
             }
