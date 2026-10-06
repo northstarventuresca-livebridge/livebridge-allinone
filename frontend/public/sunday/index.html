@@ -667,7 +667,7 @@ body{
       id="audioCaptureDiagnostic"
       style="
         margin-top:-10px;
-        margin-bottom:14px;
+        margin-bottom:10px;
         color:#8fa5bc;
         font-size:10px;
         line-height:1.45;
@@ -675,6 +675,61 @@ body{
       "
     >
       Audio: waiting
+    </div>
+
+    <div
+      id="lbMicQualityPanel"
+      style="
+        margin-bottom:14px;
+        padding:10px;
+        border-radius:10px;
+        border:1px solid rgba(255,255,255,.08);
+        background:rgba(6,17,31,.55);
+      "
+    >
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;">
+        <span style="font-size:10px;font-weight:800;color:#b9c9da;">INPUT LEVEL</span>
+        <span id="lbMicPeakDb" style="font-size:10px;color:#8fa5bc;">— dB</span>
+      </div>
+
+      <div style="height:8px;border-radius:999px;background:#16283d;overflow:hidden;">
+        <div
+          id="lbMicPeakBar"
+          style="height:100%;width:0%;border-radius:999px;background:#39d98a;transition:width .12s linear,background .12s linear;"
+        ></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:7px;margin-top:8px;">
+        <span
+          id="lbMicQualityDot"
+          style="width:8px;height:8px;border-radius:50%;background:#62758a;box-shadow:0 0 0 3px rgba(98,117,138,.12);flex:0 0 auto;"
+        ></span>
+        <span id="lbMicQualityText" style="font-size:10px;color:#9fb1c7;">Waiting for broadcast audio</span>
+      </div>
+
+      <button
+        type="button"
+        id="lbVoiceIsolationButton"
+        onclick="toggleBroadcasterVoiceIsolation()"
+        style="
+          margin-top:9px;
+          width:100%;
+          padding:8px 10px;
+          border-radius:8px;
+          border:1px solid rgba(255,255,255,.12);
+          background:#13243a;
+          color:#d9e7f6;
+          font-size:10px;
+          font-weight:800;
+          cursor:pointer;
+        "
+      >
+        Voice Isolation: OFF
+      </button>
+
+      <div id="lbVoiceIsolationStatus" style="margin-top:5px;font-size:9px;line-height:1.35;color:#73879d;">
+        Optional gentle browser noise/echo suppression. No hard gate.
+      </div>
     </div>
 
 
@@ -1418,6 +1473,8 @@ let audioSafetyTimer = null;
 let lastMeaningfulAudioAt = null;
 let lastTranscriptionUploadAt = null;
 let audioSafetyAutoEnding = false;
+let voiceIsolationEnabled = false;
+let voiceIsolationOriginalSettings = null;
 const AUDIO_ACTIVITY_THRESHOLD = 0.012;
 const TRANSCRIPTION_SILENCE_HOLD_MS = 15000;
 
@@ -4892,6 +4949,9 @@ function startAudioSafetyMonitoring() {
           let sumSquares =
             0;
 
+          let peak =
+            0;
+
           for (
             let i = 0;
             i < samples.length;
@@ -4899,6 +4959,19 @@ function startAudioSafetyMonitoring() {
           ) {
             const normalized =
               (samples[i] - 128) / 128;
+
+            const absolute =
+              Math.abs(
+                normalized
+              );
+
+            if (
+              absolute >
+              peak
+            ) {
+              peak =
+                absolute;
+            }
 
             sumSquares +=
               normalized * normalized;
@@ -4919,7 +4992,8 @@ function startAudioSafetyMonitoring() {
           }
 
           renderAudioSafetyStatus(
-            rms
+            rms,
+            peak
           );
 
           if (
@@ -4964,13 +5038,140 @@ function shouldUploadTranscriptionChunk() {
 
 
 function renderAudioSafetyStatus(
-  rms = 0
+  rms = 0,
+  peak = 0
 ) {
 
   const status =
     document.getElementById(
       "lbAudioSafetyStatus"
     );
+
+  const peakBar =
+    document.getElementById(
+      "lbMicPeakBar"
+    );
+
+  const peakDb =
+    document.getElementById(
+      "lbMicPeakDb"
+    );
+
+  const qualityDot =
+    document.getElementById(
+      "lbMicQualityDot"
+    );
+
+  const qualityText =
+    document.getElementById(
+      "lbMicQualityText"
+    );
+
+  const db =
+    peak > 0
+      ? 20 * Math.log10(peak)
+      : -60;
+
+  const meterPercent =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        (
+          db + 60
+        ) /
+        60 *
+        100
+      )
+    );
+
+  if (peakBar) {
+    peakBar.style.width =
+      meterPercent.toFixed(1) +
+      "%";
+
+    peakBar.style.background =
+      peak >= 0.985
+        ? "#ff4d5e"
+        : peak >= 0.72
+          ? "#ffb547"
+          : "#39d98a";
+  }
+
+  if (peakDb) {
+    peakDb.textContent =
+      (
+        peak > 0
+          ? db.toFixed(1)
+          : "—"
+      ) +
+      " dB";
+  }
+
+  if (
+    qualityDot &&
+    qualityText
+  ) {
+    const crestFactor =
+      rms > 0.0001
+        ? peak / rms
+        : 0;
+
+    let dotColor =
+      "#62758a";
+
+    let dotGlow =
+      "rgba(98,117,138,.12)";
+
+    let label =
+      "Waiting for voice";
+
+    if (
+      peak >= 0.985
+    ) {
+      dotColor =
+        "#ff4d5e";
+
+      dotGlow =
+        "rgba(255,77,94,.16)";
+
+      label =
+        "Input clipping — turn the microphone gain down";
+    } else if (
+      rms >= 0.012 &&
+      crestFactor < 1.65
+    ) {
+      dotColor =
+        "#ffb547";
+
+      dotGlow =
+        "rgba(255,181,71,.16)";
+
+      label =
+        "Background noise may be high";
+    } else if (
+      rms >= 0.012
+    ) {
+      dotColor =
+        "#39d98a";
+
+      dotGlow =
+        "rgba(57,217,138,.16)";
+
+      label =
+        "Voice signal looks clean";
+    }
+
+    qualityDot.style.background =
+      dotColor;
+
+    qualityDot.style.boxShadow =
+      "0 0 0 3px " +
+      dotGlow;
+
+    qualityText.textContent =
+      label;
+  }
 
   if (!status) {
     return;
@@ -4984,6 +5185,127 @@ function renderAudioSafetyStatus(
 
   status.textContent =
     "Reliability mode • transcription remains active continuously while broadcasting.";
+}
+
+
+async function toggleBroadcasterVoiceIsolation() {
+
+  const button =
+    document.getElementById(
+      "lbVoiceIsolationButton"
+    );
+
+  const status =
+    document.getElementById(
+      "lbVoiceIsolationStatus"
+    );
+
+  const track =
+    mediaStream
+      ?.getAudioTracks?.()[0];
+
+  if (
+    !broadcasting ||
+    !track
+  ) {
+    if (status) {
+      status.textContent =
+        "Start broadcasting first, then Voice Isolation can be switched on.";
+    }
+    return;
+  }
+
+  if (
+    typeof track.applyConstraints !==
+      "function"
+  ) {
+    if (status) {
+      status.textContent =
+        "Voice Isolation is not supported by this browser.";
+    }
+    return;
+  }
+
+  if (
+    !voiceIsolationOriginalSettings
+  ) {
+    voiceIsolationOriginalSettings =
+      track.getSettings
+        ? track.getSettings()
+        : {};
+  }
+
+  const nextEnabled =
+    !voiceIsolationEnabled;
+
+  const requested =
+    nextEnabled
+      ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false
+        }
+      : {
+          echoCancellation:
+            typeof voiceIsolationOriginalSettings?.echoCancellation ===
+              "boolean"
+              ? voiceIsolationOriginalSettings.echoCancellation
+              : false,
+          noiseSuppression:
+            typeof voiceIsolationOriginalSettings?.noiseSuppression ===
+              "boolean"
+              ? voiceIsolationOriginalSettings.noiseSuppression
+              : false,
+          autoGainControl:
+            typeof voiceIsolationOriginalSettings?.autoGainControl ===
+              "boolean"
+              ? voiceIsolationOriginalSettings.autoGainControl
+              : false
+        };
+
+  try {
+
+    await track.applyConstraints(
+      requested
+    );
+
+    voiceIsolationEnabled =
+      nextEnabled;
+
+    if (button) {
+      button.textContent =
+        "Voice Isolation: " +
+        (
+          voiceIsolationEnabled
+            ? "ON"
+            : "OFF"
+        );
+
+      button.style.borderColor =
+        voiceIsolationEnabled
+          ? "rgba(57,217,138,.55)"
+          : "rgba(255,255,255,.12)";
+    }
+
+    if (status) {
+      status.textContent =
+        voiceIsolationEnabled
+          ? "Gentle browser noise/echo suppression is active. No hard gate is used."
+          : "Voice Isolation is off. Original microphone processing restored.";
+    }
+
+  } catch (error) {
+
+    console.error(
+      "LiveBridge voice isolation failed:",
+      error
+    );
+
+    if (status) {
+      status.textContent =
+        "This microphone/browser could not change its audio processing while live.";
+    }
+  }
 }
 
 
@@ -5035,6 +5357,64 @@ function stopAudioSafetyMonitoring() {
 
   lastMeaningfulAudioAt =
     null;
+
+  voiceIsolationEnabled =
+    false;
+
+  voiceIsolationOriginalSettings =
+    null;
+
+  const peakBar =
+    document.getElementById(
+      "lbMicPeakBar"
+    );
+
+  if (peakBar) {
+    peakBar.style.width =
+      "0%";
+  }
+
+  const peakDb =
+    document.getElementById(
+      "lbMicPeakDb"
+    );
+
+  if (peakDb) {
+    peakDb.textContent =
+      "— dB";
+  }
+
+  const qualityDot =
+    document.getElementById(
+      "lbMicQualityDot"
+    );
+
+  if (qualityDot) {
+    qualityDot.style.background =
+      "#62758a";
+  }
+
+  const qualityText =
+    document.getElementById(
+      "lbMicQualityText"
+    );
+
+  if (qualityText) {
+    qualityText.textContent =
+      "Waiting for broadcast audio";
+  }
+
+  const isolationButton =
+    document.getElementById(
+      "lbVoiceIsolationButton"
+    );
+
+  if (isolationButton) {
+    isolationButton.textContent =
+      "Voice Isolation: OFF";
+    isolationButton.style.borderColor =
+      "rgba(255,255,255,.12)";
+  }
 }
 
 function getCurrentBroadcastRms() {
