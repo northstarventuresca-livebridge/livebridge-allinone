@@ -31,7 +31,7 @@ const REDIRECTS = new Map([
 ]);
 
 
-const REALTIME_TEST_LISTENER_PATCH = \`<script>
+const REALTIME_TEST_LISTENER_PATCH = `<script>
 (() => {
   if (
     !window.location.pathname.startsWith("/realtime-test/") ||
@@ -132,9 +132,9 @@ const REALTIME_TEST_LISTENER_PATCH = \`<script>
       );
     };
 })();
-<\\/script>\`;
+<\\/script>`;
 
-const REALTIME_TEST_ADMIN_PATCH = \`<script>
+const REALTIME_TEST_ADMIN_PATCH = `<script>
 (() => {
   if (
     !window.location.pathname.startsWith("/realtime-test/") ||
@@ -262,9 +262,9 @@ const REALTIME_TEST_ADMIN_PATCH = \`<script>
     5000
   );
 })();
-<\\/script>\`;
+<\\/script>`;
 
-const REALTIME_TEST_BROADCASTER_PATCH = \`<script>
+const REALTIME_TEST_BROADCASTER_PATCH = `<script>
 (() => {
   if (
     !window.location.pathname.startsWith("/realtime-test/") ||
@@ -668,7 +668,7 @@ const REALTIME_TEST_BROADCASTER_PATCH = \`<script>
     250
   );
 })();
-<\\/script>\`;
+<\\/script>`;
 
 const PAGES = new Map([
   ["/", "/index.html"],
