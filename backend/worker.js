@@ -25320,6 +25320,19 @@ if (
       },
       404
     );
+  },
+
+  async scheduled(
+    controller,
+    env,
+    ctx
+  ) {
+    ctx.waitUntil(
+      purgeExpiredDiagnosticAudio(
+        env,
+        250
+      )
+    );
   }
 };
 export {
