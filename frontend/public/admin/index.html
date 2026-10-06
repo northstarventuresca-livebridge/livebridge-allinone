@@ -4884,8 +4884,11 @@ function renderOrganizations(list){
               </div>
             </div>
 
-            <div class="lb-room">
-              ${escapeHtml(item.roomName)}
+            <div
+              class="lb-room"
+              data-room-organization-id="${Number(item.id)}"
+            >
+              ${escapeHtml(item.activeRoomName || item.roomName)}
             </div>
           </div>
 
@@ -4987,8 +4990,8 @@ async function refreshLiveBroadcastIndicators(){
         )
         .filter(Boolean);
 
-      const isLive =
-        activeRooms.some(
+      const matchingActiveRoom =
+        activeRooms.find(
           activeRoom =>
             baseRooms.some(
               baseRoom =>
@@ -4999,10 +5002,31 @@ async function refreshLiveBroadcastIndicators(){
                   "-"
                 )
             )
-        );
+        ) || "";
+
+      const isLive =
+        !!matchingActiveRoom;
 
       organization.isLive =
         isLive;
+
+      organization.activeRoomName =
+        matchingActiveRoom;
+
+      document
+        .querySelectorAll(
+          '[data-room-organization-id="' +
+          Number(
+            organization.id
+          ) +
+          '"]'
+        )
+        .forEach(roomLabel => {
+          roomLabel.textContent =
+            matchingActiveRoom ||
+            organization.roomName ||
+            "";
+        });
 
       document
         .querySelectorAll(
