@@ -35,6 +35,169 @@ function normalizeRoom(room) {
 }
 __name(normalizeRoom, "normalizeRoom");
 
+const DIAGNOSTIC_AUDIO_RETENTION_MS =
+  7 * 24 * 60 * 60 * 1000;
+
+let diagnosticAudioSchemaReady =
+  false;
+
+async function ensureDiagnosticAudioSchema(
+  env
+) {
+  if (diagnosticAudioSchemaReady) {
+    return;
+  }
+
+  await env.TRANSLATIONS_DB.prepare(\`
+    CREATE TABLE IF NOT EXISTS diagnostic_audio_segments (
+      id TEXT PRIMARY KEY,
+      organization_id INTEGER NOT NULL,
+      room TEXT NOT NULL,
+      broadcast_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      object_key TEXT NOT NULL UNIQUE,
+      content_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      segment_started_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL
+    )
+  \`).run();
+
+  await env.TRANSLATIONS_DB.prepare(\`
+    CREATE INDEX IF NOT EXISTS idx_diagnostic_audio_broadcast
+    ON diagnostic_audio_segments (
+      broadcast_id,
+      sequence
+    )
+  \`).run();
+
+  await env.TRANSLATIONS_DB.prepare(\`
+    CREATE INDEX IF NOT EXISTS idx_diagnostic_audio_org_created
+    ON diagnostic_audio_segments (
+      organization_id,
+      created_at DESC
+    )
+  \`).run();
+
+  await env.TRANSLATIONS_DB.prepare(\`
+    CREATE INDEX IF NOT EXISTS idx_diagnostic_audio_expiry
+    ON diagnostic_audio_segments (
+      expires_at
+    )
+  \`).run();
+
+  diagnosticAudioSchemaReady =
+    true;
+}
+__name(
+  ensureDiagnosticAudioSchema,
+  "ensureDiagnosticAudioSchema"
+);
+
+function diagnosticAudioExtension(
+  contentType
+) {
+  const type =
+    String(
+      contentType || ""
+    ).toLowerCase();
+
+  if (
+    type.includes("mp4") ||
+    type.includes("m4a")
+  ) {
+    return "m4a";
+  }
+
+  if (type.includes("ogg")) {
+    return "ogg";
+  }
+
+  return "webm";
+}
+__name(
+  diagnosticAudioExtension,
+  "diagnosticAudioExtension"
+);
+
+async function purgeExpiredDiagnosticAudio(
+  env,
+  limit = 100
+) {
+  if (!env.AZURE_TTS_CACHE) {
+    return;
+  }
+
+  await ensureDiagnosticAudioSchema(
+    env
+  );
+
+  const rows =
+    await env.TRANSLATIONS_DB.prepare(\`
+      SELECT
+        id,
+        object_key
+      FROM diagnostic_audio_segments
+      WHERE expires_at <= ?
+      ORDER BY expires_at ASC
+      LIMIT ?
+    \`)
+    .bind(
+      Date.now(),
+      Math.max(
+        1,
+        Math.min(
+          250,
+          Number(limit || 100)
+        )
+      )
+    )
+    .all();
+
+  const expired =
+    rows.results || [];
+
+  if (!expired.length) {
+    return;
+  }
+
+  try {
+    await env.AZURE_TTS_CACHE.delete(
+      expired.map(
+        item =>
+          String(
+            item.object_key || ""
+          )
+      )
+      .filter(Boolean)
+    );
+  } catch (error) {
+    console.warn(
+      "Diagnostic audio R2 cleanup failed:",
+      error
+    );
+  }
+
+  await env.TRANSLATIONS_DB.batch(
+    expired.map(
+      item =>
+        env.TRANSLATIONS_DB.prepare(\`
+          DELETE FROM diagnostic_audio_segments
+          WHERE id = ?
+        \`)
+        .bind(
+          String(item.id)
+        )
+    )
+  );
+}
+__name(
+  purgeExpiredDiagnosticAudio,
+  "purgeExpiredDiagnosticAudio"
+);
+
+
 let roomAliasSchemaReady = false;
 
 async function ensureRoomAliasSchema(env) {
@@ -3791,6 +3954,7 @@ const LIVEBRIDGE_FEATURE_OVERRIDE_KEYS = [
   "customOnboarding",
   "listenerDataDisplay",
   "listenerTimingDiagnostic",
+  "listenerNetworkQualityDisabled",
   "marketingCampaigns",
   "organizationStatsApi",
   "organizationStatsApiDisabled",
@@ -9707,6 +9871,778 @@ var index_default = {
         headers: CORS_HEADERS
       });
     }
+
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/network-health"
+    ) {
+      try {
+        const room =
+          normalizeRoom(
+            url.searchParams.get(
+              "room"
+            )
+          );
+
+        if (!room) {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "room is required."
+            },
+            400
+          );
+        }
+
+        const now =
+          Date.now();
+
+        const broadcast =
+          await env.TRANSLATIONS_DB.prepare(\`
+            SELECT
+              started_at,
+              last_seen
+            FROM active_broadcasts
+            WHERE room = ?
+            ORDER BY last_seen DESC
+            LIMIT 1
+          \`)
+          .bind(room)
+          .first();
+
+        const lastSeen =
+          Number(
+            broadcast?.last_seen ||
+            0
+          );
+
+        return jsonResponse({
+          success: true,
+          room,
+          serverTime:
+            now,
+          sourceHealthy:
+            lastSeen >=
+            now - 90000,
+          sourceLastSeen:
+            lastSeen || null,
+          sourceStartedAt:
+            Number(
+              broadcast?.started_at ||
+              0
+            ) || null
+        });
+
+      } catch (error) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              error.message ||
+              "Network health check failed."
+          },
+          500
+        );
+      }
+    }
+
+
+    if (
+      request.method === "POST" &&
+      url.pathname ===
+        "/diagnostic-audio/segment"
+    ) {
+      try {
+        if (!env.AZURE_TTS_CACHE) {
+          throw new Error(
+            "Diagnostic audio storage is not configured."
+          );
+        }
+
+        await ensureDiagnosticAudioSchema(
+          env
+        );
+
+        const auth =
+          await verifyClerkRequest(
+            request,
+            env
+          );
+
+        const room =
+          normalizeRoom(
+            url.searchParams.get(
+              "room"
+            )
+          );
+
+        const broadcastId =
+          String(
+            url.searchParams.get(
+              "broadcastId"
+            ) || ""
+          )
+          .trim()
+          .replace(
+            /[^a-zA-Z0-9_-]/g,
+            ""
+          )
+          .slice(
+            0,
+            120
+          );
+
+        const sequence =
+          Math.max(
+            0,
+            Math.floor(
+              Number(
+                url.searchParams.get(
+                  "sequence"
+                ) || 0
+              )
+            )
+          );
+
+        const segmentStartedAt =
+          Math.max(
+            0,
+            Number(
+              url.searchParams.get(
+                "startedAt"
+              ) ||
+              Date.now()
+            )
+          );
+
+        if (
+          !room ||
+          !broadcastId ||
+          !sequence
+        ) {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "Missing diagnostic audio parameters."
+            },
+            400
+          );
+        }
+
+        const owned =
+          await getOwnedBroadcastOrganization(
+            env,
+            auth.clerkUserId,
+            room
+          );
+
+        const contentType =
+          String(
+            request.headers.get(
+              "Content-Type"
+            ) ||
+            "audio/webm"
+          )
+          .split(";")[0]
+          .trim()
+          .toLowerCase();
+
+        if (
+          !contentType.startsWith(
+            "audio/"
+          )
+        ) {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "Diagnostic upload must be audio."
+            },
+            415
+          );
+        }
+
+        const audio =
+          await request.arrayBuffer();
+
+        if (
+          !audio.byteLength ||
+          audio.byteLength >
+            3 * 1024 * 1024
+        ) {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "Diagnostic audio segment is empty or too large."
+            },
+            413
+          );
+        }
+
+        const now =
+          Date.now();
+
+        const expiresAt =
+          now +
+          DIAGNOSTIC_AUDIO_RETENTION_MS;
+
+        const extension =
+          diagnosticAudioExtension(
+            contentType
+          );
+
+        const objectKey =
+          "diagnostic-audio-test/" +
+          Number(
+            owned.organization.id
+          ) +
+          "/" +
+          broadcastId +
+          "/" +
+          String(sequence)
+            .padStart(
+              7,
+              "0"
+            ) +
+          "." +
+          extension;
+
+        const segmentId =
+          broadcastId +
+          "-" +
+          String(sequence);
+
+        await env.AZURE_TTS_CACHE.put(
+          objectKey,
+          audio,
+          {
+            httpMetadata: {
+              contentType
+            },
+            customMetadata: {
+              organizationId:
+                String(
+                  owned.organization.id
+                ),
+              room,
+              broadcastId,
+              sequence:
+                String(sequence),
+              createdAt:
+                String(now),
+              expiresAt:
+                String(expiresAt)
+            }
+          }
+        );
+
+        await env.TRANSLATIONS_DB.prepare(\`
+          INSERT OR REPLACE INTO diagnostic_audio_segments (
+            id,
+            organization_id,
+            room,
+            broadcast_id,
+            sequence,
+            object_key,
+            content_type,
+            size_bytes,
+            segment_started_at,
+            created_at,
+            expires_at
+          )
+          VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          )
+        \`)
+        .bind(
+          segmentId,
+          Number(
+            owned.organization.id
+          ),
+          room,
+          broadcastId,
+          sequence,
+          objectKey,
+          contentType,
+          audio.byteLength,
+          segmentStartedAt,
+          now,
+          expiresAt
+        )
+        .run();
+
+        if (
+          sequence % 15 ===
+          0
+        ) {
+          await purgeExpiredDiagnosticAudio(
+            env,
+            50
+          );
+        }
+
+        return jsonResponse({
+          success: true,
+          segmentId,
+          sequence,
+          expiresAt
+        });
+
+      } catch (error) {
+        console.error(
+          "Diagnostic audio upload failed:",
+          error
+        );
+
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              error.message ||
+              "Diagnostic audio upload failed."
+          },
+          403
+        );
+      }
+    }
+
+
+    if (
+      request.method === "GET" &&
+      url.pathname ===
+        "/admin/diagnostic-audio/broadcasts"
+    ) {
+      try {
+        await verifyAdminRequest(
+          request,
+          env
+        );
+
+        await ensureDiagnosticAudioSchema(
+          env
+        );
+
+        await purgeExpiredDiagnosticAudio(
+          env,
+          100
+        );
+
+        const organizationId =
+          Math.max(
+            0,
+            Number(
+              url.searchParams.get(
+                "organizationId"
+              ) || 0
+            )
+          );
+
+        const where =
+          organizationId
+            ? "AND organization_id = ?"
+            : "";
+
+        const statement =
+          env.TRANSLATIONS_DB.prepare(\`
+            SELECT
+              organization_id,
+              room,
+              broadcast_id,
+              MIN(segment_started_at)
+                AS started_at,
+              MAX(segment_started_at)
+                AS last_segment_at,
+              COUNT(*) AS segment_count,
+              SUM(size_bytes)
+                AS size_bytes,
+              MAX(expires_at)
+                AS expires_at
+            FROM diagnostic_audio_segments
+            WHERE expires_at > ?
+              \${where}
+            GROUP BY
+              organization_id,
+              room,
+              broadcast_id
+            ORDER BY started_at DESC
+            LIMIT 100
+          \`);
+
+        const result =
+          organizationId
+            ? await statement
+                .bind(
+                  Date.now(),
+                  organizationId
+                )
+                .all()
+            : await statement
+                .bind(
+                  Date.now()
+                )
+                .all();
+
+        return jsonResponse({
+          success: true,
+          broadcasts:
+            (
+              result.results ||
+              []
+            )
+            .map(item => ({
+              organizationId:
+                Number(
+                  item.organization_id ||
+                  0
+                ),
+              room:
+                String(
+                  item.room || ""
+                ),
+              broadcastId:
+                String(
+                  item.broadcast_id ||
+                  ""
+                ),
+              startedAt:
+                Number(
+                  item.started_at ||
+                  0
+                ),
+              lastSegmentAt:
+                Number(
+                  item.last_segment_at ||
+                  0
+                ),
+              segmentCount:
+                Number(
+                  item.segment_count ||
+                  0
+                ),
+              sizeBytes:
+                Number(
+                  item.size_bytes ||
+                  0
+                ),
+              expiresAt:
+                Number(
+                  item.expires_at ||
+                  0
+                )
+            }))
+        });
+
+      } catch (error) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              error.message ||
+              "Unable to load diagnostic audio."
+          },
+          403
+        );
+      }
+    }
+
+
+    if (
+      request.method === "GET" &&
+      url.pathname ===
+        "/admin/diagnostic-audio/segments"
+    ) {
+      try {
+        await verifyAdminRequest(
+          request,
+          env
+        );
+
+        await ensureDiagnosticAudioSchema(
+          env
+        );
+
+        const broadcastId =
+          String(
+            url.searchParams.get(
+              "broadcastId"
+            ) || ""
+          ).trim();
+
+        const room =
+          normalizeRoom(
+            url.searchParams.get(
+              "room"
+            )
+          );
+
+        const afterSequence =
+          Math.max(
+            0,
+            Number(
+              url.searchParams.get(
+                "afterSequence"
+              ) || 0
+            )
+          );
+
+        let result;
+
+        if (broadcastId) {
+          result =
+            await env.TRANSLATIONS_DB.prepare(\`
+              SELECT
+                id,
+                room,
+                broadcast_id,
+                sequence,
+                content_type,
+                size_bytes,
+                segment_started_at,
+                created_at,
+                expires_at
+              FROM diagnostic_audio_segments
+              WHERE broadcast_id = ?
+                AND expires_at > ?
+              ORDER BY sequence ASC
+              LIMIT 5000
+            \`)
+            .bind(
+              broadcastId,
+              Date.now()
+            )
+            .all();
+
+        } else if (room) {
+          result =
+            await env.TRANSLATIONS_DB.prepare(\`
+              SELECT
+                id,
+                room,
+                broadcast_id,
+                sequence,
+                content_type,
+                size_bytes,
+                segment_started_at,
+                created_at,
+                expires_at
+              FROM diagnostic_audio_segments
+              WHERE room = ?
+                AND sequence > ?
+                AND expires_at > ?
+                AND created_at >= ?
+              ORDER BY created_at ASC
+              LIMIT 40
+            \`)
+            .bind(
+              room,
+              afterSequence,
+              Date.now(),
+              Date.now() -
+                120000
+            )
+            .all();
+
+        } else {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "broadcastId or room is required."
+            },
+            400
+          );
+        }
+
+        return jsonResponse({
+          success: true,
+          segments:
+            (
+              result.results ||
+              []
+            )
+            .map(item => ({
+              id:
+                String(
+                  item.id || ""
+                ),
+              room:
+                String(
+                  item.room || ""
+                ),
+              broadcastId:
+                String(
+                  item.broadcast_id ||
+                  ""
+                ),
+              sequence:
+                Number(
+                  item.sequence ||
+                  0
+                ),
+              contentType:
+                String(
+                  item.content_type ||
+                  "audio/webm"
+                ),
+              sizeBytes:
+                Number(
+                  item.size_bytes ||
+                  0
+                ),
+              startedAt:
+                Number(
+                  item.segment_started_at ||
+                  0
+                ),
+              createdAt:
+                Number(
+                  item.created_at ||
+                  0
+                ),
+              expiresAt:
+                Number(
+                  item.expires_at ||
+                  0
+                )
+            }))
+        });
+
+      } catch (error) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              error.message ||
+              "Unable to load diagnostic audio segments."
+          },
+          403
+        );
+      }
+    }
+
+
+    if (
+      request.method === "GET" &&
+      url.pathname ===
+        "/admin/diagnostic-audio/segment"
+    ) {
+      try {
+        await verifyAdminRequest(
+          request,
+          env
+        );
+
+        await ensureDiagnosticAudioSchema(
+          env
+        );
+
+        const segmentId =
+          String(
+            url.searchParams.get(
+              "id"
+            ) || ""
+          ).trim();
+
+        if (!segmentId) {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "segment id is required."
+            },
+            400
+          );
+        }
+
+        const row =
+          await env.TRANSLATIONS_DB.prepare(\`
+            SELECT
+              object_key,
+              content_type,
+              expires_at
+            FROM diagnostic_audio_segments
+            WHERE id = ?
+            LIMIT 1
+          \`)
+          .bind(
+            segmentId
+          )
+          .first();
+
+        if (
+          !row ||
+          Number(
+            row.expires_at ||
+            0
+          ) <=
+          Date.now()
+        ) {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "Diagnostic audio segment not found or expired."
+            },
+            404
+          );
+        }
+
+        const object =
+          await env.AZURE_TTS_CACHE.get(
+            String(
+              row.object_key
+            )
+          );
+
+        if (!object) {
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                "Diagnostic audio object not found."
+            },
+            404
+          );
+        }
+
+        return new Response(
+          object.body,
+          {
+            status: 200,
+            headers: {
+              ...CORS_HEADERS,
+              "Content-Type":
+                object.httpMetadata
+                  ?.contentType ||
+                String(
+                  row.content_type ||
+                  "audio/webm"
+                ),
+              "Cache-Control":
+                "private, no-store",
+              "X-LiveBridge-Diagnostic-Audio":
+                "source"
+            }
+          }
+        );
+
+      } catch (error) {
+        return jsonResponse(
+          {
+            success: false,
+            error:
+              error.message ||
+              "Unable to load diagnostic audio segment."
+          },
+          403
+        );
+      }
+    }
+
 
     if (
       request.method === "POST" &&
@@ -20531,6 +21467,8 @@ if (
             listenerDataDisplayEnabled:
               false,
             listenerTimingDiagnosticEnabled:
+              false,
+            listenerNetworkQualityEnabled:
               false
           });
         }
@@ -20623,6 +21561,11 @@ if (
             parseFeatureOverrides(
               organization.feature_overrides_json
             ).listenerTimingDiagnostic === true,
+          listenerNetworkQualityEnabled:
+            parseFeatureOverrides(
+              organization.feature_overrides_json
+            ).listenerNetworkQualityDisabled !==
+            true,
           remainingCapacity:
             effectiveViewerLimit > 0
               ? Math.max(
