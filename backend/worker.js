@@ -1,3 +1,4 @@
+// LiveBridge production deployment marker: effective-room display sync 2026-10-07
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
