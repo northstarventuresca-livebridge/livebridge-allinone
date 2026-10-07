@@ -1015,15 +1015,15 @@ body{
     <div class="lb-room-display">
 
       <div class="lb-room-display-label">
-        Your Default Room
+        Your Current Room
       </div>
 
       <div class="lb-big-room" id="defaultRoomDisplay">
         —
       </div>
 
-      <div class="lb-muted">
-        Your permanent LiveBridge room.
+      <div class="lb-muted" id="defaultRoomNote">
+        Your current selected LiveBridge room.
       </div>
 
     </div>
@@ -2513,6 +2513,7 @@ function updateSharing(
 
   const url =
     createListenerURL(
+      account.currentRoom ||
       account.defaultRoom,
       language
     );
@@ -5095,6 +5096,15 @@ async function renderDashboard(
       .trim()
       .toUpperCase(),
 
+    currentRoom:
+      String(
+        serverAccount.effectiveRoom ||
+        serverAccount.roomName ||
+        ""
+      )
+      .trim()
+      .toUpperCase(),
+
     accountStatus:
       String(
         serverAccount.accountStatus ||
@@ -5176,8 +5186,24 @@ async function renderDashboard(
   document.getElementById(
     "defaultRoomDisplay"
   ).textContent =
+    account.currentRoom ||
     account.defaultRoom ||
     "—";
+
+  const roomNote =
+    document.getElementById(
+      "defaultRoomNote"
+    );
+
+  if (roomNote) {
+    roomNote.textContent =
+      account.currentRoom &&
+      account.currentRoom !==
+        account.defaultRoom
+        ? "Base room: " +
+          account.defaultRoom
+        : "Your permanent LiveBridge room.";
+  }
 
   document.getElementById(
     "accountOrganization"
