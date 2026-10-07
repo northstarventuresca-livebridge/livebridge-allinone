@@ -5320,8 +5320,16 @@ function openBroadcaster(){
       ?.defaultRoom ||
     "";
 
+  const broadcasterPath =
+    window.location.pathname
+      .startsWith(
+        "/realtime-test/"
+      )
+        ? "/realtime-test/sunday/?room="
+        : "/sunday/?room=";
+
   window.location.href =
-    "/sunday/?room=" +
+    broadcasterPath +
     encodeURIComponent(
       room
     );
