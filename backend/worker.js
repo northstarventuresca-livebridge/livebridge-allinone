@@ -10294,7 +10294,7 @@ var index_default = {
                 AS expires_at
             FROM diagnostic_audio_segments
             WHERE expires_at > ?
-              \${where}
+              ${where}
             GROUP BY
               organization_id,
               room,
