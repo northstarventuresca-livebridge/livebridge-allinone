@@ -1138,6 +1138,36 @@ function enhanceAccountPage(
               html:true
             }
           );
+
+          element.append(
+            `<script>
+(() => {
+  if (
+    !window.location.pathname.startsWith("/realtime-test/")
+  ) {
+    return;
+  }
+
+  window.openBroadcaster =
+    function() {
+      const room =
+        window
+          .liveBridgeAccount
+          ?.defaultRoom ||
+        "";
+
+      window.location.href =
+        "/realtime-test/sunday/?room=" +
+        encodeURIComponent(
+          room
+        );
+    };
+})();
+<\/script>`,
+            {
+              html:true
+            }
+          );
         }
       }
     )
