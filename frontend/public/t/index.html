@@ -1093,6 +1093,7 @@
   const LISTENER_PREVIEW =
     LISTENER_HOST.includes("dev-v1-3-0") ||
     LISTENER_HOST.includes("dev-v1-4-0") ||
+    LISTENER_HOST.includes("realtime-transcription-test") ||
     LISTENER_HOST.includes("livebridge-allinone-frontend-test") ||
     LISTENER_HOST.includes("livebridge-promoter-frontend-test");
 
@@ -1583,6 +1584,54 @@
     }
   }
 
+  function listenerChatContainsLink(
+    value
+  ) {
+    return /(?:https?:\/\/|www\.|(?:^|\s)[a-z0-9-]+\.(?:com|ca|org|net|io|co|me|app|dev|info|biz|tv)(?:\b|\/))/i.test(
+      String(value || "")
+    );
+  }
+
+  function filterListenerChatProfanity(
+    value
+  ) {
+    const blockedWords = [
+      "fuck","fucking","fucker","fucked","motherfucker",
+      "shit","shitty","bullshit",
+      "bitch","bitches","bastard",
+      "asshole","dick","dicks","cock","cocks",
+      "pussy","cunt","slut","whore",
+      "damn","goddamn"
+    ];
+
+    let filtered =
+      String(value || "");
+
+    blockedWords.forEach(word => {
+      const pattern =
+        new RegExp(
+          "\\b" +
+          word +
+          "\\b",
+          "gi"
+        );
+
+      filtered =
+        filtered.replace(
+          pattern,
+          match =>
+            "*".repeat(
+              Math.max(
+                3,
+                match.length
+              )
+            )
+        );
+    });
+
+    return filtered;
+  }
+
   function sendListenerChatMessage() {
     const input =
       document.getElementById(
@@ -1593,14 +1642,30 @@
       return;
     }
 
-    const messageText =
+    const rawMessageText =
       input.value
         .trim()
         .slice(0, 500);
 
-    if (!messageText) {
+    if (!rawMessageText) {
       return;
     }
+
+    if (
+      listenerChatContainsLink(
+        rawMessageText
+      )
+    ) {
+      alert(
+        "Links are disabled in LiveBridge chat."
+      );
+      return;
+    }
+
+    const messageText =
+      filterListenerChatProfanity(
+        rawMessageText
+      );
 
     if (
       !listenerSocket ||
@@ -4146,26 +4211,57 @@ resolve(email);
     emailButton.disabled = true;
     emailButton.textContent = "Sending...";
 
-    const response = await fetch(
-      WORKER_URL + "/email-transcript",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email,
-          transcript:
-            fullTranslatedTranscript,
-          language:
-            translateLang,
-          room:
-            ROOM_ID,
-          listenerId:
-            listenerSessionId
-        })
+    const emailAbortController =
+      new AbortController();
+
+    const emailTimeout =
+      setTimeout(
+        () =>
+          emailAbortController.abort(),
+        60000
+      );
+
+    let response;
+
+    try {
+      response = await fetch(
+        WORKER_URL + "/email-transcript",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email,
+            transcript:
+              fullTranslatedTranscript,
+            language:
+              translateLang,
+            room:
+              ROOM_ID,
+            listenerId:
+              listenerSessionId
+          }),
+          signal:
+            emailAbortController.signal
+        }
+      );
+    } catch (error) {
+      if (
+        error?.name ===
+        "AbortError"
+      ) {
+        throw new Error(
+          "Email service timed out after 60 seconds. Please try again."
+        );
       }
-    );
+
+      throw error;
+    } finally {
+      clearTimeout(
+        emailTimeout
+      );
+    }
 
     const data = await response.json();
 
@@ -7238,5 +7334,334 @@ return url.toString();
   new MutationObserver(schedule).observe(document.documentElement,{subtree:true,childList:true,characterData:true});
 })();
 </script>
-      </body>
+      
+<script>
+(() => {
+  if (
+    window.__lbListenerNetworkQualityPatch
+  ) {
+    return;
+  }
+
+  window.__lbListenerNetworkQualityPatch = true;
+
+  const API = "https://livebridge.northstarventures-ca.workers.dev";
+  let enabled = false;
+  let configuredForRoom = "";
+  let currentSessionKey = "";
+  let warningShown = false;
+  let degradedSince = 0;
+  let state = "checking";
+  let latestSourceHealthy = false;
+
+  function currentRoom() {
+    try {
+      if (
+        typeof ROOM_ID !== "undefined" &&
+        String(ROOM_ID || "").trim()
+      ) {
+        return String(ROOM_ID).trim().toUpperCase();
+      }
+    } catch {}
+
+    return String(
+      document.getElementById("listenerRoom")?.value || ""
+    ).trim().toUpperCase();
+  }
+
+  function currentSession() {
+    try {
+      if (typeof listenerSessionId !== "undefined") {
+        return String(listenerSessionId || "");
+      }
+    } catch {}
+    return currentRoom();
+  }
+
+  function ensurePill() {
+    let pill = document.getElementById("listenerNetworkQuality");
+
+    if (pill) {
+      return pill;
+    }
+
+    const data = document.getElementById("listenerDataUsage");
+    const meta = document.querySelector(".lb-live-meta");
+
+    if (!data && !meta) {
+      return null;
+    }
+
+    pill = document.createElement("span");
+    pill.id = "listenerNetworkQuality";
+    pill.className = "lb-live-pill";
+    pill.style.display = "none";
+    pill.style.transition = "border-color .2s ease, background .2s ease, color .2s ease";
+    pill.textContent = "Network: Checking…";
+
+    if (data?.parentElement) {
+      data.insertAdjacentElement("afterend", pill);
+    } else {
+      meta.appendChild(pill);
+    }
+
+    return pill;
+  }
+
+  function renderState(nextState, note = "") {
+    state = nextState;
+    const pill = ensurePill();
+    if (!pill) {
+      return;
+    }
+
+    pill.style.display = enabled ? "inline-flex" : "none";
+
+    if (!enabled) {
+      return;
+    }
+
+    const values = {
+      good: {
+        text: "🟢 Network: Good",
+        color: "#66ebb2",
+        border: "rgba(102,235,178,.35)",
+        background: "rgba(40,180,120,.08)"
+      },
+      unstable: {
+        text: "🟡 Network: Unstable",
+        color: "#ffd166",
+        border: "rgba(255,209,102,.42)",
+        background: "rgba(255,209,102,.08)"
+      },
+      poor: {
+        text: "🔴 Network: Poor",
+        color: "#ff8d96",
+        border: "rgba(255,90,105,.45)",
+        background: "rgba(255,90,105,.09)"
+      },
+      checking: {
+        text: "⚪ Network: Checking",
+        color: "#a9bbce",
+        border: "rgba(255,255,255,.14)",
+        background: "rgba(255,255,255,.04)"
+      }
+    };
+
+    const view = values[nextState] || values.checking;
+    pill.textContent = view.text;
+    pill.style.color = view.color;
+    pill.style.borderColor = view.border;
+    pill.style.background = view.background;
+    pill.title = note || "";
+  }
+
+  function showWarning() {
+    if (warningShown || !enabled || !latestSourceHealthy) {
+      return;
+    }
+
+    warningShown = true;
+
+    const overlay = document.createElement("div");
+    overlay.id = "listenerNetworkWarning";
+    overlay.style.cssText =
+      "position:fixed;z-index:999999;left:50%;top:108px;transform:translateX(-50%);" +
+      "width:min(92vw,620px);padding:16px 17px;border-radius:14px;" +
+      "border:1px solid rgba(255,190,70,.50);background:rgba(15,25,38,.96);" +
+      "box-shadow:0 18px 50px rgba(0,0,0,.45);backdrop-filter:blur(9px);color:white;";
+
+    overlay.innerHTML =
+      '<div style="font-size:15px;font-weight:900;margin-bottom:7px;">⚠️ Your network connection is unstable</div>' +
+      '<div style="font-size:12px;line-height:1.55;color:#c9d6e4;">' +
+      '<strong style="color:#73e6b5;">LiveBridge is receiving the broadcast normally.</strong> ' +
+      'Your device’s Wi-Fi or cellular connection is currently weak or inconsistent. ' +
+      'This can cause delayed, interrupted, or out-of-sync translated audio. ' +
+      'Move to a stronger Wi-Fi or cellular connection if possible.' +
+      '</div>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:12px;">' +
+      '<button id="listenerNetworkWarningDismiss" type="button" style="' +
+      'border:0;border-radius:9px;padding:9px 14px;background:#2a91f6;color:white;font-weight:900;cursor:pointer;">Dismiss</button>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    document
+      .getElementById("listenerNetworkWarningDismiss")
+      ?.addEventListener("click", () => overlay.remove());
+  }
+
+  async function loadConfiguration(room) {
+    if (!room || configuredForRoom === room) {
+      return;
+    }
+
+    configuredForRoom = room;
+    enabled = false;
+    renderState("checking");
+
+    try {
+      const response = await fetch(
+        API + "/room-access?room=" + encodeURIComponent(room),
+        { cache: "no-store" }
+      );
+
+      const data = await response.json();
+
+      enabled =
+        response.ok &&
+        data?.listenerNetworkQualityEnabled === true;
+
+      renderState("checking");
+    } catch {
+      enabled = false;
+      renderState("checking");
+    }
+  }
+
+  function classifyConnection(clientRtt, fetchOk) {
+    if (!navigator.onLine) {
+      return {
+        state: "poor",
+        note: "Device reports no internet connection."
+      };
+    }
+
+    let effectiveType = "";
+    let downlink = 0;
+    let browserRtt = 0;
+
+    try {
+      const connection =
+        navigator.connection ||
+        navigator.mozConnection ||
+        navigator.webkitConnection;
+
+      effectiveType = String(connection?.effectiveType || "").toLowerCase();
+      downlink = Number(connection?.downlink || 0);
+      browserRtt = Number(connection?.rtt || 0);
+    } catch {}
+
+    let socketOpen = true;
+
+    try {
+      if (typeof listenerSocket !== "undefined" && listenerSocket) {
+        socketOpen = listenerSocket.readyState === WebSocket.OPEN;
+      }
+    } catch {}
+
+    if (
+      !fetchOk ||
+      !socketOpen ||
+      effectiveType === "slow-2g" ||
+      effectiveType === "2g" ||
+      (downlink > 0 && downlink < 0.45) ||
+      browserRtt > 1200 ||
+      clientRtt > 1800
+    ) {
+      return {
+        state: "poor",
+        note:
+          "Connection metrics indicate severe delay or interruption. " +
+          "RTT " + Math.round(clientRtt || browserRtt || 0) + " ms."
+      };
+    }
+
+    if (
+      effectiveType === "3g" ||
+      (downlink > 0 && downlink < 1.0) ||
+      browserRtt > 650 ||
+      clientRtt > 700
+    ) {
+      return {
+        state: "unstable",
+        note:
+          "Connection metrics indicate elevated delay. " +
+          "RTT " + Math.round(clientRtt || browserRtt || 0) + " ms."
+      };
+    }
+
+    return {
+      state: "good",
+      note:
+        "Connection to LiveBridge is responding normally. " +
+        "RTT " + Math.round(clientRtt || browserRtt || 0) + " ms."
+    };
+  }
+
+  async function checkNetwork() {
+    const room = currentRoom();
+    const sessionKey = currentSession();
+
+    if (!room) {
+      enabled = false;
+      ensurePill()?.style.setProperty("display", "none");
+      return;
+    }
+
+    if (sessionKey && sessionKey !== currentSessionKey) {
+      currentSessionKey = sessionKey;
+      warningShown = false;
+      degradedSince = 0;
+      document.getElementById("listenerNetworkWarning")?.remove();
+    }
+
+    await loadConfiguration(room);
+
+    if (!enabled) {
+      ensurePill()?.style.setProperty("display", "none");
+      return;
+    }
+
+    const started = performance.now();
+    let fetchOk = false;
+    let sourceHealthy = false;
+
+    try {
+      const response = await fetch(
+        API + "/network-health?room=" + encodeURIComponent(room),
+        { cache: "no-store" }
+      );
+
+      const data = await response.json();
+
+      fetchOk = response.ok && data?.success === true;
+      sourceHealthy =
+        fetchOk &&
+        data?.sourceHealthy === true;
+    } catch {}
+
+    const clientRtt = performance.now() - started;
+    latestSourceHealthy = sourceHealthy;
+
+    const result = classifyConnection(clientRtt, fetchOk);
+    renderState(result.state, result.note);
+
+    if (
+      sourceHealthy &&
+      (result.state === "poor" || result.state === "unstable")
+    ) {
+      if (!degradedSince) {
+        degradedSince = Date.now();
+      }
+
+      if (
+        Date.now() - degradedSince >= 8000
+      ) {
+        showWarning();
+      }
+    } else {
+      degradedSince = 0;
+    }
+  }
+
+  ensurePill();
+  setTimeout(checkNetwork, 1200);
+  setInterval(checkNetwork, 4000);
+
+  window.addEventListener("online", checkNetwork);
+  window.addEventListener("offline", checkNetwork);
+})();
+</script>
+</body>
     </html>

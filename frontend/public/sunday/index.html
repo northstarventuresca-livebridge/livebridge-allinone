@@ -667,7 +667,7 @@ body{
       id="audioCaptureDiagnostic"
       style="
         margin-top:-10px;
-        margin-bottom:14px;
+        margin-bottom:10px;
         color:#8fa5bc;
         font-size:10px;
         line-height:1.45;
@@ -675,6 +675,61 @@ body{
       "
     >
       Audio: waiting
+    </div>
+
+    <div
+      id="lbMicQualityPanel"
+      style="
+        margin-bottom:14px;
+        padding:10px;
+        border-radius:10px;
+        border:1px solid rgba(255,255,255,.08);
+        background:rgba(6,17,31,.55);
+      "
+    >
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;">
+        <span style="font-size:10px;font-weight:800;color:#b9c9da;">INPUT LEVEL</span>
+        <span id="lbMicPeakDb" style="font-size:10px;color:#8fa5bc;">— dB</span>
+      </div>
+
+      <div style="height:8px;border-radius:999px;background:#16283d;overflow:hidden;">
+        <div
+          id="lbMicPeakBar"
+          style="height:100%;width:0%;border-radius:999px;background:#39d98a;transition:width .12s linear,background .12s linear;"
+        ></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:7px;margin-top:8px;">
+        <span
+          id="lbMicQualityDot"
+          style="width:8px;height:8px;border-radius:50%;background:#62758a;box-shadow:0 0 0 3px rgba(98,117,138,.12);flex:0 0 auto;"
+        ></span>
+        <span id="lbMicQualityText" style="font-size:10px;color:#9fb1c7;">Waiting for broadcast audio</span>
+      </div>
+
+      <button
+        type="button"
+        id="lbVoiceIsolationButton"
+        onclick="toggleBroadcasterVoiceIsolation()"
+        style="
+          margin-top:9px;
+          width:100%;
+          padding:8px 10px;
+          border-radius:8px;
+          border:1px solid rgba(255,255,255,.12);
+          background:#13243a;
+          color:#d9e7f6;
+          font-size:10px;
+          font-weight:800;
+          cursor:pointer;
+        "
+      >
+        Voice Isolation: OFF
+      </button>
+
+      <div id="lbVoiceIsolationStatus" style="margin-top:5px;font-size:9px;line-height:1.35;color:#73879d;">
+        Optional gentle browser noise/echo suppression. No hard gate.
+      </div>
     </div>
 
 
@@ -1341,10 +1396,16 @@ const BROADCASTER_PREVIEW =
   BROADCASTER_HOST.includes("livebridge-allinone-frontend-test") ||
   BROADCASTER_HOST.includes("livebridge-promoter-frontend-test");
 
+/*
+  LiveBridge realtime transcription:
+  normal control, delivery, and ephemeral OpenAI Realtime token requests
+  all use the production backend.
+*/
 const WORKER_URL =
-  BROADCASTER_PREVIEW
-    ? "https://livebridge-allinone-backend-test.northstarventures-ca.workers.dev"
-    : "https://livebridge.northstarventures-ca.workers.dev";
+  "https://livebridge.northstarventures-ca.workers.dev";
+
+const REALTIME_TOKEN_WORKER_URL =
+  WORKER_URL;
 
 const LISTENER_BASE_URL =
   window.location.origin + "/t/";
@@ -1357,6 +1418,39 @@ let mediaStream = null;
 let mediaRecorder = null;
 let mediaRecorderStopTimer = null;
 let mediaRecorderGeneration = 0;
+
+/*
+  Experimental branch: continuous OpenAI Realtime transcription.
+  The microphone stays connected continuously; we only commit logical
+  speech turns. MediaRecorder chunking remains below as a fallback but
+  is not used by this branch's normal broadcast path.
+*/
+let realtimeTranscriptionPc = null;
+let realtimeTranscriptionDc = null;
+let realtimeTranscriptionCommitTimer = null;
+let realtimeSpeechActive = false;
+let realtimeSpeechStartedAt = 0;
+let realtimeLastVoiceAt = 0;
+let realtimeLastCommitAt = 0;
+
+/*
+  OpenAI notes that completion events from different committed turns
+  are not guaranteed to arrive in order. Keep commit order explicitly
+  and serialize delivery so listeners never receive sentence 2 before
+  sentence 1.
+*/
+let realtimeCommitSequence = 0;
+let realtimePendingCommitMeta = [];
+let realtimeCommittedOrder = [];
+let realtimeCompletedByItem = new Map();
+let realtimeDeliveryQueue = Promise.resolve();
+let realtimeFlushWaiters = new Map();
+
+const REALTIME_COMMIT_SILENCE_MS = 1250;
+const REALTIME_HARD_COMMIT_MS = 14000;
+const REALTIME_FALLBACK_COMMIT_MS = 6000;
+const REALTIME_VAD_CHECK_MS = 100;
+
 let broadcasting = false;
 let broadcastStartedAt = null;
 let broadcastTimer = null;
@@ -1378,6 +1472,8 @@ let audioSafetyTimer = null;
 let lastMeaningfulAudioAt = null;
 let lastTranscriptionUploadAt = null;
 let audioSafetyAutoEnding = false;
+let voiceIsolationEnabled = false;
+let voiceIsolationOriginalSettings = null;
 const AUDIO_ACTIVITY_THRESHOLD = 0.012;
 const TRANSCRIPTION_SILENCE_HOLD_MS = 15000;
 
@@ -2083,7 +2179,10 @@ async function initializeLiveBridgeBroadcaster() {
 
     if (!user) {
       window.location.href =
-        "/account";
+        "/account/?returnTo=" +
+        encodeURIComponent(
+          "/sunday/"
+        );
       return;
     }
 
@@ -3736,6 +3835,11 @@ async function endBroadcastForTimeLimit(){
     true;
 
 
+  await stopRealtimeTranscription(
+    true
+  );
+
+
   broadcasting =
     false;
 
@@ -4133,7 +4237,7 @@ async function toggleBroadcast() {
 
       startAudioSafetyMonitoring();
 
-      recordNextChunk();
+      await startRealtimeTranscription();
 
       startBroadcastTimer();
 
@@ -4188,11 +4292,25 @@ async function toggleBroadcast() {
         "Start Broadcasting";
 
       alert(
-        "The broadcast could not be started. Please try again."
+        window.location.pathname.startsWith(
+          "/realtime-test/"
+        )
+          ? (
+              "Test broadcast could not start:\n\n" +
+              (
+                error?.message ||
+                "Unknown realtime test error."
+              )
+            )
+          : "The broadcast could not be started. Please try again."
       );
     }
 
   } else {
+
+    await stopRealtimeTranscription(
+      true
+    );
 
     broadcasting =
       false;
@@ -4830,6 +4948,9 @@ function startAudioSafetyMonitoring() {
           let sumSquares =
             0;
 
+          let peak =
+            0;
+
           for (
             let i = 0;
             i < samples.length;
@@ -4837,6 +4958,19 @@ function startAudioSafetyMonitoring() {
           ) {
             const normalized =
               (samples[i] - 128) / 128;
+
+            const absolute =
+              Math.abs(
+                normalized
+              );
+
+            if (
+              absolute >
+              peak
+            ) {
+              peak =
+                absolute;
+            }
 
             sumSquares +=
               normalized * normalized;
@@ -4857,7 +4991,8 @@ function startAudioSafetyMonitoring() {
           }
 
           renderAudioSafetyStatus(
-            rms
+            rms,
+            peak
           );
 
           if (
@@ -4902,13 +5037,140 @@ function shouldUploadTranscriptionChunk() {
 
 
 function renderAudioSafetyStatus(
-  rms = 0
+  rms = 0,
+  peak = 0
 ) {
 
   const status =
     document.getElementById(
       "lbAudioSafetyStatus"
     );
+
+  const peakBar =
+    document.getElementById(
+      "lbMicPeakBar"
+    );
+
+  const peakDb =
+    document.getElementById(
+      "lbMicPeakDb"
+    );
+
+  const qualityDot =
+    document.getElementById(
+      "lbMicQualityDot"
+    );
+
+  const qualityText =
+    document.getElementById(
+      "lbMicQualityText"
+    );
+
+  const db =
+    peak > 0
+      ? 20 * Math.log10(peak)
+      : -60;
+
+  const meterPercent =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        (
+          db + 60
+        ) /
+        60 *
+        100
+      )
+    );
+
+  if (peakBar) {
+    peakBar.style.width =
+      meterPercent.toFixed(1) +
+      "%";
+
+    peakBar.style.background =
+      peak >= 0.985
+        ? "#ff4d5e"
+        : peak >= 0.72
+          ? "#ffb547"
+          : "#39d98a";
+  }
+
+  if (peakDb) {
+    peakDb.textContent =
+      (
+        peak > 0
+          ? db.toFixed(1)
+          : "—"
+      ) +
+      " dB";
+  }
+
+  if (
+    qualityDot &&
+    qualityText
+  ) {
+    const crestFactor =
+      rms > 0.0001
+        ? peak / rms
+        : 0;
+
+    let dotColor =
+      "#62758a";
+
+    let dotGlow =
+      "rgba(98,117,138,.12)";
+
+    let label =
+      "Waiting for voice";
+
+    if (
+      peak >= 0.985
+    ) {
+      dotColor =
+        "#ff4d5e";
+
+      dotGlow =
+        "rgba(255,77,94,.16)";
+
+      label =
+        "Input clipping — turn the microphone gain down";
+    } else if (
+      rms >= 0.012 &&
+      crestFactor < 1.65
+    ) {
+      dotColor =
+        "#ffb547";
+
+      dotGlow =
+        "rgba(255,181,71,.16)";
+
+      label =
+        "Background noise may be high";
+    } else if (
+      rms >= 0.012
+    ) {
+      dotColor =
+        "#39d98a";
+
+      dotGlow =
+        "rgba(57,217,138,.16)";
+
+      label =
+        "Voice signal looks clean";
+    }
+
+    qualityDot.style.background =
+      dotColor;
+
+    qualityDot.style.boxShadow =
+      "0 0 0 3px " +
+      dotGlow;
+
+    qualityText.textContent =
+      label;
+  }
 
   if (!status) {
     return;
@@ -4922,6 +5184,127 @@ function renderAudioSafetyStatus(
 
   status.textContent =
     "Reliability mode • transcription remains active continuously while broadcasting.";
+}
+
+
+async function toggleBroadcasterVoiceIsolation() {
+
+  const button =
+    document.getElementById(
+      "lbVoiceIsolationButton"
+    );
+
+  const status =
+    document.getElementById(
+      "lbVoiceIsolationStatus"
+    );
+
+  const track =
+    mediaStream
+      ?.getAudioTracks?.()[0];
+
+  if (
+    !broadcasting ||
+    !track
+  ) {
+    if (status) {
+      status.textContent =
+        "Start broadcasting first, then Voice Isolation can be switched on.";
+    }
+    return;
+  }
+
+  if (
+    typeof track.applyConstraints !==
+      "function"
+  ) {
+    if (status) {
+      status.textContent =
+        "Voice Isolation is not supported by this browser.";
+    }
+    return;
+  }
+
+  if (
+    !voiceIsolationOriginalSettings
+  ) {
+    voiceIsolationOriginalSettings =
+      track.getSettings
+        ? track.getSettings()
+        : {};
+  }
+
+  const nextEnabled =
+    !voiceIsolationEnabled;
+
+  const requested =
+    nextEnabled
+      ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false
+        }
+      : {
+          echoCancellation:
+            typeof voiceIsolationOriginalSettings?.echoCancellation ===
+              "boolean"
+              ? voiceIsolationOriginalSettings.echoCancellation
+              : false,
+          noiseSuppression:
+            typeof voiceIsolationOriginalSettings?.noiseSuppression ===
+              "boolean"
+              ? voiceIsolationOriginalSettings.noiseSuppression
+              : false,
+          autoGainControl:
+            typeof voiceIsolationOriginalSettings?.autoGainControl ===
+              "boolean"
+              ? voiceIsolationOriginalSettings.autoGainControl
+              : false
+        };
+
+  try {
+
+    await track.applyConstraints(
+      requested
+    );
+
+    voiceIsolationEnabled =
+      nextEnabled;
+
+    if (button) {
+      button.textContent =
+        "Voice Isolation: " +
+        (
+          voiceIsolationEnabled
+            ? "ON"
+            : "OFF"
+        );
+
+      button.style.borderColor =
+        voiceIsolationEnabled
+          ? "rgba(57,217,138,.55)"
+          : "rgba(255,255,255,.12)";
+    }
+
+    if (status) {
+      status.textContent =
+        voiceIsolationEnabled
+          ? "Gentle browser noise/echo suppression is active. No hard gate is used."
+          : "Voice Isolation is off. Original microphone processing restored.";
+    }
+
+  } catch (error) {
+
+    console.error(
+      "LiveBridge voice isolation failed:",
+      error
+    );
+
+    if (status) {
+      status.textContent =
+        "This microphone/browser could not change its audio processing while live.";
+    }
+  }
 }
 
 
@@ -4973,6 +5356,64 @@ function stopAudioSafetyMonitoring() {
 
   lastMeaningfulAudioAt =
     null;
+
+  voiceIsolationEnabled =
+    false;
+
+  voiceIsolationOriginalSettings =
+    null;
+
+  const peakBar =
+    document.getElementById(
+      "lbMicPeakBar"
+    );
+
+  if (peakBar) {
+    peakBar.style.width =
+      "0%";
+  }
+
+  const peakDb =
+    document.getElementById(
+      "lbMicPeakDb"
+    );
+
+  if (peakDb) {
+    peakDb.textContent =
+      "— dB";
+  }
+
+  const qualityDot =
+    document.getElementById(
+      "lbMicQualityDot"
+    );
+
+  if (qualityDot) {
+    qualityDot.style.background =
+      "#62758a";
+  }
+
+  const qualityText =
+    document.getElementById(
+      "lbMicQualityText"
+    );
+
+  if (qualityText) {
+    qualityText.textContent =
+      "Waiting for broadcast audio";
+  }
+
+  const isolationButton =
+    document.getElementById(
+      "lbVoiceIsolationButton"
+    );
+
+  if (isolationButton) {
+    isolationButton.textContent =
+      "Voice Isolation: OFF";
+    isolationButton.style.borderColor =
+      "rgba(255,255,255,.12)";
+  }
 }
 
 function getCurrentBroadcastRms() {
@@ -5022,6 +5463,902 @@ function getCurrentBroadcastRms() {
 
     return null;
   }
+}
+
+
+/* =====================================================
+   REALTIME CONTINUOUS TRANSCRIPTION — TEST BRANCH
+===================================================== */
+
+function clearRealtimeTranscriptionCommitTimer() {
+  if (realtimeTranscriptionCommitTimer) {
+    clearInterval(
+      realtimeTranscriptionCommitTimer
+    );
+
+    realtimeTranscriptionCommitTimer =
+      null;
+  }
+}
+
+
+function commitRealtimeTranscriptionTurn(
+  reason = "pause"
+) {
+
+  if (
+    !realtimeTranscriptionDc ||
+    realtimeTranscriptionDc.readyState !==
+      "open"
+  ) {
+    return null;
+  }
+
+  try {
+
+    realtimeCommitSequence += 1;
+
+    const sequence =
+      realtimeCommitSequence;
+
+    realtimePendingCommitMeta.push({
+      sequence,
+      reason,
+      committedAt:
+        Date.now()
+    });
+
+    realtimeTranscriptionDc.send(
+      JSON.stringify({
+        type:
+          "input_audio_buffer.commit",
+
+        event_id:
+          "livebridge-commit-" +
+          sequence
+      })
+    );
+
+    realtimeLastCommitAt =
+      Date.now();
+
+    realtimeSpeechActive =
+      false;
+
+    realtimeSpeechStartedAt =
+      0;
+
+    realtimeLastVoiceAt =
+      0;
+
+    setAudioDiagnostic(
+      "realtime commit · " +
+      reason,
+      "good"
+    );
+
+    return sequence;
+
+  } catch (error) {
+
+    realtimePendingCommitMeta.pop();
+
+    console.error(
+      "Realtime transcription commit failed:",
+      error
+    );
+
+    return null;
+  }
+}
+
+
+function startRealtimeCommitWatcher() {
+
+  clearRealtimeTranscriptionCommitTimer();
+
+  realtimeLastCommitAt =
+    Date.now();
+
+  realtimeTranscriptionCommitTimer =
+    setInterval(
+      () => {
+
+        if (
+          !broadcasting ||
+          window.__liveBridgeMicMuted ===
+            true ||
+          !realtimeTranscriptionDc ||
+          realtimeTranscriptionDc.readyState !==
+            "open"
+        ) {
+          return;
+        }
+
+        const now =
+          Date.now();
+
+        const rms =
+          getCurrentBroadcastRms();
+
+        /*
+          The audio stream itself never stops. These commits only tell
+          transcription where a logical turn can finalize, so no recorder
+          restart can lose words at a chunk boundary.
+        */
+        if (rms === null) {
+
+          if (
+            now -
+              realtimeLastCommitAt >=
+            REALTIME_FALLBACK_COMMIT_MS
+          ) {
+
+            commitRealtimeTranscriptionTurn(
+              "fallback"
+            );
+          }
+
+          return;
+        }
+
+        if (
+          rms >=
+            AUDIO_ACTIVITY_THRESHOLD
+        ) {
+
+          if (!realtimeSpeechActive) {
+
+            realtimeSpeechActive =
+              true;
+
+            realtimeSpeechStartedAt =
+              now;
+          }
+
+          realtimeLastVoiceAt =
+            now;
+
+          return;
+        }
+
+        if (!realtimeSpeechActive) {
+          return;
+        }
+
+        const pauseReady =
+          realtimeLastVoiceAt > 0 &&
+          now -
+            realtimeLastVoiceAt >=
+            REALTIME_COMMIT_SILENCE_MS;
+
+        const hardLimitReady =
+          realtimeSpeechStartedAt > 0 &&
+          now -
+            realtimeSpeechStartedAt >=
+            REALTIME_HARD_COMMIT_MS;
+
+        if (
+          pauseReady ||
+          hardLimitReady
+        ) {
+
+          commitRealtimeTranscriptionTurn(
+            pauseReady
+              ? "natural pause"
+              : "long speech"
+          );
+        }
+
+      },
+      REALTIME_VAD_CHECK_MS
+    );
+}
+
+
+async function deliverRealtimeTranscript(
+  text
+) {
+
+  const finalText =
+    String(
+      text || ""
+    ).trim();
+
+  if (
+    !finalText ||
+    !broadcasting
+  ) {
+    return;
+  }
+
+  lastTranscriptionUploadAt =
+    Date.now();
+
+  showTranscription(
+    finalText
+  );
+
+  broadcastMessageId++;
+
+  const chunkId =
+    broadcastSessionId +
+    "-rt-" +
+    broadcastMessageId;
+
+  const inputLanguage =
+    document.getElementById(
+      "inputLanguage"
+    ).value;
+
+  const sourceToken =
+    await getBroadcasterSessionToken();
+
+  if (!sourceToken) {
+
+    console.error(
+      "LiveBridge session could not be verified for realtime shared feed delivery."
+    );
+
+    return;
+  }
+
+  lastBroadcastAuthToken =
+    sourceToken;
+
+  const feedResponse =
+    await fetch(
+      WORKER_URL +
+      "/source-final",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "Authorization":
+            "Bearer " +
+            sourceToken
+        },
+
+        body: JSON.stringify({
+          room:
+            ROOM_ID,
+
+          text:
+            finalText,
+
+          chunkId,
+
+          sourceLanguage:
+            inputLanguage
+        })
+      }
+    );
+
+  const feedData =
+    await feedResponse.json();
+
+  console.log(
+    "LIVEBRIDGE REALTIME SHARED FEED:",
+    feedData
+  );
+
+  if (
+    !feedResponse.ok ||
+    !feedData.success
+  ) {
+
+    console.error(
+      "Realtime shared feed delivery failed:",
+      feedData
+    );
+
+    return;
+  }
+
+  const listeners =
+    Number(
+      feedData.listeners ||
+      0
+    );
+
+  if (listeners > 0) {
+
+    messagesSentCount++;
+
+    document.getElementById(
+      "messagesSent"
+    ).textContent =
+      messagesSentCount;
+  }
+}
+
+
+function resolveRealtimeFlushWaiter(
+  sequence
+) {
+
+  const resolver =
+    realtimeFlushWaiters.get(
+      sequence
+    );
+
+  if (!resolver) {
+    return;
+  }
+
+  realtimeFlushWaiters.delete(
+    sequence
+  );
+
+  resolver();
+}
+
+
+function flushCompletedRealtimeTranscripts() {
+
+  while (
+    realtimeCommittedOrder.length > 0
+  ) {
+
+    const next =
+      realtimeCommittedOrder[0];
+
+    if (
+      !realtimeCompletedByItem.has(
+        next.itemId
+      )
+    ) {
+      break;
+    }
+
+    realtimeCommittedOrder.shift();
+
+    const completed =
+      realtimeCompletedByItem.get(
+        next.itemId
+      );
+
+    realtimeCompletedByItem.delete(
+      next.itemId
+    );
+
+    const transcript =
+      String(
+        completed?.transcript ||
+        ""
+      ).trim();
+
+    /*
+      Serialize delivery all the way through /source-final.
+      This protects transcript order and prevents network timing
+      from reordering translation context downstream.
+    */
+    realtimeDeliveryQueue =
+      realtimeDeliveryQueue
+        .then(
+          async () => {
+
+            if (transcript) {
+
+              setAudioDiagnostic(
+                "realtime transcript finalized",
+                "good"
+              );
+
+              await deliverRealtimeTranscript(
+                transcript
+              );
+            }
+
+          }
+        )
+        .catch(
+          error => {
+
+            console.error(
+              "Realtime transcript delivery failed:",
+              error
+            );
+          }
+        )
+        .finally(
+          () => {
+
+            resolveRealtimeFlushWaiter(
+              next.sequence
+            );
+          }
+        );
+  }
+}
+
+
+async function startRealtimeTranscription() {
+
+  await stopRealtimeTranscription(
+    false
+  );
+
+  realtimeCommitSequence =
+    0;
+
+  realtimePendingCommitMeta =
+    [];
+
+  realtimeCommittedOrder =
+    [];
+
+  realtimeCompletedByItem =
+    new Map();
+
+  realtimeDeliveryQueue =
+    Promise.resolve();
+
+  realtimeFlushWaiters =
+    new Map();
+
+  if (!mediaStream) {
+    throw new Error(
+      "Microphone stream is not available."
+    );
+  }
+
+  const audioTrack =
+    mediaStream
+      .getAudioTracks?.()[0];
+
+  if (!audioTrack) {
+    throw new Error(
+      "No live microphone audio track is available."
+    );
+  }
+
+  const authToken =
+    lastBroadcastAuthToken ||
+    await getBroadcasterSessionToken();
+
+  if (!authToken) {
+    throw new Error(
+      "LiveBridge session could not be verified."
+    );
+  }
+
+  const inputLanguage =
+    document.getElementById(
+      "inputLanguage"
+    ).value;
+
+  setAudioDiagnostic(
+    "connecting realtime transcription..."
+  );
+
+  const tokenResponse =
+    await fetch(
+      REALTIME_TOKEN_WORKER_URL +
+      "/realtime-transcription-token",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "Authorization":
+            "Bearer " +
+            authToken
+        },
+
+        body: JSON.stringify({
+          room:
+            ROOM_ID,
+
+          language:
+            inputLanguage
+        })
+      }
+    );
+
+  const tokenResponseText =
+    await tokenResponse.text();
+
+  let tokenData = {};
+
+  try {
+    tokenData =
+      tokenResponseText
+        ? JSON.parse(
+            tokenResponseText
+          )
+        : {};
+  } catch {
+    tokenData = {
+      success: false,
+      stage:
+        "transport",
+      code:
+        "REALTIME_NON_JSON_RESPONSE",
+      error:
+        tokenResponseText ||
+        (
+          "Realtime transcription service returned HTTP " +
+          tokenResponse.status +
+          "."
+        )
+    };
+  }
+
+  if (
+    !tokenResponse.ok ||
+    !tokenData.success ||
+    !tokenData.value
+  ) {
+    const realtimeTokenError =
+      tokenData.error ||
+      "Realtime transcription token could not be created.";
+
+    console.error(
+      "Realtime token request failed:",
+      {
+        status:
+          tokenResponse.status,
+        stage:
+          tokenData.stage ||
+          null,
+        code:
+          tokenData.code ||
+          null,
+        openaiStatus:
+          tokenData.openaiStatus ||
+          null,
+        openaiCode:
+          tokenData.openaiCode ||
+          null,
+        error:
+          realtimeTokenError
+      }
+    );
+
+    throw new Error(
+      realtimeTokenError
+    );
+  }
+
+  const pc =
+    new RTCPeerConnection();
+
+  const dc =
+    pc.createDataChannel(
+      "oai-events"
+    );
+
+  realtimeTranscriptionPc =
+    pc;
+
+  realtimeTranscriptionDc =
+    dc;
+
+  pc.addTrack(
+    audioTrack,
+    mediaStream
+  );
+
+  dc.addEventListener(
+    "message",
+    async event => {
+
+      let data;
+
+      try {
+        data =
+          JSON.parse(
+            event.data
+          );
+      } catch {
+        return;
+      }
+
+      if (
+        data.type ===
+        "conversation.item.input_audio_transcription.delta"
+      ) {
+
+        setAudioDiagnostic(
+          "realtime transcription receiving...",
+          "good"
+        );
+
+        return;
+      }
+
+      if (
+        data.type ===
+        "input_audio_buffer.committed"
+      ) {
+
+        const meta =
+          realtimePendingCommitMeta.shift() ||
+          {
+            sequence:
+              ++realtimeCommitSequence,
+            reason:
+              "unknown",
+            committedAt:
+              Date.now()
+          };
+
+        realtimeCommittedOrder.push({
+          ...meta,
+          itemId:
+            String(
+              data.item_id || ""
+            )
+        });
+
+        flushCompletedRealtimeTranscripts();
+
+        return;
+      }
+
+      if (
+        data.type ===
+        "conversation.item.input_audio_transcription.completed"
+      ) {
+
+        const itemId =
+          String(
+            data.item_id || ""
+          );
+
+        if (!itemId) {
+          return;
+        }
+
+        realtimeCompletedByItem.set(
+          itemId,
+          {
+            transcript:
+              data.transcript || ""
+          }
+        );
+
+        flushCompletedRealtimeTranscripts();
+
+        return;
+      }
+
+      if (
+        data.type ===
+        "conversation.item.input_audio_transcription.failed"
+      ) {
+
+        const itemId =
+          String(
+            data.item_id || ""
+          );
+
+        if (itemId) {
+
+          realtimeCompletedByItem.set(
+            itemId,
+            {
+              transcript:
+                ""
+            }
+          );
+
+          flushCompletedRealtimeTranscripts();
+        }
+
+        console.error(
+          "OpenAI realtime transcription item failed:",
+          data
+        );
+
+        return;
+      }
+
+      if (
+        data.type ===
+        "error"
+      ) {
+
+        console.error(
+          "OpenAI realtime transcription error:",
+          data
+        );
+
+        setAudioDiagnostic(
+          "realtime transcription error",
+          "bad"
+        );
+      }
+    }
+  );
+
+  const dataChannelOpened =
+    new Promise(
+      (resolve, reject) => {
+
+        const timeout =
+          setTimeout(
+            () => reject(
+              new Error(
+                "Realtime transcription connection timed out."
+              )
+            ),
+            12000
+          );
+
+        dc.addEventListener(
+          "open",
+          () => {
+
+            clearTimeout(
+              timeout
+            );
+
+            resolve();
+
+          },
+          {
+            once: true
+          }
+        );
+
+        dc.addEventListener(
+          "error",
+          () => {
+
+            clearTimeout(
+              timeout
+            );
+
+            reject(
+              new Error(
+                "Realtime transcription data channel failed."
+              )
+            );
+
+          },
+          {
+            once: true
+          }
+        );
+      }
+    );
+
+  const offer =
+    await pc.createOffer();
+
+  await pc.setLocalDescription(
+    offer
+  );
+
+  const sdpResponse =
+    await fetch(
+      "https://api.openai.com/v1/realtime/calls",
+      {
+        method: "POST",
+
+        body:
+          pc.localDescription
+            ?.sdp ||
+          offer.sdp,
+
+        headers: {
+          "Authorization":
+            "Bearer " +
+            tokenData.value,
+
+          "Content-Type":
+            "application/sdp"
+        }
+      }
+    );
+
+  const answerSdp =
+    await sdpResponse.text();
+
+  if (!sdpResponse.ok) {
+    throw new Error(
+      "OpenAI realtime connection failed: " +
+      answerSdp
+    );
+  }
+
+  await pc.setRemoteDescription({
+    type:
+      "answer",
+
+    sdp:
+      answerSdp
+  });
+
+  await dataChannelOpened;
+
+  startRealtimeCommitWatcher();
+
+  setAudioDiagnostic(
+    "realtime transcription connected · continuous audio",
+    "good"
+  );
+}
+
+
+async function stopRealtimeTranscription(
+  flush = true
+) {
+
+  clearRealtimeTranscriptionCommitTimer();
+
+  if (
+    flush &&
+    realtimeTranscriptionDc &&
+    realtimeTranscriptionDc.readyState ===
+      "open" &&
+    realtimeSpeechActive
+  ) {
+
+    const flushSequence =
+      commitRealtimeTranscriptionTurn(
+        "broadcast end"
+      );
+
+    if (flushSequence) {
+
+      await Promise.race([
+        new Promise(
+          resolve => {
+
+            realtimeFlushWaiters.set(
+              flushSequence,
+              resolve
+            );
+          }
+        ),
+
+        new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              3500
+            )
+        )
+      ]);
+
+      realtimeFlushWaiters.delete(
+        flushSequence
+      );
+    }
+  }
+
+  try {
+    realtimeTranscriptionDc
+      ?.close();
+  } catch {}
+
+  try {
+    realtimeTranscriptionPc
+      ?.close();
+  } catch {}
+
+  realtimeTranscriptionDc =
+    null;
+
+  realtimeTranscriptionPc =
+    null;
+
+  realtimeSpeechActive =
+    false;
+
+  realtimeSpeechStartedAt =
+    0;
+
+  realtimeLastVoiceAt =
+    0;
 }
 
 
@@ -5102,9 +6439,23 @@ function setLiveBridgeBroadcastMuted(
   );
 
   /*
-    End the current chunk immediately whenever mute state changes.
-    recordNextChunk() will start a clean chunk from the new state.
-    The old chunk is discarded because its mute revision no longer matches.
+    Realtime branch: muting does not tear down the microphone session.
+    Finalize any speech already buffered, then the disabled media track
+    naturally sends silence until the broadcaster unmutes.
+  */
+  if (
+    broadcasting &&
+    window.__liveBridgeMicMuted ===
+      true
+  ) {
+    commitRealtimeTranscriptionTurn(
+      "mute"
+    );
+  }
+
+  /*
+    Legacy recorder fallback remains available but is not used by the
+    normal realtime branch broadcast path.
   */
   if (
     broadcasting &&
@@ -6646,31 +7997,63 @@ async function emailBroadcastTranscript() {
     }
 
 
-    const response =
-      await fetch(
-        WORKER_URL +
-        "/email-transcript",
-        {
-          method: "POST",
+    const emailAbortController =
+      new AbortController();
 
-          headers: {
-            "Content-Type":
-              "application/json",
-
-            "Authorization":
-              "Bearer " +
-              token
-          },
-
-          body: JSON.stringify({
-            email,
-            transcript,
-            language,
-            room:
-              ROOM_ID
-          })
-        }
+    const emailTimeout =
+      setTimeout(
+        () =>
+          emailAbortController.abort(),
+        60000
       );
+
+    let response;
+
+    try {
+      response =
+        await fetch(
+          WORKER_URL +
+          "/email-transcript",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              "Authorization":
+                "Bearer " +
+                token
+            },
+
+            body: JSON.stringify({
+              email,
+              transcript,
+              language,
+              room:
+                ROOM_ID
+            }),
+
+            signal:
+              emailAbortController.signal
+          }
+        );
+    } catch (error) {
+      if (
+        error?.name ===
+        "AbortError"
+      ) {
+        throw new Error(
+          "Email service timed out after 60 seconds. Please try again."
+        );
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(
+        emailTimeout
+      );
+    }
 
     const data =
       await response.json();
@@ -8275,6 +9658,21 @@ window.addEventListener(
 
   async function init(){
 
+    /*
+      Realtime transcription test:
+      skip the optional admin-mute verification helper entirely.
+      That helper retries Clerk repeatedly for non-admin users and can
+      trigger Clerk rate limits, which then interferes with the real
+      broadcaster authentication flow. Production /sunday is unchanged.
+    */
+    if (
+      window.location.pathname.startsWith(
+        "/realtime-test/"
+      )
+    ) {
+      return;
+    }
+
     createMuteButton();
 
 
@@ -8351,6 +9749,18 @@ window.addEventListener(
 <!-- LiveBridge Broadcaster PWA Install -->
 <script>
 (() => {
+  /*
+    The realtime test runs under the production livebridge.ca origin.
+    Never register/install the production /sunday PWA from the test route.
+  */
+  if (
+    window.location.pathname.startsWith(
+      "/realtime-test/"
+    )
+  ) {
+    return;
+  }
+
   const DISMISS_KEY = "lbBroadcasterInstallDismissedAt";
   const DISMISS_MS = 30 * 24 * 60 * 60 * 1000;
   let deferredInstallPrompt = null;
@@ -8514,5 +9924,310 @@ window.addEventListener(
 })();
 </script>
 
+
+<script>
+(() => {
+  if (
+    window.__lbDiagnosticSourceAudioPatch
+  ) {
+    return;
+  }
+
+  window.__lbDiagnosticSourceAudioPatch = true;
+
+  const API = "https://livebridge.northstarventures-ca.workers.dev";
+  const SEGMENT_MS = 5000;
+  let diagnosticRecorder = null;
+  let diagnosticTimer = null;
+  let diagnosticGeneration = 0;
+  let diagnosticSequence = 0;
+  let diagnosticStarted = false;
+  let uploadsInFlight = 0;
+
+  function preferredMimeType() {
+    if (typeof MediaRecorder === "undefined") {
+      return "";
+    }
+
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4;codecs=mp4a.40.2",
+      "audio/mp4",
+      "audio/ogg;codecs=opus",
+      "audio/ogg"
+    ];
+
+    for (const type of candidates) {
+      try {
+        if (MediaRecorder.isTypeSupported(type)) {
+          return type;
+        }
+      } catch {}
+    }
+
+    return "";
+  }
+
+  async function uploadSegment(blob, sequence, startedAt) {
+    if (
+      !blob ||
+      blob.size < 200 ||
+      uploadsInFlight >= 3
+    ) {
+      return;
+    }
+
+    let token = "";
+
+    try {
+      if (
+        typeof lastBroadcastAuthToken !== "undefined" &&
+        lastBroadcastAuthToken
+      ) {
+        token = String(lastBroadcastAuthToken);
+      }
+    } catch {}
+
+    if (!token) {
+      try {
+        if (typeof getBroadcasterSessionToken === "function") {
+          token = await getBroadcasterSessionToken();
+        }
+      } catch {}
+    }
+
+    if (!token) {
+      return;
+    }
+
+    let room = "";
+    let broadcastId = "";
+
+    try {
+      room = String(ROOM_ID || "").trim().toUpperCase();
+      broadcastId = String(broadcastSessionId || "").trim();
+    } catch {}
+
+    if (!room || !broadcastId) {
+      return;
+    }
+
+    uploadsInFlight += 1;
+
+    try {
+      const response = await fetch(
+        API +
+          "/diagnostic-audio/segment?room=" +
+          encodeURIComponent(room) +
+          "&broadcastId=" +
+          encodeURIComponent(broadcastId) +
+          "&sequence=" +
+          encodeURIComponent(sequence) +
+          "&startedAt=" +
+          encodeURIComponent(startedAt),
+        {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + token,
+            "Content-Type": blob.type || "audio/webm"
+          },
+          body: blob
+        }
+      );
+
+      if (!response.ok) {
+        console.warn(
+          "LiveBridge diagnostic source-audio upload skipped:",
+          response.status
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "LiveBridge diagnostic source-audio upload failed:",
+        error
+      );
+    } finally {
+      uploadsInFlight = Math.max(0, uploadsInFlight - 1);
+    }
+  }
+
+  function stopRecorderOnly() {
+    if (diagnosticTimer) {
+      clearTimeout(diagnosticTimer);
+      diagnosticTimer = null;
+    }
+
+    const recorder = diagnosticRecorder;
+    diagnosticRecorder = null;
+
+    if (
+      recorder &&
+      recorder.state === "recording"
+    ) {
+      try {
+        recorder.stop();
+      } catch {}
+    }
+  }
+
+  function recordNextSegment() {
+    let active = false;
+    let stream = null;
+
+    try {
+      active =
+        typeof broadcasting !== "undefined" &&
+        broadcasting === true;
+
+      stream =
+        typeof mediaStream !== "undefined"
+          ? mediaStream
+          : null;
+    } catch {}
+
+    if (
+      !diagnosticStarted ||
+      !active ||
+      !stream ||
+      !stream.getAudioTracks?.().length
+    ) {
+      return;
+    }
+
+    const generation = diagnosticGeneration;
+    const sequence = ++diagnosticSequence;
+    const startedAt = Date.now();
+    const chunks = [];
+    const mimeType = preferredMimeType();
+
+    let recorder;
+
+    try {
+      recorder =
+        mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream);
+    } catch (error) {
+      console.warn(
+        "LiveBridge diagnostic recorder unavailable:",
+        error
+      );
+      return;
+    }
+
+    diagnosticRecorder = recorder;
+
+    recorder.ondataavailable = event => {
+      if (
+        event.data &&
+        event.data.size > 0
+      ) {
+        chunks.push(event.data);
+      }
+    };
+
+    recorder.onerror = event => {
+      console.warn(
+        "LiveBridge diagnostic recorder error:",
+        event?.error || event
+      );
+    };
+
+    recorder.onstop = () => {
+      if (generation !== diagnosticGeneration) {
+        return;
+      }
+
+      const type =
+        recorder.mimeType ||
+        mimeType ||
+        chunks[0]?.type ||
+        "audio/webm";
+
+      if (chunks.length) {
+        const blob = new Blob(chunks, { type });
+        uploadSegment(blob, sequence, startedAt);
+      }
+
+      if (diagnosticStarted) {
+        setTimeout(recordNextSegment, 25);
+      }
+    };
+
+    try {
+      recorder.start();
+
+      diagnosticTimer =
+        setTimeout(() => {
+          diagnosticTimer = null;
+
+          if (
+            recorder.state === "recording"
+          ) {
+            try {
+              recorder.stop();
+            } catch {}
+          }
+        }, SEGMENT_MS);
+    } catch (error) {
+      console.warn(
+        "LiveBridge diagnostic recorder could not start:",
+        error
+      );
+    }
+  }
+
+  function startDiagnosticRecording() {
+    if (diagnosticStarted) {
+      return;
+    }
+
+    diagnosticGeneration += 1;
+    diagnosticSequence = 0;
+    diagnosticStarted = true;
+    recordNextSegment();
+  }
+
+  function stopDiagnosticRecording() {
+    if (!diagnosticStarted) {
+      return;
+    }
+
+    diagnosticStarted = false;
+    diagnosticGeneration += 1;
+    stopRecorderOnly();
+  }
+
+  let previousBroadcasting = false;
+
+  setInterval(() => {
+    let active = false;
+
+    try {
+      active =
+        typeof broadcasting !== "undefined" &&
+        broadcasting === true &&
+        typeof mediaStream !== "undefined" &&
+        !!mediaStream;
+    } catch {}
+
+    if (active && !previousBroadcasting) {
+      startDiagnosticRecording();
+    }
+
+    if (!active && previousBroadcasting) {
+      stopDiagnosticRecording();
+    }
+
+    previousBroadcasting = active;
+  }, 400);
+
+  window.addEventListener(
+    "beforeunload",
+    stopDiagnosticRecording
+  );
+})();
+</script>
 </body>
 </html>

@@ -4884,8 +4884,11 @@ function renderOrganizations(list){
               </div>
             </div>
 
-            <div class="lb-room">
-              ${escapeHtml(item.roomName)}
+            <div
+              class="lb-room"
+              data-room-organization-id="${Number(item.id)}"
+            >
+              ${escapeHtml(item.activeRoomName || item.roomName)}
             </div>
           </div>
 
@@ -4987,8 +4990,8 @@ async function refreshLiveBroadcastIndicators(){
         )
         .filter(Boolean);
 
-      const isLive =
-        activeRooms.some(
+      const matchingActiveRoom =
+        activeRooms.find(
           activeRoom =>
             baseRooms.some(
               baseRoom =>
@@ -4999,10 +5002,31 @@ async function refreshLiveBroadcastIndicators(){
                   "-"
                 )
             )
-        );
+        ) || "";
+
+      const isLive =
+        !!matchingActiveRoom;
 
       organization.isLive =
         isLive;
+
+      organization.activeRoomName =
+        matchingActiveRoom;
+
+      document
+        .querySelectorAll(
+          '[data-room-organization-id="' +
+          Number(
+            organization.id
+          ) +
+          '"]'
+        )
+        .forEach(roomLabel => {
+          roomLabel.textContent =
+            matchingActiveRoom ||
+            organization.roomName ||
+            "";
+        });
 
       document
         .querySelectorAll(
@@ -10920,5 +10944,758 @@ Does NOT change admin data or Worker logic.
 })();
 </script>
 
+
+<script>
+(() => {
+  if (
+    window.__lbDiagnosticAdminPatch
+  ) {
+    return;
+  }
+
+  window.__lbDiagnosticAdminPatch = true;
+
+  const API = "https://livebridge.northstarventures-ca.workers.dev";
+
+  if (
+    typeof adminFetch === "function" &&
+    typeof getAdminToken === "function"
+  ) {
+    adminFetch =
+      async function(path, options = {}) {
+        const token = await getAdminToken();
+
+        if (!token) {
+          throw new Error("You are not signed in.");
+        }
+
+        const headers = {
+          ...(options.headers || {}),
+          "Authorization": "Bearer " + token
+        };
+
+        if (
+          options.body &&
+          !headers["Content-Type"]
+        ) {
+          headers["Content-Type"] = "application/json";
+        }
+
+        return fetch(
+          API + path,
+          {
+            ...options,
+            headers
+          }
+        );
+      };
+  }
+
+  function ensureNetworkToggle() {
+    const card = document.getElementById("orgListenerDataCard");
+
+    if (
+      !card ||
+      document.getElementById("editListenerNetworkQuality")
+    ) {
+      return;
+    }
+
+    const label = document.createElement("label");
+
+    label.style.cssText =
+      "display:flex;align-items:center;justify-content:space-between;gap:14px;" +
+      "padding:12px;margin-top:10px;border:1px solid rgba(69,214,145,.22);" +
+      "border-radius:11px;background:rgba(69,214,145,.06);cursor:pointer;";
+
+    label.innerHTML =
+      '<div>' +
+        '<div style="font-weight:900;color:#d8f5e7;margin-bottom:3px;">Show listener network quality warning</div>' +
+        '<div class="lb-muted">Shows Network: Good / Unstable / Poor beside listener data usage. ' +
+        'A connection warning appears once per listening session only after sustained poor connectivity.</div>' +
+      '</div>' +
+      '<input id="editListenerNetworkQuality" type="checkbox" checked ' +
+      'style="width:19px;height:19px;flex:0 0 auto;">';
+
+    card.appendChild(label);
+  }
+
+  function ensureAudioCard() {
+    if (document.getElementById("orgDiagnosticAudioCard")) {
+      return;
+    }
+
+    const broadcastsCard = document.getElementById("orgBroadcastsCard");
+
+    if (!broadcastsCard?.parentElement) {
+      return;
+    }
+
+    const card = document.createElement("div");
+    card.id = "orgDiagnosticAudioCard";
+    card.className = "lb-card";
+    card.style.marginTop = "16px";
+
+    card.innerHTML =
+      '<div class="lb-card-title" style="margin-bottom:7px;">🎧 Source Audio Diagnostics</div>' +
+      '<div class="lb-muted" style="line-height:1.5;margin-bottom:13px;">' +
+      'Private administrator-only source audio. Segments are stored for up to 7 days for quality troubleshooting, then expire.' +
+      '</div>' +
+      '<div id="diagnosticAudioArchive"><div class="lb-empty">Open an organization to load source audio.</div></div>';
+
+    broadcastsCard.parentElement.insertBefore(
+      card,
+      broadcastsCard
+    );
+  }
+
+  function ensurePlayerPanel() {
+    let panel = document.getElementById("diagnosticAudioPlayerPanel");
+
+    if (panel) {
+      return panel;
+    }
+
+    panel = document.createElement("div");
+    panel.id = "diagnosticAudioPlayerPanel";
+    panel.style.cssText =
+      "position:fixed;right:18px;bottom:18px;z-index:999999;width:min(92vw,430px);" +
+      "padding:14px;border-radius:14px;border:1px solid rgba(45,151,255,.35);" +
+      "background:rgba(8,18,31,.97);box-shadow:0 18px 55px rgba(0,0,0,.5);display:none;";
+
+    panel.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;">' +
+        '<div>' +
+          '<div style="font-weight:900;color:white;">Source Audio Monitor</div>' +
+          '<div id="diagnosticAudioPlayerStatus" style="font-size:10px;color:#8fa5bc;margin-top:2px;">Idle</div>' +
+        '</div>' +
+        '<button id="diagnosticAudioStopButton" type="button" class="lb-button secondary" style="padding:7px 10px;">Stop</button>' +
+      '</div>' +
+      '<audio id="diagnosticAudioPlayer" controls playsinline style="width:100%;height:38px;"></audio>';
+
+    document.body.appendChild(panel);
+
+    document
+      .getElementById("diagnosticAudioStopButton")
+      ?.addEventListener(
+        "click",
+        stopDiagnosticPlayback
+      );
+
+    return panel;
+  }
+
+  const playback = {
+    mode: "",
+    room: "",
+    broadcastId: "",
+    lastSequence: 0,
+    queue: [],
+    polling: null,
+    objectUrl: "",
+    loading: false,
+    label: ""
+  };
+
+  function setPlayerStatus(text) {
+    const status =
+      document.getElementById("diagnosticAudioPlayerStatus");
+
+    if (status) {
+      status.textContent = text;
+    }
+  }
+
+  function clearObjectUrl() {
+    if (playback.objectUrl) {
+      try {
+        URL.revokeObjectURL(playback.objectUrl);
+      } catch {}
+      playback.objectUrl = "";
+    }
+  }
+
+  function stopDiagnosticPlayback() {
+    if (playback.polling) {
+      clearInterval(playback.polling);
+      playback.polling = null;
+    }
+
+    playback.mode = "";
+    playback.room = "";
+    playback.broadcastId = "";
+    playback.lastSequence = 0;
+    playback.queue = [];
+    playback.loading = false;
+
+    const audio = document.getElementById("diagnosticAudioPlayer");
+
+    if (audio) {
+      try {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      } catch {}
+    }
+
+    clearObjectUrl();
+
+    const panel = document.getElementById("diagnosticAudioPlayerPanel");
+
+    if (panel) {
+      panel.style.display = "none";
+    }
+  }
+
+  async function fetchSegmentBlob(id) {
+    const response =
+      await adminFetch(
+        "/admin/diagnostic-audio/segment?id=" +
+        encodeURIComponent(id)
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "Unable to load source audio segment."
+      );
+    }
+
+    return response.blob();
+  }
+
+  async function playNextSegment() {
+    if (
+      playback.loading ||
+      !playback.queue.length
+    ) {
+      return;
+    }
+
+    playback.loading = true;
+
+    const segment = playback.queue.shift();
+
+    try {
+      const blob =
+        await fetchSegmentBlob(segment.id);
+
+      clearObjectUrl();
+
+      playback.objectUrl =
+        URL.createObjectURL(blob);
+
+      const audio =
+        document.getElementById("diagnosticAudioPlayer");
+
+      if (!audio) {
+        return;
+      }
+
+      audio.src = playback.objectUrl;
+      audio.onended = () => {
+        playback.loading = false;
+        clearObjectUrl();
+        playNextSegment();
+      };
+
+      audio.onerror = () => {
+        playback.loading = false;
+        clearObjectUrl();
+        playNextSegment();
+      };
+
+      setPlayerStatus(
+        playback.mode === "live"
+          ? "🔴 LIVE source • about 5–10 seconds behind"
+          : playback.label
+      );
+
+      try {
+        await audio.play();
+      } catch {
+        setPlayerStatus(
+          (playback.mode === "live"
+            ? "Live source ready"
+            : playback.label) +
+          " • Press Play if your browser blocked autoplay"
+        );
+        playback.loading = false;
+      }
+
+    } catch (error) {
+      playback.loading = false;
+      setPlayerStatus(error.message || "Source audio playback failed.");
+      playNextSegment();
+    }
+  }
+
+  async function pollLiveSegments() {
+    if (playback.mode !== "live") {
+      return;
+    }
+
+    try {
+      let path;
+
+      if (playback.broadcastId) {
+        path =
+          "/admin/diagnostic-audio/segments?broadcastId=" +
+          encodeURIComponent(playback.broadcastId) +
+          "&afterSequence=" +
+          encodeURIComponent(playback.lastSequence);
+      } else {
+        path =
+          "/admin/diagnostic-audio/segments?room=" +
+          encodeURIComponent(playback.room) +
+          "&afterSequence=0";
+      }
+
+      const response = await adminFetch(path);
+      const data = await response.json();
+
+      if (!response.ok) {
+        return;
+      }
+
+      let segments = data.segments || [];
+
+      if (!playback.broadcastId && segments.length) {
+        const latest = segments[segments.length - 1];
+
+        playback.broadcastId = latest.broadcastId;
+        playback.lastSequence = latest.sequence;
+        playback.queue.push(latest);
+      } else if (playback.broadcastId) {
+        segments =
+          segments.filter(
+            item =>
+              item.broadcastId === playback.broadcastId &&
+              item.sequence > playback.lastSequence
+          );
+
+        for (const item of segments) {
+          playback.lastSequence =
+            Math.max(
+              playback.lastSequence,
+              Number(item.sequence || 0)
+            );
+
+          playback.queue.push(item);
+        }
+      }
+
+      playNextSegment();
+
+    } catch (error) {
+      console.warn(
+        "Live source monitor poll failed:",
+        error
+      );
+    }
+  }
+
+  async function startDiagnosticLiveListen(room, label = "") {
+    stopDiagnosticPlayback();
+    ensurePlayerPanel().style.display = "block";
+
+    playback.mode = "live";
+    playback.room = String(room || "").trim().toUpperCase();
+    playback.label = label || playback.room;
+
+    setPlayerStatus("Connecting to live source audio…");
+
+    await pollLiveSegments();
+
+    playback.polling =
+      setInterval(
+        pollLiveSegments,
+        1500
+      );
+  }
+
+  async function playDiagnosticBroadcast(broadcastId, label = "") {
+    stopDiagnosticPlayback();
+    ensurePlayerPanel().style.display = "block";
+
+    playback.mode = "archive";
+    playback.broadcastId = String(broadcastId || "");
+    playback.label = label || "Archived source audio";
+
+    setPlayerStatus("Loading archived source audio…");
+
+    try {
+      const response =
+        await adminFetch(
+          "/admin/diagnostic-audio/segments?broadcastId=" +
+          encodeURIComponent(playback.broadcastId) +
+          "&afterSequence=0"
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+          "Unable to load archived source audio."
+        );
+      }
+
+      playback.queue =
+        data.segments || [];
+
+      if (!playback.queue.length) {
+        setPlayerStatus("No source audio segments found.");
+        return;
+      }
+
+      playNextSegment();
+
+    } catch (error) {
+      setPlayerStatus(
+        error.message ||
+        "Unable to load archived source audio."
+      );
+    }
+  }
+
+  window.startDiagnosticLiveListen =
+    startDiagnosticLiveListen;
+
+  window.playDiagnosticBroadcast =
+    playDiagnosticBroadcast;
+
+  function formatBytes(value) {
+    const bytes = Number(value || 0);
+
+    if (bytes < 1024 * 1024) {
+      return (bytes / 1024).toFixed(0) + " KB";
+    }
+
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function formatDuration(ms) {
+    const seconds =
+      Math.max(
+        0,
+        Math.round(
+          Number(ms || 0) / 1000
+        )
+      );
+
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+
+    return mins
+      ? mins + "m " + secs + "s"
+      : secs + "s";
+  }
+
+  async function loadDiagnosticAudioArchives() {
+    ensureAudioCard();
+
+    const box =
+      document.getElementById("diagnosticAudioArchive");
+
+    if (!box) {
+      return;
+    }
+
+    let organizationId = 0;
+
+    try {
+      organizationId =
+        Number(
+          selectedOrganization?.id || 0
+        );
+    } catch {}
+
+    if (!organizationId) {
+      box.innerHTML =
+        '<div class="lb-empty">No organization selected.</div>';
+      return;
+    }
+
+    box.innerHTML =
+      '<div class="lb-empty">Loading private source audio…</div>';
+
+    try {
+      const response =
+        await adminFetch(
+          "/admin/diagnostic-audio/broadcasts?organizationId=" +
+          encodeURIComponent(organizationId)
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+          "Unable to load source audio."
+        );
+      }
+
+      const broadcasts =
+        data.broadcasts || [];
+
+      if (!broadcasts.length) {
+        box.innerHTML =
+          '<div class="lb-empty">No source recordings from the last 7 days.</div>';
+        return;
+      }
+
+      box.innerHTML =
+        broadcasts.map(item => {
+          const started =
+            new Date(
+              Number(item.startedAt || 0)
+            ).toLocaleString();
+
+          const approxDuration =
+            Math.max(
+              0,
+              Number(item.lastSegmentAt || 0) -
+              Number(item.startedAt || 0) +
+              5000
+            );
+
+          const expires =
+            new Date(
+              Number(item.expiresAt || 0)
+            ).toLocaleString();
+
+          const safeId =
+            String(item.broadcastId || "")
+              .replace(/'/g, "\\'");
+
+          const safeRoom =
+            String(item.room || "")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+
+          return (
+            '<div style="padding:11px 0;border-bottom:1px solid rgba(255,255,255,.07);display:flex;gap:10px;align-items:center;justify-content:space-between;">' +
+              '<div style="min-width:0;">' +
+                '<div style="font-weight:900;color:white;font-size:11px;">' + safeRoom + '</div>' +
+                '<div class="lb-muted" style="font-size:10px;margin-top:3px;">' +
+                  started + ' • ' +
+                  formatDuration(approxDuration) + ' • ' +
+                  formatBytes(item.sizeBytes) +
+                '</div>' +
+                '<div class="lb-muted" style="font-size:9px;margin-top:2px;">Auto expires ' + expires + '</div>' +
+              '</div>' +
+              '<button type="button" class="lb-button secondary" style="flex:0 0 auto;padding:8px 10px;" ' +
+                "onclick=\"playDiagnosticBroadcast('" + safeId + "','Archived source • " + safeRoom.replace(/'/g, "\\'") + "')\">▶ Listen</button>" +
+            '</div>'
+          );
+        }).join("");
+
+    } catch (error) {
+      box.innerHTML =
+        '<div class="lb-empty">' +
+        String(error.message || "Unable to load source audio.") +
+        '</div>';
+    }
+  }
+
+  function decorateLiveButtons(activeBroadcasts) {
+    let organizations = [];
+
+    try {
+      organizations =
+        Array.isArray(adminOrganizations)
+          ? adminOrganizations
+          : [];
+    } catch {}
+
+    for (const organization of organizations) {
+      const baseRooms =
+        [
+          organization.roomName,
+          organization.roomAlias
+        ]
+        .map(value =>
+          String(value || "")
+            .trim()
+            .toUpperCase()
+        )
+        .filter(Boolean);
+
+      const matching =
+        activeBroadcasts.find(
+          item =>
+            baseRooms.some(
+              base =>
+                item.room === base ||
+                item.room.startsWith(base + "-")
+            )
+        );
+
+      const row =
+        document.querySelector(
+          '[data-organization-id="' +
+          Number(organization.id) +
+          '"]'
+        );
+
+      if (!row) {
+        continue;
+      }
+
+      let button =
+        row.querySelector(
+          ".lb-diagnostic-live-listen"
+        );
+
+      if (!matching) {
+        button?.remove();
+        continue;
+      }
+
+      if (!button) {
+        button =
+          document.createElement("button");
+
+        button.type = "button";
+        button.className =
+          "lb-button secondary lb-diagnostic-live-listen";
+        button.style.cssText =
+          "margin-right:6px;padding:8px 9px;font-size:10px;";
+        button.textContent =
+          "🔊 Listen Live";
+
+        const actions =
+          row.lastElementChild;
+
+        actions?.insertBefore(
+          button,
+          actions.firstChild
+        );
+      }
+
+      button.onclick =
+        () =>
+          startDiagnosticLiveListen(
+            matching.room,
+            organization.organizationName || matching.room
+          );
+    }
+  }
+
+  async function syncLiveDiagnosticButtons() {
+    try {
+      const response =
+        await adminFetch(
+          "/admin/live-broadcasts"
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        return;
+      }
+
+      decorateLiveButtons(
+        (data.broadcasts || [])
+          .map(item => ({
+            ...item,
+            room:
+              String(item.room || "")
+                .trim()
+                .toUpperCase()
+          }))
+      );
+
+    } catch {}
+  }
+
+  function installWrappers() {
+    ensureNetworkToggle();
+    ensureAudioCard();
+    ensurePlayerPanel();
+
+    if (
+      typeof collectFeatureOverrides === "function" &&
+      !collectFeatureOverrides.__lbNetworkWrapped
+    ) {
+      const originalCollect =
+        collectFeatureOverrides;
+
+      const wrappedCollect =
+        function() {
+          const output =
+            originalCollect();
+
+          output.listenerNetworkQualityDisabled =
+            document.getElementById(
+              "editListenerNetworkQuality"
+            )?.checked !== true;
+
+          return output;
+        };
+
+      wrappedCollect.__lbNetworkWrapped =
+        true;
+
+      collectFeatureOverrides =
+        wrappedCollect;
+    }
+
+    if (
+      typeof openOrganization === "function" &&
+      !openOrganization.__lbDiagnosticWrapped
+    ) {
+      const originalOpen =
+        openOrganization;
+
+      const wrappedOpen =
+        async function(id) {
+          const result =
+            await originalOpen(id);
+
+          ensureNetworkToggle();
+          ensureAudioCard();
+
+          try {
+            const overrides =
+              selectedOrganization
+                ?.featureOverrides ||
+              {};
+
+            const checkbox =
+              document.getElementById(
+                "editListenerNetworkQuality"
+              );
+
+            if (checkbox) {
+              checkbox.checked =
+                overrides
+                  .listenerNetworkQualityDisabled !==
+                true;
+            }
+          } catch {}
+
+          loadDiagnosticAudioArchives();
+
+          return result;
+        };
+
+      wrappedOpen.__lbDiagnosticWrapped =
+        true;
+
+      openOrganization =
+        wrappedOpen;
+    }
+  }
+
+  installWrappers();
+  setTimeout(installWrappers, 500);
+  setTimeout(syncLiveDiagnosticButtons, 1000);
+  setInterval(syncLiveDiagnosticButtons, 5000);
+})();
+</script>
 </body>
 </html>
