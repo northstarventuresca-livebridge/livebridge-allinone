@@ -24428,48 +24428,6 @@ const now =
         );
       }
     }
-    if (
-      request.method === "GET" &&
-      url.pathname ===
-        "/smtp2go-smoke-test-20261007-rw"
-    ) {
-      try {
-        const result =
-          await sendLiveBridgeEmail(
-            env,
-            {
-              email:
-                "livebridge@northstarventures.ca",
-              subject:
-                "LiveBridge SMTP2GO Test",
-              text:
-                "LiveBridge SMTP2GO test successful.",
-              html:
-                "<div style=\"font-family:Arial,sans-serif\"><h2>LiveBridge</h2><p>SMTP2GO test successful.</p></div>"
-            }
-          );
-
-        return jsonResponse({
-          success: true,
-          provider:
-            result?.provider || ""
-        });
-      } catch (error) {
-        return jsonResponse(
-          {
-            success: false,
-            error:
-              String(
-                error?.message ||
-                error ||
-                "SMTP2GO test failed."
-              )
-          },
-          500
-        );
-      }
-    }
-
     if (request.method === "POST" && url.pathname === "/email-transcript") {
   try {
 
