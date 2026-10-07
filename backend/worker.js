@@ -4297,6 +4297,28 @@ function buildOrganizationAccount(
     roomName:
       row.room_name,
 
+    lastSubroom:
+      normalizeRoom(
+        row.last_subroom ||
+        ""
+      ),
+
+    effectiveRoom:
+      normalizeRoom(
+        row.last_subroom ||
+        ""
+      )
+        ? normalizeRoom(
+            row.room_name
+          ) +
+          "-" +
+          normalizeRoom(
+            row.last_subroom
+          )
+        : normalizeRoom(
+            row.room_name
+          ),
+
     roomAlias:
       row.room_alias || "",
 
