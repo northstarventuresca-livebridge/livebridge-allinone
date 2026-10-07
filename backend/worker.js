@@ -8,6 +8,138 @@ var OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 var OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations";
 var OPENAI_TRANSCRIBE_URL = "https://api.openai.com/v1/audio/transcriptions";
 var AZURE_TTS_INFLIGHT = /* @__PURE__ */ new Map();
+
+var SMTP2GO_SEND_URL = "https://api.smtp2go.com/v3/email/send";
+var LIVEBRIDGE_EMAIL_FROM = "LiveBridge <livebridge@northstarventures.ca>";
+
+async function sendLiveBridgeEmail(
+  env,
+  {
+    email,
+    subject,
+    text,
+    html
+  }
+) {
+  const recipient =
+    String(email || "")
+      .trim();
+
+  if (!recipient) {
+    throw new Error(
+      "LiveBridge email recipient is required."
+    );
+  }
+
+  if (env.SMTP2GO_API_KEY) {
+    const response =
+      await fetch(
+        SMTP2GO_SEND_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            "Accept":
+              "application/json",
+            "X-Smtp2go-Api-Key":
+              env.SMTP2GO_API_KEY
+          },
+          body: JSON.stringify({
+            sender:
+              LIVEBRIDGE_EMAIL_FROM,
+            to: [recipient],
+            subject:
+              String(
+                subject ||
+                "LiveBridge"
+              ),
+            text_body:
+              String(text || ""),
+            html_body:
+              String(html || ""),
+            fastaccept: true
+          })
+        }
+      );
+
+    let data = null;
+
+    try {
+      data =
+        await response.json();
+    } catch {}
+
+    const failed =
+      Number(
+        data?.data?.failed ||
+        0
+      );
+
+    if (
+      !response.ok ||
+      failed > 0
+    ) {
+      const reason =
+        data?.data?.failures?.[0]?.message ||
+        data?.data?.error ||
+        data?.error ||
+        (
+          "SMTP2GO email failed: " +
+          response.status
+        );
+
+      throw new Error(
+        String(reason)
+      );
+    }
+
+    return {
+      provider: "smtp2go",
+      data
+    };
+  }
+
+  if (env.GMAIL_WEB_APP_URL) {
+    const response =
+      await fetch(
+        env.GMAIL_WEB_APP_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+          body: JSON.stringify({
+            email: recipient,
+            subject,
+            text,
+            html
+          })
+        }
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "Legacy email service failed: " +
+        response.status
+      );
+    }
+
+    return {
+      provider: "gmail-app-script"
+    };
+  }
+
+  throw new Error(
+    "LiveBridge email service is not configured."
+  );
+}
+__name(
+  sendLiveBridgeEmail,
+  "sendLiveBridgeEmail"
+);
+
 var CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -718,7 +850,10 @@ async function sendMarketingRefundAdminEmail(
   balanceAfter,
   requestedAt
 ) {
-  if (!env.GMAIL_WEB_APP_URL) {
+  if (
+    !env.SMTP2GO_API_KEY &&
+    !env.GMAIL_WEB_APP_URL
+  ) {
     return false;
   }
 
@@ -817,29 +952,19 @@ async function sendMarketingRefundAdminEmail(
 
   for (const email of emails) {
     try {
-      const response =
-        await fetch(
-          env.GMAIL_WEB_APP_URL,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
-            body: JSON.stringify({
-              email,
-              subject:
-                "LiveBridge Marketing Credit Refund — " +
-                organizationName,
-              text,
-              html
-            })
-          }
-        );
+      await sendLiveBridgeEmail(
+        env,
+        {
+          email,
+          subject:
+            "LiveBridge Marketing Credit Refund — " +
+            organizationName,
+          text,
+          html
+        }
+      );
 
-      if (response.ok) {
-        sent = true;
-      }
+      sent = true;
     } catch (error) {
       console.error(
         "Marketing refund admin email failed:",
@@ -1421,7 +1546,13 @@ async function sendBroadcastAlertEmail(
   timeoutMinutes
 ) {
 
-  if (!env.GMAIL_WEB_APP_URL || !organization) {
+  if (
+    (
+      !env.SMTP2GO_API_KEY &&
+      !env.GMAIL_WEB_APP_URL
+    ) ||
+    !organization
+  ) {
     return;
   }
 
@@ -1464,41 +1595,34 @@ async function sendBroadcastAlertEmail(
     : "The broadcast has been ended to protect your account and usage.";
 
   try {
-    await fetch(
-      env.GMAIL_WEB_APP_URL,
+    await sendLiveBridgeEmail(
+      env,
       {
-        method: "POST",
-        headers: {
-          "Content-Type":
-            "application/json"
-        },
-        body: JSON.stringify({
-          email,
-          subject:
-            isScheduleFailure
-              ? "LiveBridge Scheduled Broadcast Alert"
-              : "LiveBridge Broadcast Alert",
-          text:
-            "LIVEBRIDGE ALERT\n\n" +
-            "Organization: " +
-            organizationName +
-            "\nRoom: " +
-            normalizeRoom(room) +
-            "\n\n" +
-            reasonText +
-            "\n\n" +
-            closingText,
-          html: `
-            <div style="font-family:Arial,Helvetica,sans-serif;max-width:700px;margin:auto;color:#172033;line-height:1.6;">
-              <h1 style="margin-bottom:4px;">LiveBridge</h1>
-              <h2 style="margin-top:0;">${isScheduleFailure ? "Scheduled Broadcast Alert" : "Broadcast Alert"}</h2>
-              <p><strong>Organization:</strong> ${organizationName}</p>
-              <p><strong>Room:</strong> ${normalizeRoom(room)}</p>
-              <p>${reasonText}</p>
-              <p>${closingText}</p>
-            </div>
-          `
-        })
+        email,
+        subject:
+          isScheduleFailure
+            ? "LiveBridge Scheduled Broadcast Alert"
+            : "LiveBridge Broadcast Alert",
+        text:
+          "LIVEBRIDGE ALERT\n\n" +
+          "Organization: " +
+          organizationName +
+          "\nRoom: " +
+          normalizeRoom(room) +
+          "\n\n" +
+          reasonText +
+          "\n\n" +
+          closingText,
+        html: `
+          <div style="font-family:Arial,Helvetica,sans-serif;max-width:700px;margin:auto;color:#172033;line-height:1.6;">
+            <h1 style="margin-bottom:4px;">LiveBridge</h1>
+            <h2 style="margin-top:0;">${isScheduleFailure ? "Scheduled Broadcast Alert" : "Broadcast Alert"}</h2>
+            <p><strong>Organization:</strong> ${organizationName}</p>
+            <p><strong>Room:</strong> ${normalizeRoom(room)}</p>
+            <p>${reasonText}</p>
+            <p>${closingText}</p>
+          </div>
+        `
       }
     );
   } catch (error) {
@@ -24516,6 +24640,7 @@ const now =
 
 
     if (
+      !env.SMTP2GO_API_KEY &&
       !env.GMAIL_WEB_APP_URL
     ) {
       throw new Error(
@@ -24595,29 +24720,7 @@ const now =
       .replace(/\n/g, "<br>");
 
     // Send combined email
-    const emailResponse = await fetch(
-      env.GMAIL_WEB_APP_URL,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email:
-            normalizedEmail,
-
-          subject:
-            "Your LiveBridge Transcript & AI Notes",
-
-          text:
-            "LIVEBRIDGE\n\n" +
-            "AI NOTES / SUMMARY\n\n" +
-            summary +
-            "\n\n----------------------------------------\n\n" +
-            "FULL TRANSCRIPT\n\n" +
-            transcript,
-
-          html: `
+    const emailHtml = `
             <div style="
               font-family:Arial,Helvetica,sans-serif;
               max-width:800px;
@@ -24667,16 +24770,26 @@ const now =
               </p>
 
             </div>
-          `
-        })
+          `;
+
+    await sendLiveBridgeEmail(
+      env,
+      {
+        email:
+          normalizedEmail,
+        subject:
+          "Your LiveBridge Transcript & AI Notes",
+        text:
+          "LIVEBRIDGE\n\n" +
+          "AI NOTES / SUMMARY\n\n" +
+          summary +
+          "\n\n----------------------------------------\n\n" +
+          "FULL TRANSCRIPT\n\n" +
+          transcript,
+        html:
+          emailHtml
       }
     );
-
-    if (!emailResponse.ok) {
-      throw new Error(
-        "Email service failed: " + emailResponse.status
-      );
-    }
 
     return jsonResponse({
       success: true
