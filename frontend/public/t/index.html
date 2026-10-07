@@ -4211,26 +4211,57 @@ resolve(email);
     emailButton.disabled = true;
     emailButton.textContent = "Sending...";
 
-    const response = await fetch(
-      WORKER_URL + "/email-transcript",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email,
-          transcript:
-            fullTranslatedTranscript,
-          language:
-            translateLang,
-          room:
-            ROOM_ID,
-          listenerId:
-            listenerSessionId
-        })
+    const emailAbortController =
+      new AbortController();
+
+    const emailTimeout =
+      setTimeout(
+        () =>
+          emailAbortController.abort(),
+        60000
+      );
+
+    let response;
+
+    try {
+      response = await fetch(
+        WORKER_URL + "/email-transcript",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email,
+            transcript:
+              fullTranslatedTranscript,
+            language:
+              translateLang,
+            room:
+              ROOM_ID,
+            listenerId:
+              listenerSessionId
+          }),
+          signal:
+            emailAbortController.signal
+        }
+      );
+    } catch (error) {
+      if (
+        error?.name ===
+        "AbortError"
+      ) {
+        throw new Error(
+          "Email service timed out after 60 seconds. Please try again."
+        );
       }
-    );
+
+      throw error;
+    } finally {
+      clearTimeout(
+        emailTimeout
+      );
+    }
 
     const data = await response.json();
 
