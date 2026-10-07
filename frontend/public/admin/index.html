@@ -4888,7 +4888,7 @@ function renderOrganizations(list){
               class="lb-room"
               data-room-organization-id="${Number(item.id)}"
             >
-              ${escapeHtml(item.activeRoomName || item.roomName)}
+              ${escapeHtml(item.activeRoomName || item.effectiveRoom || item.roomName)}
             </div>
           </div>
 
@@ -5024,6 +5024,7 @@ async function refreshLiveBroadcastIndicators(){
         .forEach(roomLabel => {
           roomLabel.textContent =
             matchingActiveRoom ||
+            organization.effectiveRoom ||
             organization.roomName ||
             "";
         });
