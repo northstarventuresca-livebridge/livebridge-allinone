@@ -4349,6 +4349,28 @@ function renderBroadcastHistory(
                 )
               : "🔒 Growth";
 
+          const connectionIssues =
+            Math.max(0, Number(item.connectionIssues || 0));
+          const recentConnectionEvents =
+            (Array.isArray(item.connectionEvents) ? item.connectionEvents : [])
+              .slice(0, 10)
+              .map(event => {
+                const label = String(event.type || "")
+                  .replace(/[^a-z_]/g, "")
+                  .replace(/_/g, " ");
+                const at = Number(event.at || 0);
+                const time = Number.isFinite(at) && at > 0
+                  ? new Date(at).toLocaleTimeString() : "";
+                return '<div>' + time + ' · ' + label + '</div>';
+              })
+              .join("");
+          const connectionHealth = connectionIssues
+            ? '<details style="margin-top:5px;font-size:11px;color:#fbbf74">' +
+              '<summary style="cursor:pointer">⚠ ' + connectionIssues +
+              ' recent connection alert' + (connectionIssues === 1 ? '' : 's') +
+              '</summary>' + recentConnectionEvents + '</details>'
+            : "";
+
           const listenTime =
             detailed
               ? formatDuration(
@@ -4363,6 +4385,7 @@ function renderBroadcastHistory(
                 <strong>
                   ${dateText}
                 </strong>
+                ${connectionHealth}
               </div>
 
               <div>
