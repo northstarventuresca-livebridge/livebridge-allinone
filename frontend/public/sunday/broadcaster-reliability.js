@@ -186,6 +186,13 @@
         await audioSafetyContext.resume();
       }
       if (!active() || !track || track.readyState !== "live") throw new Error("Microphone unavailable");
+      if (peerHealthy() && audioSafetyContext?.state !== "suspended") {
+        state.issueSince = 0;
+        state.attempts = 0;
+        record("recovered", "Audio processing resumed without reconnecting");
+        clearWarning();
+        return;
+      }
       // This only rebuilds the transcription transport. It never ends/restarts a broadcast room.
       await stopRealtimeTranscription(channelOpen());
       if (!active()) return;
@@ -256,6 +263,8 @@
       line("lbNetworkQuality", "🔴", "Network: offline");
     } else if (networkFailed) {
       line("lbNetworkQuality", "🔴", "Network: unable to reach server");
+    } else if (state.lastNetworkMs === null) {
+      line("lbNetworkQuality", "🟡", "Network: checking connection…");
     } else if (networkSlow) {
       line("lbNetworkQuality", "🟡", "Network: unstable (" + state.lastNetworkMs + " ms)");
       if (state.lastNetworkMs > 2000) record("network_degraded", "Server roundtrip " + state.lastNetworkMs + " ms");
@@ -324,7 +333,8 @@
   window.addEventListener("online", () => {
     state.probeFailures = 0;
     state.lastProbeAt = 0;
-    if (state.active) void attemptRecovery();
+    if (state.active && (!peerHealthy() || micTrack()?.readyState !== "live"))
+      void attemptRecovery();
   });
   window.addEventListener("offline", () => {
     if (state.active) record("network_lost", "Browser reported offline");
