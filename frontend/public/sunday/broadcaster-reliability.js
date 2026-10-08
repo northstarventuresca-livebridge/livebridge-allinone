@@ -12,7 +12,7 @@
     lastProbeAt: 0, probeFailures: 0, probeBusy: false,
     quietSpeechWarning: false, lastVisibleAt: 0, hiddenAt: 0,
     pendingEvents: [], logging: false, eventCooldowns: new Map(),
-    sessionKey: "", lastHealthyAt: 0, lastRetryAt: 0
+    sessionKey: "", lastHealthyAt: 0, lastRetryAt: 0, previousMuted: false
   };
 
   const el = id => document.getElementById(id);
@@ -227,6 +227,7 @@
     state.lastNetworkMs = null;
     state.lastProbeAt = 0;
     state.lastHealthyAt = Date.now();
+    state.previousMuted = intentionallyMuted();
     state.pendingEvents = [];
     state.eventCooldowns.clear();
     clearWarning();
@@ -251,6 +252,12 @@
     if (!state.active) beginSession();
     const now = Date.now();
     const muted = intentionallyMuted();
+    if (state.previousMuted && !muted) {
+      // Silence while intentionally muted must never trigger an immediate warning.
+      lastMeaningfulAudioAt = now;
+      state.silenceAlerted = false;
+    }
+    state.previousMuted = muted;
     const track = micTrack();
     const networkFailed = navigator.onLine === false || state.probeFailures >= 2;
     const networkSlow = state.lastNetworkMs !== null && state.lastNetworkMs > 1200;
@@ -312,8 +319,10 @@
       state.lastHealthyAt = now;
     }
 
-    if (!muted && !badTrack && !suspendedAudio && !state.silenceAlerted &&
-        lastMeaningfulAudioAt && now - lastMeaningfulAudioAt >= SILENCE_WARNING_MS) {
+    if (!muted && !badTrack && !suspendedAudio &&
+        audioSafetyAnalyser && audioSafetyContext?.state === "running" &&
+        !state.silenceAlerted && lastMeaningfulAudioAt &&
+        now - lastMeaningfulAudioAt >= SILENCE_WARNING_MS) {
       state.silenceAlerted = true;
       record("audio_silence", "No microphone audio above activity threshold for 60 seconds");
       if (!state.warning) warn("No audio detected for 60 seconds. Check your microphone or sound source.");
