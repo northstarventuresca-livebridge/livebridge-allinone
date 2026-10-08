@@ -55,6 +55,26 @@
   const target = el("lbMicQualityPanel") || el("audioCaptureDiagnostic");
   if (target?.parentNode) target.parentNode.insertBefore(panel, target);
   const resumeButton = el("lbResumeBroadcastAudio");
+  const toast = document.createElement("div");
+  toast.id = "lbBroadcastSafetyToast";
+  toast.setAttribute("role", "alert");
+  toast.style.cssText = "display:none;position:fixed;z-index:99999;top:12px;left:12px;right:12px;max-width:420px;margin-left:auto;padding:14px 16px;background:#3b2025;border:2px solid #ffb46a;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.45);color:#fff;font-size:13px;line-height:1.4";
+  toast.innerHTML = '<div style="font-weight:800">⚠ Broadcast Audio Alert</div>' +
+    '<div id="lbBroadcastToastText" style="margin-top:6px"></div>' +
+    '<div style="display:flex;gap:8px;margin-top:10px">' +
+    '<button id="lbBroadcastToastResume" type="button" style="display:none;padding:9px 12px;font-weight:800;border:0;border-radius:7px;background:#ffcd63;color:#172334">Tap to Resume</button>' +
+    '<button id="lbBroadcastToastDismiss" type="button" style="padding:9px 12px;border:1px solid #8b6b6b;border-radius:7px;color:#fff;background:transparent">Dismiss</button>' +
+    '</div>';
+  document.body.appendChild(toast);
+  let lastToastMessage = "";
+  el("lbBroadcastToastDismiss")?.addEventListener("click", () => {
+    toast.style.display = "none";
+  });
+  el("lbBroadcastToastResume")?.addEventListener("click", () => {
+    toast.style.display = "none";
+    state.attempts = 0;
+    void attemptRecovery(true);
+  });
 
   function line(id, symbol, message) {
     const node = el(id);
@@ -65,11 +85,19 @@
     if (!area) return;
     state.warning = message;
     area.textContent = message;
+    if (lastToastMessage !== message) {
+      lastToastMessage = message;
+      el("lbBroadcastToastText").textContent = message;
+      toast.style.display = "block";
+    }
+    el("lbBroadcastToastResume").style.display = requiresTap ? "block" : "none";
     area.style.display = "block";
     if (resumeButton) resumeButton.style.display = requiresTap ? "block" : "none";
   }
   function clearWarning() {
     state.warning = "";
+    lastToastMessage = "";
+    toast.style.display = "none";
     const area = el("lbReliabilityWarning");
     if (area) area.style.display = "none";
     if (resumeButton) resumeButton.style.display = "none";
