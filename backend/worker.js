@@ -23883,7 +23883,8 @@ const now =
         const allowedTypes = new Set([
           "network_lost", "network_degraded", "realtime_disconnected",
           "microphone_ended", "microphone_suspended", "audio_silence",
-          "recovery_failed", "recovered", "manual_resume", "page_suspended"
+          "recovery_failed", "recovered", "manual_resume", "page_suspended",
+          "transcription_error"
         ]);
         const eventType = String(body.type || "").toLowerCase();
         if (!allowedTypes.has(eventType)) {
