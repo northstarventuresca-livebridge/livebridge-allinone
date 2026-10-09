@@ -6164,16 +6164,24 @@ async function startRealtimeTranscription() {
         data.type ===
         "error"
       ) {
-
-        console.error(
-          "OpenAI realtime transcription error:",
-          data
-        );
-
+        // Ignore late events from a peer that recovery has already replaced.
+        if (dc !== realtimeTranscriptionDc) return;
+        const problem = data.error || data;
+        const code = String(problem.code || "unknown").slice(0, 80);
+        const message = String(problem.message || "Realtime transcription error").slice(0, 180);
+        // Empty-buffer commits after a microphone interruption aren't fatal.
+        // Never leave the broadcaster showing a permanent error for these.
+        const harmless = /input_audio_buffer_commit_(empty|too_small)|input_audio_buffer_empty/i.test(code);
+        console.error("OpenAI realtime transcription error:", { code, message });
         setAudioDiagnostic(
-          "realtime transcription error",
-          "bad"
+          harmless
+            ? "realtime waiting for speech · microphone recovered"
+            : "realtime transcription error · " + code,
+          harmless ? "normal" : "bad"
         );
+        window.dispatchEvent(new CustomEvent("livebridge:realtime-error", {
+          detail: { code, message, fatal: !harmless }
+        }));
       }
     }
   );
