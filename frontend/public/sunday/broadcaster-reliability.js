@@ -1,6 +1,8 @@
 /* LiveBridge broadcaster resilience (isolated from broadcast start/stop and no-audio timeout). */
 (() => {
   "use strict";
+  if (window.__liveBridgeReliabilityGuardActive) return;
+  window.__liveBridgeReliabilityGuardActive = true;
   const CHECK_MS = 2500;
   const SIGNAL_PROBE_MS = 20000;
   const BAD_CONNECTION_GRACE_MS = 9000;
