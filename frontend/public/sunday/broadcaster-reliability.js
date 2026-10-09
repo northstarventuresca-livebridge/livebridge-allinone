@@ -14,7 +14,8 @@
     lastProbeAt: 0, probeFailures: 0, probeBusy: false,
     quietSpeechWarning: false, lastVisibleAt: 0, hiddenAt: 0,
     pendingEvents: [], logging: false, eventCooldowns: new Map(),
-    sessionKey: "", lastHealthyAt: 0, lastRetryAt: 0, previousMuted: false
+    sessionKey: "", lastHealthyAt: 0, lastRetryAt: 0, previousMuted: false,
+    fatalRealtimeError: false, fatalRealtimeCode: ""
   };
 
   const el = id => document.getElementById(id);
@@ -30,13 +31,21 @@
   const micTrack = () => {
     try { return mediaStream?.getAudioTracks?.()[0] || null; } catch { return null; }
   };
+  const boundMicTrack = () => {
+    try {
+      return realtimeTranscriptionPc?.getSenders?.().find(sender => sender.track?.kind === "audio")?.track || null;
+    } catch { return null; }
+  };
   const channelOpen = () => {
     try { return realtimeTranscriptionDc?.readyState === "open"; } catch { return false; }
   };
   const peerHealthy = () => {
     try {
       const pc = realtimeTranscriptionPc;
-      return !!pc && channelOpen() &&
+      // An open data channel alone is not enough: it can remain connected
+      // to an ended microphone track after a USB mic is unplugged.
+      return !!pc && channelOpen() && !state.fatalRealtimeError &&
+        boundMicTrack() === micTrack() && boundMicTrack()?.readyState === "live" &&
         (pc.connectionState === "connected" ||
           ((pc.connectionState === "new" || !pc.connectionState) &&
            ["connected","completed"].includes(pc.iceConnectionState)));
@@ -188,6 +197,8 @@
         await audioSafetyContext.resume();
       }
       if (!active() || !track || track.readyState !== "live") throw new Error("Microphone unavailable");
+      // Never treat an old WebRTC sender as recovered just because its
+      // data channel is still open. peerHealthy() verifies track identity.
       if (peerHealthy() && audioSafetyContext?.state !== "suspended") {
         state.issueSince = 0;
         state.attempts = 0;
@@ -196,8 +207,12 @@
         return;
       }
       // This only rebuilds the transcription transport. It never ends/restarts a broadcast room.
-      await stopRealtimeTranscription(channelOpen());
+      // Do not commit stale/empty microphone audio while repairing capture;
+      // a forced commit can trigger an OpenAI transcription error.
+      await stopRealtimeTranscription(false);
       if (!active()) return;
+      state.fatalRealtimeError = false;
+      state.fatalRealtimeCode = "";
       await startRealtimeTranscription();
       if (!peerHealthy()) throw new Error("Realtime connection has not recovered");
       state.issueSince = 0;
@@ -230,6 +245,8 @@
     state.lastProbeAt = 0;
     state.lastHealthyAt = Date.now();
     state.previousMuted = intentionallyMuted();
+    state.fatalRealtimeError = false;
+    state.fatalRealtimeCode = "";
     state.pendingEvents = [];
     state.eventCooldowns.clear();
     clearWarning();
@@ -292,7 +309,8 @@
     const goodPeer = peerHealthy();
     line("lbRealtimeQuality",
       goodPeer && !networkFailed ? "🟢" : goodPeer ? "🟡" : "🔴",
-      goodPeer ? "Translation audio: connected" : "Translation audio: disconnected");
+      goodPeer ? "Realtime transcription: connected" :
+        state.fatalRealtimeError ? "Realtime transcription: error" : "Realtime transcription: disconnected");
 
     if (badTrack || suspendedAudio || !goodPeer || networkFailed) {
       if (!state.issueSince) {
@@ -300,7 +318,8 @@
         if (badTrack) record("microphone_ended", "Microphone track ended unexpectedly");
         else if (suspendedAudio) record("microphone_suspended", "AudioContext suspended");
         else if (networkFailed) record("network_lost", "Network connection interrupted");
-        else record("realtime_disconnected", "Realtime peer/data channel unavailable");
+        else if (state.fatalRealtimeError) record("transcription_error", state.fatalRealtimeCode || "Realtime service reported an error");
+        else record("realtime_disconnected", "Realtime peer/data channel unavailable or bound to an inactive mic");
       }
       const elapsed = now - state.issueSince;
       if (elapsed >= BAD_CONNECTION_GRACE_MS) {
@@ -336,6 +355,17 @@
 
     if (state.pendingEvents.length && navigator.onLine) void flushEvents();
   }
+
+  window.addEventListener("livebridge:realtime-error", event => {
+    if (!state.active) return;
+    const code = String(event.detail?.code || "unknown").slice(0, 80);
+    const message = String(event.detail?.message || "").slice(0, 120);
+    record("transcription_error", code + (message ? ": " + message : ""));
+    if (event.detail?.fatal) {
+      state.fatalRealtimeError = true;
+      state.fatalRealtimeCode = code;
+    }
+  });
 
   resumeButton?.addEventListener("click", () => {
     state.attempts = 0;
