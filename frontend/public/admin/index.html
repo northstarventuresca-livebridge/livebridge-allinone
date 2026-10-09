@@ -7030,6 +7030,25 @@ function renderDetailHistory(
           0
         );
 
+      const recentAlerts = Array.isArray(item.connectionEvents)
+        ? item.connectionEvents : [];
+      const issueCount = Math.max(0, Number(item.connectionIssues || 0));
+      const alertHtml = recentAlerts.map(event => {
+        const time = Number(event.at || 0) > 0
+          ? new Date(Number(event.at)).toLocaleTimeString() : "";
+        const type = String(event.type || "").replace(/_/g, " ");
+        const detail = String(event.detail || "").slice(0, 180);
+        return '<div style="padding:3px 0">' +
+          escapeHtml(time) + ' · ' + escapeHtml(type) +
+          (detail ? ' — ' + escapeHtml(detail) : '') + '</div>';
+      }).join("");
+      const reliabilityHtml = issueCount
+        ? '<details style="margin-top:5px;max-width:280px;font-size:11px;color:#ffc77c">' +
+          '<summary style="cursor:pointer">⚠ ' + issueCount +
+          ' connection alert' + (issueCount === 1 ? '' : 's') + '</summary>' +
+          '<div style="padding-top:4px">' + alertHtml + '</div></details>'
+        : '';
+
       const endReason =
         String(
           item.autoEndReason || ""
@@ -7050,7 +7069,7 @@ function renderDetailHistory(
       return `
         <div class="lb-history-row">
 
-          <div>${escapeHtml(date)}</div>
+          <div>${escapeHtml(date)}${reliabilityHtml}</div>
 
           <div>
             ${formatDuration(item.durationMs)}

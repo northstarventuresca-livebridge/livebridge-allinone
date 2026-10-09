@@ -4930,6 +4930,23 @@ __name(
   "trackAnonymousOrganizationVisitor"
 );
 
+async function ensureBroadcastConnectionEvents(env) {
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE TABLE IF NOT EXISTS broadcast_connection_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      broadcast_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL
+    )
+  `).run();
+  await env.TRANSLATIONS_DB.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_broadcast_connection_events_history
+    ON broadcast_connection_events (broadcast_id, created_at)
+  `).run();
+}
+__name(ensureBroadcastConnectionEvents, "ensureBroadcastConnectionEvents");
+
 async function ensureAnalyticsTables(env) {
   await env.TRANSLATIONS_DB.prepare(`
     CREATE TABLE IF NOT EXISTS broadcast_sessions (
@@ -15926,6 +15943,35 @@ if (
       }
     }
 
+    // Reuse the same per-broadcast interruption records available to the customer.
+    // Fetch them in one bounded, authenticated admin query instead of an N+1 loop.
+    const connectionByBroadcastId = new Map();
+    if (visibleRows.length) {
+      await ensureBroadcastConnectionEvents(env);
+      const historyIds = visibleRows.map(item => String(item.id || ""));
+      const placeholders = historyIds.map(() => "?").join(",");
+      const eventsResult = await env.TRANSLATIONS_DB.prepare(`
+        SELECT broadcast_id, event_type, detail, created_at FROM (
+          SELECT broadcast_id, event_type, detail, created_at,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY broadcast_id ORDER BY created_at DESC
+                 ) AS event_number
+          FROM broadcast_connection_events
+          WHERE broadcast_id IN (${placeholders})
+        ) WHERE event_number <= 20
+        ORDER BY created_at DESC
+      `).bind(...historyIds).all();
+      for (const event of eventsResult.results || []) {
+        const key = String(event.broadcast_id || "");
+        if (!connectionByBroadcastId.has(key)) connectionByBroadcastId.set(key, []);
+        connectionByBroadcastId.get(key).push({
+          type: String(event.event_type || ""),
+          detail: String(event.detail || ""),
+          at: Number(event.created_at || 0)
+        });
+      }
+    }
+
     const broadcasts = [];
 
     for (
@@ -15940,8 +15986,15 @@ if (
         );
 
       if (summary) {
+        const connectionEvents =
+          connectionByBroadcastId.get(String(broadcast.id || "")) || [];
+        const connectionIssues = connectionEvents.filter(event =>
+          !["recovered", "manual_resume"].includes(event.type)
+        ).length;
         broadcasts.push({
           ...summary,
+          connectionEvents,
+          connectionIssues,
           transcriptAvailable:
             transcriptAvailableIds.has(
               String(
@@ -22151,6 +22204,7 @@ const audioMuted =
           )
           .all();
 
+        await ensureBroadcastConnectionEvents(env);
         const broadcasts = [];
 
         for (
@@ -22184,7 +22238,27 @@ const audioMuted =
             .first();
 
 
+          const connectionEventsResult =
+            await env.TRANSLATIONS_DB.prepare(`
+              SELECT event_type, detail, created_at
+              FROM broadcast_connection_events
+              WHERE broadcast_id = ?
+              ORDER BY created_at DESC
+              LIMIT 20
+            `).bind(row.id).all();
+          const connectionEvents = (connectionEventsResult.results || [])
+            .map(event => ({
+              type: String(event.event_type || ""),
+              detail: String(event.detail || ""),
+              at: Number(event.created_at || 0)
+            }));
+          const connectionIssues = connectionEvents.filter(event =>
+            !["recovered", "manual_resume"].includes(event.type)
+          ).length;
+
           const basicSummary = {
+            connectionIssues,
+            connectionEvents,
             success: true,
             broadcastId:
               summary.broadcastId,
@@ -22217,6 +22291,8 @@ const audioMuted =
 
             broadcasts.push({
               ...summary,
+              connectionIssues,
+              connectionEvents,
               hasTranscript:
                 !!transcript,
               transcriptExpiresAt:
@@ -23796,6 +23872,54 @@ const now =
           },
           authError ? 403 : 500
         );
+      }
+    }
+    if (request.method === "POST" && url.pathname === "/broadcast-connection-event") {
+      try {
+        const auth = await verifyClerkRequest(request, env);
+        const body = await request.json();
+        const room = normalizeRoom(body.room);
+        await getOwnedBroadcastOrganization(env, auth.clerkUserId, room);
+        const allowedTypes = new Set([
+          "network_lost", "network_degraded", "realtime_disconnected",
+          "microphone_ended", "microphone_suspended", "audio_silence",
+          "recovery_failed", "recovered", "manual_resume", "page_suspended"
+        ]);
+        const eventType = String(body.type || "").toLowerCase();
+        if (!allowedTypes.has(eventType)) {
+          return jsonResponse({ success: false, error: "Invalid event type." }, 400);
+        }
+        const active = await getActiveBroadcast(env, room);
+        if (!active) {
+          return jsonResponse({ success: false, error: "Broadcast is not active." }, 409);
+        }
+        await ensureBroadcastConnectionEvents(env);
+        const count = await env.TRANSLATIONS_DB.prepare(`
+          SELECT COUNT(*) AS total
+          FROM broadcast_connection_events
+          WHERE broadcast_id = ?
+        `).bind(active.id).first();
+        if (Number(count?.total || 0) >= 100) {
+          return jsonResponse({ success: true, capped: true });
+        }
+        await env.TRANSLATIONS_DB.prepare(`
+          INSERT INTO broadcast_connection_events
+            (broadcast_id, event_type, detail, created_at)
+          VALUES (?, ?, ?, ?)
+        `).bind(
+          active.id,
+          eventType,
+          String(body.detail || "").slice(0, 180),
+          Date.now()
+        ).run();
+        return jsonResponse({ success: true });
+      } catch (error) {
+        const message = String(error?.message || "");
+        const forbidden = /Clerk|authorization|authorized|account not found/i.test(message);
+        return jsonResponse({
+          success: false,
+          error: forbidden ? "Not authorized." : "Could not record connection event."
+        }, forbidden ? 403 : 500);
       }
     }
     if (request.method === "POST" && url.pathname === "/broadcast-heartbeat") {
