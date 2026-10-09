@@ -15943,6 +15943,35 @@ if (
       }
     }
 
+    // Reuse the same per-broadcast interruption records available to the customer.
+    // Fetch them in one bounded, authenticated admin query instead of an N+1 loop.
+    const connectionByBroadcastId = new Map();
+    if (visibleRows.length) {
+      await ensureBroadcastConnectionEvents(env);
+      const historyIds = visibleRows.map(item => String(item.id || ""));
+      const placeholders = historyIds.map(() => "?").join(",");
+      const eventsResult = await env.TRANSLATIONS_DB.prepare(`
+        SELECT broadcast_id, event_type, detail, created_at FROM (
+          SELECT broadcast_id, event_type, detail, created_at,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY broadcast_id ORDER BY created_at DESC
+                 ) AS event_number
+          FROM broadcast_connection_events
+          WHERE broadcast_id IN (${placeholders})
+        ) WHERE event_number <= 20
+        ORDER BY created_at DESC
+      `).bind(...historyIds).all();
+      for (const event of eventsResult.results || []) {
+        const key = String(event.broadcast_id || "");
+        if (!connectionByBroadcastId.has(key)) connectionByBroadcastId.set(key, []);
+        connectionByBroadcastId.get(key).push({
+          type: String(event.event_type || ""),
+          detail: String(event.detail || ""),
+          at: Number(event.created_at || 0)
+        });
+      }
+    }
+
     const broadcasts = [];
 
     for (
@@ -15957,8 +15986,15 @@ if (
         );
 
       if (summary) {
+        const connectionEvents =
+          connectionByBroadcastId.get(String(broadcast.id || "")) || [];
+        const connectionIssues = connectionEvents.filter(event =>
+          !["recovered", "manual_resume"].includes(event.type)
+        ).length;
         broadcasts.push({
           ...summary,
+          connectionEvents,
+          connectionIssues,
           transcriptAvailable:
             transcriptAvailableIds.has(
               String(
