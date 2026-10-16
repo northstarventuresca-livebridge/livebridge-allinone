@@ -9642,7 +9642,9 @@ Scripture rules:
           ? "Kinyarwanda (Ikinyarwanda)"
           : normalizedTargetLanguage === "ln"
             ? "Lingala (Democratic Republic of the Congo)"
-            : String(targetLanguage || "");
+            : normalizedTargetLanguage === "nya"
+              ? "Chichewa (Nyanja; Malawi)"
+              : String(targetLanguage || "");
 
     const response = await fetch(
       OPENAI_CHAT_URL,
