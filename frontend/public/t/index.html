@@ -855,6 +855,7 @@
                 <option value="sw|sw-KE">Swahili — Kiswahili</option>
                 <option value="rw|rw-RW">Kinyarwanda — Ikinyarwanda</option>
                 <option value="ln|ln-CD">Lingala (Congo) — Lingála</option>
+                <option value="nya|ny-MW">Chichewa (Nyanja) — Text Only</option>
                 <option value="zh|zh-CN">Mandarin Chinese — 中文（普通话）</option>
                 <option value="yue|yue-CN">Cantonese — 廣東話</option>
               </select>
@@ -6692,6 +6693,7 @@ return url.toString();
     {code:"sw",flag:"🇰🇪",native:"Bonyeza hapa kusikiliza kwa Kiswahili",english:"Swahili"},
     {code:"rw",flag:"🇷🇼",native:"Kanda hano wumve mu Kinyarwanda",english:"Kinyarwanda"},
     {code:"ln",flag:"🇨🇩",native:"Finá awa mpo na koyoka na Lingála",english:"Lingala (Congo)"},
+    {code:"nya",flag:"🇲🇼",native:"Dinani pano kuti muwerenge mu Chichewa",english:"Chichewa (Text only)"},
     {code:"zh",flag:"🇨🇳",native:"点击这里收听普通话",english:"Mandarin Chinese"},
     {code:"yue",flag:"🇭🇰",native:"撳呢度用廣東話收聽",english:"Cantonese"}
   ];
@@ -6716,6 +6718,7 @@ return url.toString();
     ha:"Canja harshe",
     rw:"Hindura ururimi",
     ln:"Bongola monɔkɔ",
+    nya:"Sinthani chinenero",
     zh:"更改语言",
     yue:"更改語言"
   };
@@ -6857,6 +6860,19 @@ return url.toString();
 
     if(!selected){
       return null;
+    }
+
+    // Chichewa is captions-only: Azure has no Chichewa neural voice.
+    if(selected.code === "nya"){
+      listenerAudioMuted = true;
+      const audioButton = document.getElementById("listenerAudioButton");
+      if(audioButton){
+        audioButton.disabled = true;
+        audioButton.textContent = "💬 Text only — audio unavailable";
+        audioButton.style.opacity = "0.8";
+      }
+      const voiceChoices = document.querySelector(".lb-voice-choice");
+      if(voiceChoices) voiceChoices.style.display = "none";
     }
 
     const select =
