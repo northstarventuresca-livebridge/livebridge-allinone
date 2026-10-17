@@ -856,6 +856,10 @@
                 <option value="rw|rw-RW">Kinyarwanda — Ikinyarwanda</option>
                 <option value="ln|ln-CD">Lingala (Congo) — Lingála</option>
                 <option value="nya|ny-MW">Chichewa (Nyanja) — Text Only</option>
+                <option value="lug|lg-UG">Luganda (Uganda) — Text Only</option>
+                <option value="ta|ta-IN">Tamil — தமிழ்</option>
+                <option value="hi|hi-IN">Hindi — हिन्दी</option>
+                <option value="ne|ne-NP">Nepali — नेपाली</option>
                 <option value="zh|zh-CN">Mandarin Chinese — 中文（普通话）</option>
                 <option value="yue|yue-CN">Cantonese — 廣東話</option>
               </select>
@@ -6694,6 +6698,10 @@ return url.toString();
     {code:"rw",flag:"🇷🇼",native:"Kanda hano wumve mu Kinyarwanda",english:"Kinyarwanda"},
     {code:"ln",flag:"🇨🇩",native:"Finá awa mpo na koyoka na Lingála",english:"Lingala (Congo)"},
     {code:"nya",flag:"🇲🇼",native:"Dinani pano kuti muwerenge mu Chichewa",english:"Chichewa (Text only)"},
+    {code:"lug",flag:"🇺🇬",native:"Nyiga wano okusoma mu Luganda",english:"Luganda (Text only)"},
+    {code:"ta",flag:"🇮🇳",native:"தமிழில் கேட்க இங்கே அழுத்தவும்",english:"Tamil"},
+    {code:"hi",flag:"🇮🇳",native:"हिंदी में सुनने के लिए यहाँ क्लिक करें",english:"Hindi"},
+    {code:"ne",flag:"🇳🇵",native:"नेपालीमा सुन्न यहाँ क्लिक गर्नुहोस्",english:"Nepali"},
     {code:"zh",flag:"🇨🇳",native:"点击这里收听普通话",english:"Mandarin Chinese"},
     {code:"yue",flag:"🇭🇰",native:"撳呢度用廣東話收聽",english:"Cantonese"}
   ];
@@ -6719,6 +6727,10 @@ return url.toString();
     rw:"Hindura ururimi",
     ln:"Bongola monɔkɔ",
     nya:"Sinthani chinenero",
+    lug:"Kyusa olulimi",
+    ta:"மொழியை மாற்று",
+    hi:"भाषा बदलें",
+    ne:"भाषा परिवर्तन गर्नुहोस्",
     zh:"更改语言",
     yue:"更改語言"
   };
@@ -6862,8 +6874,8 @@ return url.toString();
       return null;
     }
 
-    // Chichewa is captions-only: Azure has no Chichewa neural voice.
-    if(selected.code === "nya"){
+    // Chichewa and Luganda are captions-only: no supported Azure neural voices.
+    if(selected.code === "nya" || selected.code === "lug"){
       listenerAudioMuted = true;
       const audioButton = document.getElementById("listenerAudioButton");
       if(audioButton){
