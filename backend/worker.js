@@ -4947,6 +4947,40 @@ async function ensureBroadcastConnectionEvents(env) {
 }
 __name(ensureBroadcastConnectionEvents, "ensureBroadcastConnectionEvents");
 
+// Additive, nullable, anonymous per-listener diagnostics. No captions/audio stored.
+let listenerTimingSchemaPromise = null;
+async function ensureListenerTimingSchema(env) {
+  if (!listenerTimingSchemaPromise) {
+    listenerTimingSchemaPromise = (async () => {
+      const fields = [
+        "source_to_text_ms INTEGER",
+        "source_to_caption_ms INTEGER",
+        "audio_prepare_ms INTEGER",
+        "audio_playback_ms INTEGER",
+        "queue_oldest_ms INTEGER",
+        "tts_speech_rate REAL",
+        "audio_failure_count INTEGER"
+      ];
+      for (const field of fields) {
+        try {
+          await env.TRANSLATIONS_DB.prepare(
+            "ALTER TABLE listener_sessions ADD COLUMN " + field
+          ).run();
+        } catch (error) {
+          if (!String(error?.message || error).toLowerCase().includes("duplicate column")) {
+            throw error;
+          }
+        }
+      }
+    })().catch(error => {
+      listenerTimingSchemaPromise = null;
+      throw error;
+    });
+  }
+  return listenerTimingSchemaPromise;
+}
+__name(ensureListenerTimingSchema, "ensureListenerTimingSchema");
+
 async function ensureAnalyticsTables(env) {
   await env.TRANSLATIONS_DB.prepare(`
     CREATE TABLE IF NOT EXISTS broadcast_sessions (
@@ -14120,6 +14154,85 @@ if (
 
 /*
 =======================================================
+ADMIN ONLY - LIVE LISTENER TRANSLATION DIAGNOSTICS
+Anonymous samples; no listener names, transcripts or identifiers returned.
+=======================================================
+*/
+if (
+  request.method === "GET" &&
+  url.pathname === "/admin/translation-diagnostics"
+) {
+  try {
+    await verifyAdminRequest(request, env);
+    await ensureAnalyticsTables(env);
+    await ensureListenerTimingSchema(env);
+
+    const cutoff = Date.now() - 45000;
+    const result = await env.TRANSLATIONS_DB.prepare(`
+      SELECT
+        ls.room,
+        ls.language,
+        ls.queue_depth,
+        ls.audio_muted,
+        ls.last_seen,
+        ls.source_to_text_ms,
+        ls.source_to_caption_ms,
+        ls.audio_prepare_ms,
+        ls.audio_playback_ms,
+        ls.queue_oldest_ms,
+        ls.tts_speech_rate,
+        ls.audio_failure_count
+      FROM listener_sessions ls
+      INNER JOIN broadcast_sessions bs
+        ON bs.id = ls.broadcast_id
+      INNER JOIN active_broadcasts ab
+        ON ab.room = bs.room
+        AND ab.started_at = bs.started_at
+      WHERE ls.ended_at IS NULL
+        AND bs.ended_at IS NULL
+        AND ls.last_seen >= ?
+        AND ab.last_seen >= ?
+      ORDER BY ls.queue_depth DESC, ls.last_seen DESC
+      LIMIT 100
+    `).bind(cutoff, Date.now() - 90000).all();
+
+    const samples = (result.results || []).map(item => ({
+      room: String(item.room || ""),
+      language: String(item.language || ""),
+      queueDepth: Math.max(0, Number(item.queue_depth || 0)),
+      audioMuted: Number(item.audio_muted || 0) === 1,
+      lastSeen: Number(item.last_seen || 0),
+      sourceToTextMs: item.source_to_text_ms == null ? null : Number(item.source_to_text_ms),
+      sourceToCaptionMs: item.source_to_caption_ms == null ? null : Number(item.source_to_caption_ms),
+      audioPrepareMs: item.audio_prepare_ms == null ? null : Number(item.audio_prepare_ms),
+      audioPlaybackMs: item.audio_playback_ms == null ? null : Number(item.audio_playback_ms),
+      queueOldestMs: item.queue_oldest_ms == null ? null : Number(item.queue_oldest_ms),
+      speechRate: item.tts_speech_rate == null ? null : Number(item.tts_speech_rate),
+      audioFailures: Number(item.audio_failure_count || 0)
+    }));
+    const audioSamples = samples.filter(item => !item.audioMuted);
+    return jsonResponse({
+      success: true,
+      sampledAt: Date.now(),
+      activeListeners: samples.length,
+      audioListeners: audioSamples.length,
+      delayedListeners: audioSamples.filter(item => item.queueDepth >= 4).length,
+      criticalListeners: audioSamples.filter(item => item.queueDepth >= 11).length,
+      highestQueue: audioSamples.reduce((max, item) => Math.max(max, item.queueDepth), 0),
+      limited: samples.length === 100,
+      listeners: samples
+    });
+  } catch (error) {
+    return jsonResponse({
+      success: false,
+      error: "Unable to load admin diagnostics."
+    }, 403);
+  }
+}
+
+
+/*
+=======================================================
 ADMIN - LIST ALL ORGANIZATIONS
 =======================================================
 */
@@ -21924,10 +22037,21 @@ if (organization) {
         const room = normalizeRoom(body.room);
         const listenerId = String(body.listenerId || "").trim();
         const queueDepth =
-  Math.max(0, Number(body.queueDepth || 0));
+  Math.max(0, Math.min(5000, Number(body.queueDepth || 0)));
 
 const audioMuted =
   body.audioMuted === true;
+
+const timingInt = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(Math.max(0, Math.min(3600000, number))) : null;
+};
+const timingRate = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(3, number)) : null;
+};
         if (!room || !listenerId) {
           return jsonResponse(
             {
@@ -21952,18 +22076,33 @@ const audioMuted =
           "listener_heartbeats"
         );
 
+        await ensureListenerTimingSchema(env);
         const now = Date.now();
         const sessionId = `${broadcast.id}:${listenerId}`;
         await env.TRANSLATIONS_DB.prepare(`
   UPDATE listener_sessions
   SET last_seen = ?,
       queue_depth = ?,
-      audio_muted = ?
+      audio_muted = ?,
+      source_to_text_ms = ?,
+      source_to_caption_ms = ?,
+      audio_prepare_ms = ?,
+      audio_playback_ms = ?,
+      queue_oldest_ms = ?,
+      tts_speech_rate = ?,
+      audio_failure_count = ?
   WHERE id = ?
 `).bind(
   now,
   queueDepth,
   audioMuted ? 1 : 0,
+  timingInt(body.sourceToTextMs),
+  timingInt(body.sourceToCaptionMs),
+  timingInt(body.audioPrepareMs),
+  timingInt(body.audioPlaybackMs),
+  timingInt(body.queueOldestMs),
+  timingRate(body.speechRate),
+  timingInt(body.audioFailures),
   sessionId
 ).run();
         return jsonResponse({
