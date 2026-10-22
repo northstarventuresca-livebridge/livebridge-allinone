@@ -2173,6 +2173,15 @@
   let listenerDisplayQueue = [];
 let listenerQueueRunning = false;
 
+// Read-only per-listener timing samples for the private admin dashboard.
+// These values never change the timing or ordering of caption/audio playback.
+let lbDiagSourceToTextMs = null;
+let lbDiagSourceToCaptionMs = null;
+let lbDiagAudioPrepareMs = null;
+let lbDiagAudioPlaybackMs = null;
+let lbDiagSpeechRate = null;
+let lbDiagAudioFailures = 0;
+
 /*
   v1.0.1 queue pipeline:
   Azure audio preparation is exposed to the live message handler so
@@ -3688,8 +3697,18 @@ if (listenerReconnectTimer) {
                   data.sourceElapsedMs ||
                   0
                 )
-              )
+              ),
+            receivedAt: Date.now()
           };
+
+          if (queueItem.broadcastStartedAt > 0 &&
+              queueItem.sourceElapsedMs > 0) {
+            lbDiagSourceToTextMs = Math.min(
+              3600000,
+              Math.max(0, Date.now() -
+                (queueItem.broadcastStartedAt + queueItem.sourceElapsedMs))
+            );
+          }
 
           /*
             Queue the translation immediately. Audio is prepared with
@@ -4436,7 +4455,19 @@ resolve(email);
     (listenerQueueRunning ? 1 : 0),
 
   audioMuted:
-    listenerAudioMuted
+    listenerAudioMuted,
+
+  // Timings are diagnostic only; do not include transcripts or listener identity.
+  sourceToTextMs: lbDiagSourceToTextMs,
+  sourceToCaptionMs: lbDiagSourceToCaptionMs,
+  audioPrepareMs: lbDiagAudioPrepareMs,
+  audioPlaybackMs: lbDiagAudioPlaybackMs,
+  queueOldestMs: listenerDisplayQueue.length &&
+    listenerDisplayQueue[0]?.receivedAt
+      ? Math.max(0, Date.now() - listenerDisplayQueue[0].receivedAt)
+      : 0,
+  speechRate: lbDiagSpeechRate,
+  audioFailures: lbDiagAudioFailures
 })
         }
       );
@@ -5165,6 +5196,7 @@ resolve(email);
     ttsLang
   ) {
 
+    const lbDiagPrepareStartedAt = Date.now();
     const gender =
       getSelectedGender();
 
@@ -5246,6 +5278,7 @@ resolve(email);
               catchUpBoost
           ) * 100
         ) / 100;
+      lbDiagSpeechRate = effectiveSpeechRate;
 
       const response =
         await fetch(
@@ -5399,6 +5432,7 @@ const cacheStatus =
 
       } catch (error) {}
 
+      lbDiagAudioPrepareMs = Date.now() - lbDiagPrepareStartedAt;
       return {
         type: "azure",
         text,
@@ -5408,6 +5442,8 @@ const cacheStatus =
       };
 
     } catch (error) {
+      lbDiagAudioPrepareMs = Date.now() - lbDiagPrepareStartedAt;
+      lbDiagAudioFailures += 1;
 
       console.error(
         "Azure listener prepare failed:",
@@ -5917,6 +5953,16 @@ const cacheStatus =
               translatedText;
           }
 
+          if (typeof queueItem !== "string" &&
+              queueItem?.broadcastStartedAt > 0 &&
+              queueItem?.sourceElapsedMs > 0) {
+            lbDiagSourceToCaptionMs = Math.min(
+              3600000,
+              Math.max(0, Date.now() -
+                (queueItem.broadcastStartedAt + queueItem.sourceElapsedMs))
+            );
+          }
+
           output.appendChild(
             line
           );
@@ -5934,9 +5980,11 @@ const cacheStatus =
             prepared
           ) {
 
+            const lbDiagPlaybackStartedAt = Date.now();
             await playPreparedAudio(
               prepared
             );
+            lbDiagAudioPlaybackMs = Date.now() - lbDiagPlaybackStartedAt;
           }
         }
 

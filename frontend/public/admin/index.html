@@ -966,6 +966,26 @@ body{
         </div>
 
 
+        <div class="lb-card" id="lbAdminTimingCard" style="margin-bottom:18px;">
+          <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+            <div>
+              <div class="lb-card-title">Live Translation Diagnostics <span style="font-size:10px;color:#29d783;">• Admin only</span></div>
+              <div class="lb-muted" style="line-height:1.5;margin-top:5px;">
+                Private monitoring of individual audio queues and translation delays. Refreshes every 15 seconds.
+                No listener names or transcripts are shown.
+              </div>
+            </div>
+            <button id="lbAdminTimingRefresh" type="button" class="lb-button secondary" style="padding:8px 12px;">↻ Refresh</button>
+          </div>
+          <div id="lbAdminTimingSummary" class="lb-muted" style="margin-top:14px;">Checking live listener health...</div>
+          <div id="lbAdminTimingRows" style="overflow-x:auto;margin-top:12px;"></div>
+          <div class="lb-muted" style="font-size:10px;margin-top:10px;line-height:1.5;">
+            Source → text measures speech-to-received translation; source → caption measures speech-to-visible caption.
+            Audio prepare includes speech generation and media readiness. Audio playback is the previous spoken clip.
+            Samples arrive from listener devices about every 30 seconds. Missing values appear as —.
+          </div>
+        </div>
+
         <div class="lb-card lb-table-card">
 
           <div class="lb-table-header">
@@ -11717,5 +11737,100 @@ Does NOT change admin data or Worker logic.
   setInterval(syncLiveDiagnosticButtons, 5000);
 })();
 </script>
+<script>
+/* Admin-only readout: no changes to broadcaster or listener presentation. */
+(function installLiveTranslationDiagnostics() {
+  const languages = {
+    en:"English",fr:"French",es:"Spanish",de:"German",pt:"Portuguese",
+    it:"Italian",pl:"Polish",ru:"Russian",uk:"Ukrainian",uz:"Uzbek",
+    nl:"Dutch",cs:"Czech",fil:"Filipino",he:"Hebrew",yo:"Yoruba",
+    ig:"Igbo",ha:"Hausa",sw:"Swahili",rw:"Kinyarwanda",
+    ln:"Lingala",nya:"Chichewa",lug:"Luganda",ta:"Tamil",
+    hi:"Hindi",ne:"Nepali",zh:"Mandarin",yue:"Cantonese"
+  };
+  const safe = value => String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  })[char]);
+  const duration = value => value == null || !Number.isFinite(Number(value))
+    ? "—" : (Number(value) >= 1000
+      ? (Number(value) / 1000).toFixed(1) + "s"
+      : Math.round(Number(value)) + "ms");
+  const number = value => value == null || !Number.isFinite(Number(value))
+    ? "—" : String(Math.round(Number(value)));
+  let updating = false;
+
+  async function refresh() {
+    const summary = document.getElementById("lbAdminTimingSummary");
+    const table = document.getElementById("lbAdminTimingRows");
+    const main = document.getElementById("clientListView");
+    const shell = document.getElementById("adminShell");
+    if (!summary || !table || updating ||
+        !main || main.style.display === "none" ||
+        !shell || shell.style.display === "none" ||
+        document.hidden || typeof Clerk === "undefined") return;
+
+    updating = true;
+    try {
+      const response = await adminFetch("/admin/translation-diagnostics");
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error("Diagnostics unavailable");
+      const items = Array.isArray(data.listeners) ? data.listeners : [];
+      summary.textContent =
+        data.activeListeners + " active listener" + (data.activeListeners === 1 ? "" : "s") +
+        " • " + data.audioListeners + " listening to audio" +
+        " • " + data.delayedListeners + " delayed (queue 4+)" +
+        " • " + data.criticalListeners + " critical (queue 11+)" +
+        " • largest queue " + data.highestQueue +
+        (data.limited ? " • showing first 100 listeners" : "");
+      if (!items.length) {
+        table.innerHTML = '<div class="lb-empty">No active listener samples. Start a broadcast and connect a listener to see diagnostics.</div>';
+        return;
+      }
+      table.innerHTML =
+        '<table style="width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap;">' +
+        '<thead><tr style="text-align:left;color:#9fb5c9;">' +
+        ["Room","Listener","Language","Audio queue","Source → text","Source → caption","Audio prepare","Audio playback","Oldest waiting","Speech rate","Audio errors","Sample age"]
+          .map(label => '<th style="padding:9px 10px;border-bottom:1px solid #2b435b;">' + label + '</th>').join("") +
+        '</tr></thead><tbody>' +
+        items.map((item,index) => {
+          const queue = Number(item.queueDepth || 0);
+          const style = item.audioMuted ? "#a7b6c6" :
+            queue >= 11 ? "#ff9b9b" : queue >= 4 ? "#f5c46e" : "#65e5aa";
+          const cells = [
+            item.room || "—",
+            "#" + (index + 1),
+            languages[item.language] || String(item.language || "—").toUpperCase(),
+            item.audioMuted ? "Muted" : String(queue) + " waiting",
+            duration(item.sourceToTextMs),
+            duration(item.sourceToCaptionMs),
+            duration(item.audioPrepareMs),
+            duration(item.audioPlaybackMs),
+            duration(item.queueOldestMs),
+            item.speechRate == null ? "—" : Number(item.speechRate).toFixed(2) + "×",
+            number(item.audioFailures),
+            duration(Math.max(0, Date.now() - Number(item.lastSeen || Date.now())))
+          ];
+          return '<tr>' + cells.map((value,col) =>
+            '<td style="padding:10px;border-bottom:1px solid #203247;' +
+            (col === 3 ? "font-weight:800;color:" + style + ";" : "") +
+            '">' + safe(value) + '</td>'
+          ).join("") + '</tr>';
+        }).join("") + '</tbody></table>';
+    } catch (error) {
+      summary.textContent = "Live diagnostics unavailable. Check that the test backend is running and your admin session is active.";
+      table.textContent = "";
+    } finally {
+      updating = false;
+    }
+  }
+
+  window.addEventListener("load", () => {
+    document.getElementById("lbAdminTimingRefresh")?.addEventListener("click", refresh);
+    setTimeout(refresh, 2500);
+    setInterval(refresh, 15000);
+  });
+})();
+</script>
+
 </body>
 </html>
