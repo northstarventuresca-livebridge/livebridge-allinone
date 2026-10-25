@@ -1530,12 +1530,11 @@ async function getSignedInLiveBridgeUser() {
 
   const session =
     sessions.find(item =>
-      item.id === lastActiveId
+      item.id === lastActiveId && item.status === "active"
     ) ||
     sessions.find(item =>
       item.status === "active"
-    ) ||
-    sessions[0];
+    ) || null;
 
   if (!session) {
     return null;
@@ -1553,58 +1552,68 @@ async function getSignedInLiveBridgeUser() {
 }
 
 
+let broadcasterSessionInvalidated = false;
+
 async function getBroadcasterSessionToken() {
-
-  const currentUserId =
-    Clerk.user?.id || "";
-
-  const sessions =
-    Clerk.client?.sessions ||
-    Clerk.client?.signedInSessions ||
-    [];
-
-  let session =
-    Clerk.session || null;
-
-  if (
-    currentUserId &&
-    session?.user?.id !== currentUserId
-  ) {
-    session =
-      sessions.find(item =>
-        item?.user?.id === currentUserId
-      ) || null;
-  }
-
-  if (!session && currentUserId) {
-    session =
-      sessions.find(item =>
-        item?.user?.id === currentUserId
-      ) || null;
-  }
-
-  if (!session) {
-    session =
-      sessions.find(item =>
-        item.status === "active"
-      ) ||
-      sessions[0] ||
-      null;
-  }
-
-  if (!session) {
+  // Only currently active Clerk sessions may transmit, not cached sessions.
+  if (broadcasterSessionInvalidated ||
+      !window.Clerk || Clerk.isSignedIn !== true ||
+      !Clerk.user || !Clerk.session ||
+      Clerk.session.status !== "active") {
     return null;
   }
+  try {
+    return (await Clerk.session.getToken()) || null;
+  } catch (error) {
+    console.warn("LiveBridge session token refresh failed:", error);
+    return null;
+  }
+}
 
-  if (
-    Clerk.session?.id !== session.id
-  ) {
-    await Clerk.setActive({
-      session: session.id
-    });
+function isBroadcasterAuthFailure(response, data) {
+  return response.status === 401 || response.status === 403 ||
+    /^(UNAUTHORIZED|AUTH_REQUIRED|SESSION_EXPIRED|INVALID_TOKEN|TOKEN_EXPIRED)$/
+      .test(String(data?.code || "").toUpperCase());
+}
+
+async function handleBroadcasterSessionExpired() {
+  if (broadcasterSessionInvalidated) return;
+  broadcasterSessionInvalidated = true;
+  broadcasting = false;
+
+  stopBroadcastTimer();
+  stopBroadcastHeartbeat();
+  stopRoomStatusPolling();
+  stopAudioSafetyMonitoring();
+  stopBroadcastRecorderCycle();
+  try {
+    await stopRealtimeTranscription(false);
+  } catch (error) {
+    console.warn("Stopping expired realtime transcription failed:", error);
+  }
+  try {
+    if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+  } catch (error) {
+    console.warn("Stopping expired microphone failed:", error);
   }
 
-  return await session.getToken();
+  mediaStream = null;
+  roomReserved = false;
+  lastBroadcastAuthToken = null;
+  document.getElementById("broadcastDot")?.classList.remove("live");
+  const status = document.getElementById("broadcastStatus");
+  if (status) status.textContent = "SESSION EXPIRED — NOT BROADCASTING";
+  const button = document.getElementById("broadcastButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sign In Required";
+    button.classList.remove("lb-btn-danger");
+    button.classList.add("lb-btn-primary");
+  }
+  document.getElementById("inputLanguage")?.removeAttribute("disabled");
+
+  alert("Your LiveBridge login has expired. This broadcast is not reaching listeners. Please sign in again before broadcasting.");
+  window.location.href = "/account/?returnTo=" + encodeURIComponent("/sunday/");
 }
 
 
@@ -3697,8 +3706,9 @@ async function checkStartingBroadcastTime(){
     const token =
       await getBroadcasterSessionToken();
 
-    if(!token){
-      return true;
+    if (!token) {
+      await handleBroadcasterSessionExpired();
+      return false;
     }
 
 
@@ -3719,12 +3729,13 @@ async function checkStartingBroadcastTime(){
       await response.json();
 
 
-    if(
-      !response.ok ||
-      !data.success ||
-      !data.account
-    ){
-      return true;
+    if (!response.ok || !data.success || !data.account) {
+      if (isBroadcasterAuthFailure(response, data)) {
+        await handleBroadcasterSessionExpired();
+      } else {
+        alert("LiveBridge could not verify your account. Please retry before broadcasting.");
+      }
+      return false;
     }
 
 
@@ -3817,7 +3828,8 @@ async function checkStartingBroadcastTime(){
       error
     );
 
-    return true;
+    alert("LiveBridge could not confirm your account or connection. Please retry before broadcasting.");
+    return false;
   }
 }
 
@@ -4044,9 +4056,8 @@ async function toggleBroadcast() {
         await getBroadcasterSessionToken();
 
       if (!startToken) {
-        throw new Error(
-          "Your LiveBridge session could not be verified."
-        );
+        await handleBroadcasterSessionExpired();
+        return;
       }
 
       lastBroadcastAuthToken =
@@ -4081,6 +4092,11 @@ async function toggleBroadcast() {
   !roomResponse.ok ||
   !roomData.success
 ) {
+  if (isBroadcasterAuthFailure(roomResponse, roomData)) {
+    await handleBroadcasterSessionExpired();
+    return;
+  }
+
 
   const errorMessage =
     roomData.error ||
@@ -4238,6 +4254,10 @@ async function toggleBroadcast() {
       startAudioSafetyMonitoring();
 
       await startRealtimeTranscription();
+
+      if (broadcasterSessionInvalidated || !broadcasting) {
+        return;
+      }
 
       startBroadcastTimer();
 
@@ -4415,6 +4435,7 @@ function startBroadcastHeartbeat() {
             await getBroadcasterSessionToken();
 
           if (!heartbeatToken) {
+            await handleBroadcasterSessionExpired();
             return;
           }
 
@@ -4452,6 +4473,11 @@ function startBroadcastHeartbeat() {
             !response.ok ||
             !data.success
           ){
+
+            if (isBroadcasterAuthFailure(response, data)) {
+              await handleBroadcasterSessionExpired();
+              return;
+            }
 
             if(
               data.code ===
@@ -5675,9 +5701,7 @@ async function deliverRealtimeTranscript(
   lastTranscriptionUploadAt =
     Date.now();
 
-  showTranscription(
-    finalText
-  );
+  if (broadcasterSessionInvalidated) return;
 
   broadcastMessageId++;
 
@@ -5696,6 +5720,7 @@ async function deliverRealtimeTranscript(
 
   if (!sourceToken) {
 
+    await handleBroadcasterSessionExpired();
     console.error(
       "LiveBridge session could not be verified for realtime shared feed delivery."
     );
@@ -5750,6 +5775,11 @@ async function deliverRealtimeTranscript(
     !feedData.success
   ) {
 
+    if (isBroadcasterAuthFailure(feedResponse, feedData)) {
+      await handleBroadcasterSessionExpired();
+      return;
+    }
+
     console.error(
       "Realtime shared feed delivery failed:",
       feedData
@@ -5757,6 +5787,9 @@ async function deliverRealtimeTranscript(
 
     return;
   }
+
+  if (broadcasterSessionInvalidated) return;
+  showTranscription(finalText);
 
   const listeners =
     Number(
@@ -6865,6 +6898,8 @@ async function sendAudioChunk(
   audioBlob
 ) {
 
+  if (broadcasterSessionInvalidated) return;
+
   if (
     window.__liveBridgeMicMuted ===
       true
@@ -7020,9 +7055,7 @@ async function sendAudioChunk(
       return;
     }
 
-    showTranscription(
-      data.text
-    );
+    if (broadcasterSessionInvalidated) return;
 
     broadcastMessageId++;
 
@@ -7035,6 +7068,7 @@ async function sendAudioChunk(
       await getBroadcasterSessionToken();
 
     if (!sourceToken) {
+      await handleBroadcasterSessionExpired();
       console.error(
         "LiveBridge session could not be verified for shared feed delivery."
       );
@@ -7088,6 +7122,11 @@ async function sendAudioChunk(
       !feedData.success
     ) {
 
+      if (isBroadcasterAuthFailure(feedResponse, feedData)) {
+        await handleBroadcasterSessionExpired();
+        return;
+      }
+
       console.error(
         "Shared feed delivery failed:",
         feedData
@@ -7095,6 +7134,9 @@ async function sendAudioChunk(
 
       return;
     }
+
+    if (broadcasterSessionInvalidated) return;
+    showTranscription(data.text);
 
     const listeners =
       Number(
