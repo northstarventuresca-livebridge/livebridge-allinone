@@ -857,7 +857,7 @@ body{
     <div class="lb-login-card">
       <div id="clerk-auth"></div>
       <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,.15);padding-top:16px;">
-        <button type="button" class="lb-secondary-button lb-wide" id="passwordLoginToggle">Have an approved password? Sign in</button>
+        <button type="button" class="lb-secondary-button lb-wide" id="passwordLoginToggle">Sign in with password instead</button>
         <form id="passwordLoginForm" style="display:none;margin-top:15px;">
           <label style="display:block;margin-bottom:10px;">Email
             <input type="email" id="passwordLoginEmail" autocomplete="username" required
@@ -2172,7 +2172,7 @@ body{
       <div class="lb-muted">
         Manage your password, sign-in methods and account security.
       </div>
-      <div id="passwordLoginEligibility" class="lb-muted" style="margin-top:12px;"></div>
+      <div class="lb-muted" style="margin-top:12px;">Optional: add a password in Manage Password & Security. You can continue using an email verification code instead.</div>
 
       <button
         class="lb-secondary-button lb-wide"
@@ -5293,8 +5293,6 @@ async function renderDashboard(
     )
   );
 
-  updatePasswordLoginEligibility();
-
   updateSharing(
     account
   );
@@ -5321,25 +5319,6 @@ async function renderDashboard(
   );
 }
 
-async function updatePasswordLoginEligibility() {
-  const el = document.getElementById("passwordLoginEligibility");
-  if (!el) return;
-  try {
-    const token = await getLiveBridgeSessionToken();
-    if (!token) return;
-    const response = await fetch(LB_WORKER + "/account/password-login-policy", {
-      headers: {Authorization:"Bearer " + token}
-    });
-    if (!response.ok) throw new Error("Unable to verify account settings.");
-    const policy = await response.json();
-    el.textContent = policy.enabled
-      ? "Password login is enabled for your account. Use Manage Password & Security to add a password, then use the password option next time you sign in."
-      : "Email verification remains your standard sign-in method.";
-  } catch {
-    el.textContent = "Password login settings are temporarily unavailable.";
-  }
-}
-
 function setupPasswordLogin() {
   const toggle = document.getElementById("passwordLoginToggle");
   const form = document.getElementById("passwordLoginForm");
@@ -5364,16 +5343,6 @@ function setupPasswordLogin() {
         throw new Error("Additional verification required. Please use the standard email sign-in.");
       }
       await Clerk.setActive({session:result.createdSessionId});
-      const token = await Clerk.session.getToken();
-      const response = await fetch(
-        "https://livebridge.northstarventures-ca.workers.dev/account/password-login-policy",
-        {headers:{Authorization:"Bearer " + token}}
-      );
-      const policy = await response.json();
-      if (!response.ok || policy.enabled !== true) {
-        await Clerk.signOut();
-        throw new Error("Password-only access has not been enabled for this account. Use email verification.");
-      }
       const destination = new URLSearchParams(location.search).get("returnTo") === "/admin" ? "/admin" : "/account";
       window.location.replace(destination);
     } catch(error) {
