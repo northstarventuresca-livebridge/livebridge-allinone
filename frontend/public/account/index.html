@@ -856,6 +856,21 @@ body{
 
     <div class="lb-login-card">
       <div id="clerk-auth"></div>
+      <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,.15);padding-top:16px;">
+        <button type="button" class="lb-secondary-button lb-wide" id="passwordLoginToggle">Sign in with password instead</button>
+        <form id="passwordLoginForm" style="display:none;margin-top:15px;">
+          <label style="display:block;margin-bottom:10px;">Email
+            <input type="email" id="passwordLoginEmail" autocomplete="username" required
+              style="display:block;width:100%;padding:12px;margin-top:6px;border-radius:8px;">
+          </label>
+          <label style="display:block;margin-bottom:10px;">Password
+            <input type="password" id="passwordLoginPassword" autocomplete="current-password" required
+              style="display:block;width:100%;padding:12px;margin-top:6px;border-radius:8px;">
+          </label>
+          <button type="submit" class="lb-secondary-button lb-wide" id="passwordLoginSubmit">Sign in with password</button>
+          <div id="passwordLoginError" role="alert" style="color:#ffb5b5;margin-top:10px;"></div>
+        </form>
+      </div>
     </div>
 
   </div>
@@ -2157,6 +2172,7 @@ body{
       <div class="lb-muted">
         Manage your password, sign-in methods and account security.
       </div>
+      <div class="lb-muted" style="margin-top:12px;">Optional: add a password in Manage Password & Security. You can continue using an email verification code instead.</div>
 
       <button
         class="lb-secondary-button lb-wide"
@@ -5303,6 +5319,41 @@ async function renderDashboard(
   );
 }
 
+function setupPasswordLogin() {
+  const toggle = document.getElementById("passwordLoginToggle");
+  const form = document.getElementById("passwordLoginForm");
+  if (!toggle || !form || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
+  toggle.addEventListener("click", () => {
+    form.style.display = form.style.display === "none" ? "block" : "none";
+  });
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const submit = document.getElementById("passwordLoginSubmit");
+    const errorBox = document.getElementById("passwordLoginError");
+    submit.disabled = true;
+    errorBox.textContent = "";
+    try {
+      const result = await Clerk.client.signIn.create({
+        strategy:"password",
+        identifier:document.getElementById("passwordLoginEmail").value.trim(),
+        password:document.getElementById("passwordLoginPassword").value
+      });
+      if (result.status !== "complete" || !result.createdSessionId) {
+        throw new Error("Additional verification required. Please use the standard email sign-in.");
+      }
+      await Clerk.setActive({session:result.createdSessionId});
+      const destination = new URLSearchParams(location.search).get("returnTo") === "/admin" ? "/admin" : "/account";
+      window.location.replace(destination);
+    } catch(error) {
+      errorBox.textContent = error?.errors?.[0]?.longMessage || error.message || "Password sign-in failed.";
+    } finally {
+      submit.disabled = false;
+      document.getElementById("passwordLoginPassword").value = "";
+    }
+  });
+}
+
 function showLogin(){
 
   document.getElementById(
@@ -5332,6 +5383,8 @@ function showLogin(){
     "/admin"
       ? "/admin"
       : "/account";
+
+  setupPasswordLogin();
 
   Clerk.mountSignIn(
     document.getElementById(
