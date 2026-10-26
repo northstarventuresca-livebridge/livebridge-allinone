@@ -17668,6 +17668,11 @@ if (
               row.feature_overrides_json
             ).livebridgeAnywherePreview === true,
 
+          passwordLoginEnabled:
+            parseFeatureOverrides(
+              row.feature_overrides_json
+            ).passwordLoginEnabled === true,
+
           adminRole:
             row.admin_role || ""
         }));
@@ -18003,6 +18008,42 @@ if (
   }
 }
 
+
+/*
+=======================================================
+ADMIN - PER-ACCOUNT PASSWORD LOGIN PREFERENCE
+This saves eligibility only. Clerk still owns sign-in
+and password enrollment; no authentication is bypassed.
+=======================================================
+*/
+if (
+  request.method === "POST" &&
+  url.pathname === "/admin/password-login-access"
+) {
+  try {
+    await verifyAdminRequest(request, env);
+    const body = await request.json();
+    const clerkUserId = String(body.clerkUserId || "").trim();
+    const enabled = body.enabled === true;
+    if (!clerkUserId) {
+      return jsonResponse({success:false,error:"Clerk user ID is required."},400);
+    }
+    const organization = await env.TRANSLATIONS_DB.prepare(
+      "SELECT feature_overrides_json FROM organizations WHERE clerk_user_id = ? LIMIT 1"
+    ).bind(clerkUserId).first();
+    if (!organization) {
+      return jsonResponse({success:false,error:"Customer account not found."},404);
+    }
+    const overrides = parseFeatureOverrides(organization.feature_overrides_json);
+    overrides.passwordLoginEnabled = enabled;
+    await env.TRANSLATIONS_DB.prepare(
+      "UPDATE organizations SET feature_overrides_json = ?, updated_at = ? WHERE clerk_user_id = ?"
+    ).bind(JSON.stringify(overrides), Date.now(), clerkUserId).run();
+    return jsonResponse({success:true,clerkUserId,enabled});
+  } catch (error) {
+    return jsonResponse({success:false,error:error.message || "Unable to update password login preference."},403);
+  }
+}
 
 /*
 =======================================================
