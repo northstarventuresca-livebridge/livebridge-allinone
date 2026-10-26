@@ -2172,6 +2172,7 @@ body{
       <div class="lb-muted">
         Manage your password, sign-in methods and account security.
       </div>
+      <div id="passwordLoginEligibility" class="lb-muted" style="margin-top:12px;"></div>
 
       <button
         class="lb-secondary-button lb-wide"
@@ -5292,6 +5293,8 @@ async function renderDashboard(
     )
   );
 
+  updatePasswordLoginEligibility();
+
   updateSharing(
     account
   );
@@ -5316,6 +5319,25 @@ async function renderDashboard(
   loadBroadcastHistory(
     account
   );
+}
+
+async function updatePasswordLoginEligibility() {
+  const el = document.getElementById("passwordLoginEligibility");
+  if (!el) return;
+  try {
+    const token = await getLiveBridgeSessionToken();
+    if (!token) return;
+    const response = await fetch(LB_WORKER + "/account/password-login-policy", {
+      headers: {Authorization:"Bearer " + token}
+    });
+    if (!response.ok) throw new Error("Unable to verify account settings.");
+    const policy = await response.json();
+    el.textContent = policy.enabled
+      ? "Password login is enabled for your account. Use Manage Password & Security to add a password, then use the password option next time you sign in."
+      : "Email verification remains your standard sign-in method.";
+  } catch {
+    el.textContent = "Password login settings are temporarily unavailable.";
+  }
 }
 
 function setupPasswordLogin() {
