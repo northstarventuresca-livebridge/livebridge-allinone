@@ -3959,7 +3959,8 @@ const LIVEBRIDGE_FEATURE_OVERRIDE_KEYS = [
   "marketingCampaigns",
   "organizationStatsApi",
   "organizationStatsApiDisabled",
-  "livebridgeAnywherePreview"
+  "livebridgeAnywherePreview",
+  "passwordLoginEnabled"
 ];
 
 
