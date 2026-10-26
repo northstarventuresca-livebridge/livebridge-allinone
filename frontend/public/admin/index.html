@@ -2851,9 +2851,6 @@ function renderAdminCandidates(list){
             <div class="lb-admin-access-status ${item.isAdmin ? "on" : "off"}">
               ${item.isAdmin ? "✓ Administrator" : "Customer Only"}
             </div>
-            <div class="lb-admin-access-status ${item.passwordLoginEnabled ? "on" : "off"}" style="margin-top:6px;">
-              ${item.passwordLoginEnabled ? "✓ Password Login Selected" : "Email Code Default"}
-            </div>
             <div class="lb-admin-access-status ${item.lbaPreviewAccess ? "on" : "off"}" style="margin-top:6px;">
               ${item.lbaPreviewAccess ? "✓ LBA Preview" : "LBA Preview Off"}
             </div>
@@ -2878,15 +2875,6 @@ function renderAdminCandidates(list){
               )"
             >
               ${item.lbaPreviewAccess ? "Remove LBA" : "Give LBA Access"}
-            </button>
-            <button
-              class="lb-button ${item.passwordLoginEnabled ? "secondary" : "green"}"
-              onclick="setPasswordLoginAccess(
-                '${escapeHtml(item.clerkUserId)}',
-                ${item.passwordLoginEnabled ? "false" : "true"}
-              )"
-            >
-              ${item.passwordLoginEnabled ? "Disable Password Preference" : "Enable Password Preference"}
             </button>
           </div>
 
@@ -2955,26 +2943,6 @@ async function setAdministratorAccess(
       error.message ||
       "Unable to update administrator access."
     );
-  }
-}
-
-
-async function setPasswordLoginAccess(clerkUserId, enabled) {
-  if (!confirm(
-    (enabled ? "Select password login" : "Restore email-code default") +
-    " for this account? This saves an account preference; the customer must also set up a password in Clerk."
-  )) return;
-  try {
-    const response = await adminFetch("/admin/password-login-access",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({clerkUserId,enabled})
-    });
-    const data = await response.json();
-    if(!response.ok) throw new Error(data.error || "Unable to update preference.");
-    await loadAdminCandidates();
-  } catch(error) {
-    alert(error.message || "Unable to update preference.");
   }
 }
 
