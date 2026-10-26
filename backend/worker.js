@@ -18011,6 +18011,24 @@ if (
 
 
 /*
+Authenticated policy check for a completed Clerk session.
+*/
+if (request.method === "GET" && url.pathname === "/account/password-login-policy") {
+  try {
+    const auth = await verifyClerkRequest(request, env);
+    const row = await env.TRANSLATIONS_DB.prepare(
+      "SELECT feature_overrides_json FROM organizations WHERE clerk_user_id = ? LIMIT 1"
+    ).bind(auth.clerkUserId).first();
+    const enabled = row
+      ? parseFeatureOverrides(row.feature_overrides_json).passwordLoginEnabled === true
+      : false;
+    return jsonResponse({success:true,enabled});
+  } catch(error) {
+    return jsonResponse({success:false,error:"Unable to verify password login permissions."},403);
+  }
+}
+
+/*
 =======================================================
 ADMIN - PER-ACCOUNT PASSWORD LOGIN PREFERENCE
 This saves eligibility only. Clerk still owns sign-in
