@@ -186,6 +186,7 @@ export async function recordBetaAcceptance(env, organizationId, clerkUserId, inp
 export async function ministryAdminRoute(request, env, verifyAdminRequest) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/admin/ministry-")) return null;
+  if (request.method === "OPTIONS") return new Response(null, {status:204, headers: {"Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"Content-Type, Authorization", "Access-Control-Allow-Methods":"GET, POST, OPTIONS"}});
   if (request.method !== "GET" && request.method !== "POST") return reply({success:false,error:"Method not allowed."},405);
   try {
     await verifyAdminRequest(request, env);
