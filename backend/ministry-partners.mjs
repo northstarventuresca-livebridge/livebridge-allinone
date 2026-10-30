@@ -152,6 +152,20 @@ export async function assignMinistryCampusFromOffer(env, token, organizationId) 
     row.pricing_notes, Date.now(), Date.now()).run();
 }
 
+/* Look up only the actual account ID; no name-based free access is granted. */
+export async function isGiftedMinistry(env, organizationId) {
+  if (!Number.isSafeInteger(Number(organizationId)) || Number(organizationId) <= 0) return false;
+  try {
+    const row = await env.TRANSLATIONS_DB.prepare(
+      "SELECT partnership_type FROM ministry_campuses WHERE organization_id = ?"
+    ).bind(Number(organizationId)).first();
+    return row?.partnership_type === "ministry_gift";
+  } catch (error) {
+    if (/no such table/i.test(String(error?.message || ""))) return false;
+    throw error;
+  }
+}
+
 export async function recordBetaAcceptance(env, organizationId, clerkUserId, input, request) {
   if (!organizationId || !clerkUserId) throw new Error("Account identity is required for beta acceptance.");
   if (input.betaAgreementAccepted !== true ||
