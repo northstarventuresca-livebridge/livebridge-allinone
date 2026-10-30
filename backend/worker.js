@@ -1,3 +1,4 @@
+import { BETA_AGREEMENT_VERSION, ministryAdminRoute, saveMinistryOfferAssignment, assignMinistryCampusFromOffer, recordBetaAcceptance } from "./ministry-partners.mjs";
 // LiveBridge production deployment marker: effective-room display sync 2026-10-07
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -9922,6 +9923,8 @@ Scripture rules:
 };
 var index_default = {
   async fetch(request, env) {
+    const ministryResponse = await ministryAdminRoute(request, env, verifyAdminRequest);
+    if (ministryResponse) return ministryResponse;
     const url = new URL(request.url);
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -11021,6 +11024,10 @@ if (
 
     if (!existing) {
 
+      if (body.betaAgreementAccepted !== true || body.betaAgreementVersion !== BETA_AGREEMENT_VERSION) {
+        return jsonResponse({success:false,error:"You must accept the current LiveBridge Beta Participation Agreement."},400);
+      }
+
       await ensureStripeRegistrationTable(
         env
       );
@@ -11338,6 +11345,10 @@ if (
         }
       }
 
+      await recordBetaAcceptance(env, Number(insertedOrganization?.id || 0), auth.clerkUserId, body, request);
+      if (checkout.offerToken) {
+        await assignMinistryCampusFromOffer(env, checkout.offerToken, Number(insertedOrganization?.id || 0));
+      }
 
     } else {
 
@@ -13693,6 +13704,13 @@ if (
 
     if (!inserted) {
       throw new Error("Unable to generate a unique private-offer link.");
+    }
+
+    try {
+      await saveMinistryOfferAssignment(env, token, body);
+    } catch (assignmentError) {
+      await env.TRANSLATIONS_DB.prepare("DELETE FROM offers WHERE token = ?").bind(token).run();
+      throw assignmentError;
     }
 
     const offerResult = await getValidOffer(env, token);
