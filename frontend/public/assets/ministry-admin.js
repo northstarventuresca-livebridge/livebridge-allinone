@@ -68,8 +68,15 @@
   }
 
   function renderCampus(account) {
-    const target = $("ministryCampusEditor");
-    if (!target || !account) return;
+    if (!account) return;
+    let target = $("ministryCampusEditor");
+    if (!target) {
+      const profile = $("orgProfileFields");
+      if (!profile) return;
+      target = document.createElement("section");
+      target.id = "ministryCampusEditor";
+      profile.insertAdjacentElement("afterend", target);
+    }
     const c = state.campuses.find(row=>Number(row.organization_id)===Number(account.id)) || {};
     const acceptance = state.acceptances.find(row=>Number(row.organization_id)===Number(account.id));
     target.innerHTML = `
