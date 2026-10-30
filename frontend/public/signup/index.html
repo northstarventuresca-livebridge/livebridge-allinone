@@ -960,6 +960,15 @@
 
             </label>
 
+            <label class="lbs-agree" style="margin-top:16px;">
+              <input type="checkbox" id="lbsBetaAgreement" required>
+              <span>
+                I am authorized to represent this organization and I accept the
+                <a href="/beta-agreement/" target="_blank" rel="noopener" style="color:#78b7ff;font-weight:800;">LiveBridge Beta Participation Agreement</a>
+                (version 2026-10-30-v1), including the possibility of translation inaccuracies and service interruptions during testing.
+              </span>
+            </label>
+
           </div>
 
 
@@ -1042,6 +1051,9 @@
 
   const LIVEBRIDGE_LEGAL_VERSION =
     "2026-08-31";
+
+  const LIVEBRIDGE_BETA_AGREEMENT_VERSION =
+    "2026-10-30-v1";
 
   const LB_CHECKOUT_VERIFY_PATH =
     "/stripe/verify-checkout-session";
@@ -2014,6 +2026,9 @@
         )
         .checked;
 
+    const betaAgreementAccepted =
+      document.getElementById("lbsBetaAgreement").checked;
+
 
     if (!organizationName) {
       alert(
@@ -2096,6 +2111,11 @@
       return;
     }
 
+    if (!betaAgreementAccepted) {
+      alert("Please accept the Beta Participation Agreement as an authorized representative.");
+      return;
+    }
+
 
     const pendingAccount = {
 
@@ -2159,6 +2179,10 @@
 
       legalVersion:
         LIVEBRIDGE_LEGAL_VERSION,
+
+      betaAgreementAccepted: true,
+      betaAgreementVersion: LIVEBRIDGE_BETA_AGREEMENT_VERSION,
+      betaAgreementAcceptedAt: Date.now(),
 
       createdAt:
         new Date().toISOString()
@@ -2369,6 +2393,10 @@
             legalVersion:
               pendingAccount.legalVersion,
 
+            betaAgreementAccepted: pendingAccount.betaAgreementAccepted,
+            betaAgreementVersion: pendingAccount.betaAgreementVersion,
+            betaAgreementAcceptedAt: pendingAccount.betaAgreementAcceptedAt,
+
             phone:
               pendingAccount.phone,
 
@@ -2512,6 +2540,10 @@
 
             legalVersion:
               pendingAccount.legalVersion,
+
+            betaAgreementAccepted: pendingAccount.betaAgreementAccepted,
+            betaAgreementVersion: pendingAccount.betaAgreementVersion,
+            betaAgreementAcceptedAt: pendingAccount.betaAgreementAcceptedAt,
 
             accountCreatedAt:
               pendingAccount.createdAt,
@@ -2937,6 +2969,10 @@ Purpose:
                 legalVersion:
                   pendingAccount.legalVersion,
 
+                betaAgreementAccepted: pendingAccount.betaAgreementAccepted,
+                betaAgreementVersion: pendingAccount.betaAgreementVersion,
+                betaAgreementAcceptedAt: pendingAccount.betaAgreementAcceptedAt,
+
                 phone:
                   pendingAccount.phone,
 
@@ -3096,7 +3132,9 @@ Purpose:
       if(
         !pendingAccount.termsAcceptedAt ||
         !pendingAccount.privacyAcceptedAt ||
-        !pendingAccount.legalVersion
+        !pendingAccount.legalVersion ||
+        pendingAccount.betaAgreementAccepted !== true ||
+        pendingAccount.betaAgreementVersion !== LIVEBRIDGE_BETA_AGREEMENT_VERSION
       ){
 
         throw new Error(
@@ -3183,6 +3221,10 @@ Purpose:
 
               legalVersion:
                 pendingAccount.legalVersion,
+
+              betaAgreementAccepted: pendingAccount.betaAgreementAccepted,
+              betaAgreementVersion: pendingAccount.betaAgreementVersion,
+              betaAgreementAcceptedAt: pendingAccount.betaAgreementAcceptedAt,
 
               accountCreatedAt:
                 pendingAccount.createdAt,

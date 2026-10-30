@@ -1,3 +1,4 @@
+import { BETA_AGREEMENT_VERSION, ministryAdminRoute, saveMinistryOfferAssignment, assignMinistryCampusFromOffer, recordBetaAcceptance, isGiftedMinistry } from "./ministry-partners.mjs";
 // LiveBridge production deployment marker: effective-room display sync 2026-10-07
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -8516,7 +8517,9 @@ var LiveBridgeRoom = class {
 
         if (organization) {
           const totalSecondsAvailable =
-            Math.max(
+            (await isGiftedMinistry(this.env, Number(organization.id)))
+              ? Infinity
+              : Math.max(
               0,
               (
                 Number(
@@ -8612,7 +8615,9 @@ var LiveBridgeRoom = class {
 
         if (organization) {
           const totalSecondsAvailable =
-            Math.max(
+            (await isGiftedMinistry(this.env, Number(organization.id)))
+              ? Infinity
+              : Math.max(
               0,
               (
                 Number(
@@ -9922,6 +9927,8 @@ Scripture rules:
 };
 var index_default = {
   async fetch(request, env) {
+    const ministryResponse = await ministryAdminRoute(request, env, verifyAdminRequest);
+    if (ministryResponse) return ministryResponse;
     const url = new URL(request.url);
     if (request.method === "OPTIONS") {
       return new Response(null, {
@@ -11021,6 +11028,10 @@ if (
 
     if (!existing) {
 
+      if (body.betaAgreementAccepted !== true || body.betaAgreementVersion !== BETA_AGREEMENT_VERSION) {
+        return jsonResponse({success:false,error:"You must accept the current LiveBridge Beta Participation Agreement."},400);
+      }
+
       await ensureStripeRegistrationTable(
         env
       );
@@ -11311,7 +11322,15 @@ if (
         );
       }
 
+      // Attach the campus and record consent before redeeming an offer.
+      // Both writes are idempotent, allowing a retry if the response is lost.
+      await recordBetaAcceptance(
+        env, Number(insertedOrganization?.id || 0), auth.clerkUserId, body, request
+      );
       if (checkout.offerToken) {
+        await assignMinistryCampusFromOffer(
+          env, checkout.offerToken, Number(insertedOrganization?.id || 0)
+        );
         try {
           await claimOfferAfterAccountCreation(
             env,
@@ -11337,7 +11356,6 @@ if (
           throw offerClaimError;
         }
       }
-
 
     } else {
 
@@ -13620,6 +13638,20 @@ if (
         error: "Only active plans can be shared as an offer."
       }, 409);
     }
+    
+    if (body.partnershipType === "ministry_gift" && Number(planRow.price_cents || 0) > 0) {
+      return jsonResponse({
+        success: false,
+        error: "A Ministry Gift invitation requires a $0 private plan. Choose a free plan first."
+      }, 409);
+    }
+    if ((body.parentId || String(body.campusName || "").trim()) && maxRedemptions !== 1) {
+      return jsonResponse({
+        success: false,
+        error: "A campus-linked invitation must be single-use so each campus gets its own account."
+      }, 409);
+    }
+
 
     if (
       Number(planRow.custom_plan || 0) !== 1 &&
@@ -13693,6 +13725,13 @@ if (
 
     if (!inserted) {
       throw new Error("Unable to generate a unique private-offer link.");
+    }
+
+    try {
+      await saveMinistryOfferAssignment(env, token, body);
+    } catch (assignmentError) {
+      await env.TRANSLATIONS_DB.prepare("DELETE FROM offers WHERE token = ?").bind(token).run();
+      throw assignmentError;
     }
 
     const offerResult = await getValidOffer(env, token);
@@ -21433,6 +21472,8 @@ if (
       buildOrganizationAccount(
         row
       );
+    account.unlimitedBroadcast =
+      await isGiftedMinistry(env, Number(row.id));
 
     const usageResetRow =
       await env.TRANSLATIONS_DB.prepare(`
@@ -23641,6 +23682,9 @@ return jsonResponse({
 
         const organization =
           ownedRoom.organization;
+        const ministryGift = organization
+          ? await isGiftedMinistry(env, Number(organization.id))
+          : false;
 
 
 /*
@@ -23709,7 +23753,7 @@ if (organization) {
 
 
   if (
-    remainingMinutes <= 0
+    !ministryGift && remainingMinutes <= 0
   ) {
 
     return jsonResponse(
@@ -23856,8 +23900,8 @@ const now =
           success: true,
           room,
           broadcastId,
-          remainingMinutes:
-            startRemainingMinutes
+          remainingMinutes: ministryGift ? null : startRemainingMinutes,
+          unlimited: ministryGift
         });
       } catch (error) {
 
@@ -23992,6 +24036,7 @@ const now =
         const organization =
           await env.TRANSLATIONS_DB.prepare(`
             SELECT
+              id,
               account_status,
               included_minutes,
               used_minutes,
@@ -24033,7 +24078,9 @@ const now =
 
 
           const totalSecondsAvailable =
-            Math.max(
+            (await isGiftedMinistry(env, Number(organization.id)))
+              ? Infinity
+              : Math.max(
               0,
               (
                 Number(
@@ -24402,7 +24449,8 @@ const now =
               updatedAccount.usedMinutes,
 
             remainingMinutes:
-              updatedAccount.remainingMinutes,
+              (await isGiftedMinistry(env, Number(updatedAccount.id)))
+                ? null : updatedAccount.remainingMinutes,
 
             viewerLimit:
               updatedAccount
