@@ -11322,7 +11322,15 @@ if (
         );
       }
 
+      // Attach the campus and record consent before redeeming an offer.
+      // Both writes are idempotent, allowing a retry if the response is lost.
+      await recordBetaAcceptance(
+        env, Number(insertedOrganization?.id || 0), auth.clerkUserId, body, request
+      );
       if (checkout.offerToken) {
+        await assignMinistryCampusFromOffer(
+          env, checkout.offerToken, Number(insertedOrganization?.id || 0)
+        );
         try {
           await claimOfferAfterAccountCreation(
             env,
@@ -11347,11 +11355,6 @@ if (
 
           throw offerClaimError;
         }
-      }
-
-      await recordBetaAcceptance(env, Number(insertedOrganization?.id || 0), auth.clerkUserId, body, request);
-      if (checkout.offerToken) {
-        await assignMinistryCampusFromOffer(env, checkout.offerToken, Number(insertedOrganization?.id || 0));
       }
 
     } else {
