@@ -22,7 +22,7 @@ async function prod(request, env, path) {
   return env.PRODUCTION_API.fetch(new Request(url, request));
 }
 async function verifiedAdmin(request, env) {
-  const response = await prod(request, env, "/admin/plans");
+  const response = await env.PRODUCTION_API.fetch(new Request("https://livebridge.northstarventures-ca.workers.dev/admin/plans", {method:"GET",headers:request.headers}));
   if (!response.ok) throw new Error("Administrator access required.");
   return { clerkUserId:"verified-through-production", admin:{} };
 }
