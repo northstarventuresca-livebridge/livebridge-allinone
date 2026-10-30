@@ -21469,6 +21469,8 @@ if (
       buildOrganizationAccount(
         row
       );
+    account.unlimitedBroadcast =
+      await isGiftedMinistry(env, Number(row.id));
 
     const usageResetRow =
       await env.TRANSLATIONS_DB.prepare(`
@@ -24444,7 +24446,8 @@ const now =
               updatedAccount.usedMinutes,
 
             remainingMinutes:
-              updatedAccount.remainingMinutes,
+              (await isGiftedMinistry(env, Number(updatedAccount.id)))
+                ? null : updatedAccount.remainingMinutes,
 
             viewerLimit:
               updatedAccount
