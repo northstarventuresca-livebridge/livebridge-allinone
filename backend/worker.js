@@ -1,4 +1,4 @@
-import { BETA_AGREEMENT_VERSION, ministryAdminRoute, saveMinistryOfferAssignment, assignMinistryCampusFromOffer, recordBetaAcceptance } from "./ministry-partners.mjs";
+import { BETA_AGREEMENT_VERSION, ministryAdminRoute, saveMinistryOfferAssignment, assignMinistryCampusFromOffer, recordBetaAcceptance, isGiftedMinistry } from "./ministry-partners.mjs";
 // LiveBridge production deployment marker: effective-room display sync 2026-10-07
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -8517,7 +8517,9 @@ var LiveBridgeRoom = class {
 
         if (organization) {
           const totalSecondsAvailable =
-            Math.max(
+            (await isGiftedMinistry(this.env, Number(organization.id)))
+              ? Infinity
+              : Math.max(
               0,
               (
                 Number(
@@ -8613,7 +8615,9 @@ var LiveBridgeRoom = class {
 
         if (organization) {
           const totalSecondsAvailable =
-            Math.max(
+            (await isGiftedMinistry(this.env, Number(organization.id)))
+              ? Infinity
+              : Math.max(
               0,
               (
                 Number(
@@ -23673,6 +23677,9 @@ return jsonResponse({
 
         const organization =
           ownedRoom.organization;
+        const ministryGift = organization
+          ? await isGiftedMinistry(env, Number(organization.id))
+          : false;
 
 
 /*
@@ -23741,7 +23748,7 @@ if (organization) {
 
 
   if (
-    remainingMinutes <= 0
+    !ministryGift && remainingMinutes <= 0
   ) {
 
     return jsonResponse(
@@ -23888,8 +23895,8 @@ const now =
           success: true,
           room,
           broadcastId,
-          remainingMinutes:
-            startRemainingMinutes
+          remainingMinutes: ministryGift ? null : startRemainingMinutes,
+          unlimited: ministryGift
         });
       } catch (error) {
 
@@ -24024,6 +24031,7 @@ const now =
         const organization =
           await env.TRANSLATIONS_DB.prepare(`
             SELECT
+              id,
               account_status,
               included_minutes,
               used_minutes,
@@ -24065,7 +24073,9 @@ const now =
 
 
           const totalSecondsAvailable =
-            Math.max(
+            (await isGiftedMinistry(env, Number(organization.id)))
+              ? Infinity
+              : Math.max(
               0,
               (
                 Number(
