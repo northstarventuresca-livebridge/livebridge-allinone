@@ -13631,6 +13631,20 @@ if (
         error: "Only active plans can be shared as an offer."
       }, 409);
     }
+    
+    if (body.partnershipType === "ministry_gift" && Number(planRow.price_cents || 0) > 0) {
+      return jsonResponse({
+        success: false,
+        error: "A Ministry Gift invitation requires a $0 private plan. Choose a free plan first."
+      }, 409);
+    }
+    if ((body.parentId || String(body.campusName || "").trim()) && maxRedemptions !== 1) {
+      return jsonResponse({
+        success: false,
+        error: "A campus-linked invitation must be single-use so each campus gets its own account."
+      }, 409);
+    }
+
 
     if (
       Number(planRow.custom_plan || 0) !== 1 &&
