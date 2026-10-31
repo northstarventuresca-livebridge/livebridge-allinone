@@ -857,7 +857,7 @@ body{
     <div class="lb-login-card">
       <div id="clerk-auth"></div>
       <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,.15);padding-top:16px;">
-        <button type="button" class="lb-secondary-button lb-wide" id="passwordLoginToggle">Sign in with password instead</button>
+        <button type="button" class="lb-secondary-button lb-wide" id="passwordLoginToggle">Use password instead of email code</button>
         <form id="passwordLoginForm" style="display:none;margin-top:15px;">
           <label style="display:block;margin-bottom:10px;">Email
             <input type="email" id="passwordLoginEmail" autocomplete="username" required
@@ -868,6 +868,7 @@ body{
               style="display:block;width:100%;padding:12px;margin-top:6px;border-radius:8px;">
           </label>
           <button type="submit" class="lb-secondary-button lb-wide" id="passwordLoginSubmit">Sign in with password</button>
+<button type="button" class="lb-secondary-button lb-wide" id="passwordEmailCodeButton" style="margin-top:9px">Forgot password? Use email code instead</button>
           <div id="passwordLoginError" role="alert" style="color:#ffb5b5;margin-top:10px;"></div>
         </form>
       </div>
@@ -2172,7 +2173,8 @@ body{
       <div class="lb-muted">
         Manage your password, sign-in methods and account security.
       </div>
-      <div class="lb-muted" style="margin-top:12px;">Optional: add a password in Manage Password & Security. You can continue using an email verification code instead.</div>
+      <div class="lb-muted" style="margin-top:12px;"><span id="passwordAccessStatus">Email codes remain available for sign-in.</span>
+<div id="passwordAccessEnabled" style="display:none;margin-top:8px;color:#93efbf;font-size:11px;font-weight:800">Password sign-in enabled for your organization. Choose Manage Password &amp; Security below to set or change it.</div></div>
 
       <button
         class="lb-secondary-button lb-wide"
@@ -5212,6 +5214,7 @@ async function renderDashboard(
       !marketingEnabled;
   }
 
+  updatePasswordAccessDashboard();
   loadOrganizationStatsApi();
 
   initializeUsageStatsControls();
@@ -5319,39 +5322,63 @@ async function renderDashboard(
   );
 }
 
-function setupPasswordLogin() {
-  const toggle = document.getElementById("passwordLoginToggle");
-  const form = document.getElementById("passwordLoginForm");
-  if (!toggle || !form || form.dataset.bound === "true") return;
-  form.dataset.bound = "true";
-  toggle.addEventListener("click", () => {
-    form.style.display = form.style.display === "none" ? "block" : "none";
-  });
-  form.addEventListener("submit", async event => {
-    event.preventDefault();
-    const submit = document.getElementById("passwordLoginSubmit");
-    const errorBox = document.getElementById("passwordLoginError");
-    submit.disabled = true;
-    errorBox.textContent = "";
-    try {
-      const result = await Clerk.client.signIn.create({
-        strategy:"password",
-        identifier:document.getElementById("passwordLoginEmail").value.trim(),
-        password:document.getElementById("passwordLoginPassword").value
-      });
-      if (result.status !== "complete" || !result.createdSessionId) {
-        throw new Error("Additional verification required. Please use the standard email sign-in.");
-      }
-      await Clerk.setActive({session:result.createdSessionId});
-      const destination = new URLSearchParams(location.search).get("returnTo") === "/admin" ? "/admin" : "/account";
-      window.location.replace(destination);
-    } catch(error) {
-      errorBox.textContent = error?.errors?.[0]?.longMessage || error.message || "Password sign-in failed.";
-    } finally {
-      submit.disabled = false;
-      document.getElementById("passwordLoginPassword").value = "";
-    }
-  });
+const PASSWORD_PREVIEW_API="https://livebridge-password-login-test.northstarventures-ca.workers.dev";
+async function checkPasswordAccess(){
+ const token=await getLiveBridgeSessionToken();
+ if(!token)throw new Error("Please sign in again.");
+ const r=await fetch(PASSWORD_PREVIEW_API+"/account/password-login",{headers:{"Authorization":"Bearer "+token},cache:"no-store"});
+ const data=await r.json();
+ if(!r.ok||data.success!==true)throw new Error("Unable to verify password sign-in access.");
+ return data.enabled===true;
+}
+async function updatePasswordAccessDashboard(){
+ const status=document.getElementById("passwordAccessStatus");
+ const enabled=document.getElementById("passwordAccessEnabled");
+ if(!status||!enabled)return;
+ try {
+  const allowed=await checkPasswordAccess();
+  enabled.style.display=allowed?"block":"none";
+  status.textContent=allowed?"Use a password or an email code to sign in.":"Email code sign-in is enabled. Your organization administrator can enable optional password sign-in.";
+ }catch(_e){enabled.style.display="none";status.textContent="Email code sign-in remains available.";}
+}
+function setupPasswordLogin(){
+ const toggle=document.getElementById("passwordLoginToggle");
+ const form=document.getElementById("passwordLoginForm");
+ const fallback=document.getElementById("passwordEmailCodeButton");
+ if(!toggle||!form||form.dataset.bound==="true")return;
+ form.dataset.bound="true";
+ toggle.addEventListener("click",()=>{
+  const show=form.style.display==="none";
+  form.style.display=show?"block":"none";
+  toggle.textContent=show?"Use email code instead":"Use password instead of email code";
+ });
+ fallback?.addEventListener("click",()=>{
+  form.reset();form.style.display="none";
+  toggle.textContent="Use password instead of email code";
+  document.getElementById("clerk-auth")?.scrollIntoView({block:"center",behavior:"smooth"});
+ });
+ form.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const submit=document.getElementById("passwordLoginSubmit"), error=document.getElementById("passwordLoginError");
+  submit.disabled=true;error.textContent="";
+  try{
+   const identifier=document.getElementById("passwordLoginEmail").value.trim();
+   const password=document.getElementById("passwordLoginPassword").value;
+   if(!identifier||!password)throw new Error("Enter your email and password.");
+   const result=await Clerk.client.signIn.create({strategy:"password",identifier,password});
+   if(result.status!=="complete"||!result.createdSessionId)
+    throw new Error("More verification is needed. Use the email code option to finish signing in.");
+   await Clerk.setActive({session:result.createdSessionId});
+   const allowed=await checkPasswordAccess();
+   if(!allowed){
+    await Clerk.signOut();
+    throw new Error("Password sign-in isn't enabled for this organization. Choose email code instead.");
+   }
+   const destination=new URLSearchParams(location.search).get("returnTo")==="/admin"?"/admin":"/account";
+   window.location.replace(destination);
+  }catch(e){error.textContent=e?.errors?.[0]?.longMessage||e?.message||"Unable to sign in with password. Try email code.";}
+  finally{submit.disabled=false;document.getElementById("passwordLoginPassword").value="";}
+ });
 }
 
 function showLogin(){
