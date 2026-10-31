@@ -3430,5 +3430,111 @@ Purpose:
 
 })();
 </script>
+<!-- LiveBridge legal agreement viewer: preserve all signup form values. -->
+<style>
+  .lb-legal-viewer[hidden] { display: none !important; }
+  .lb-legal-viewer {
+    position: fixed; inset: 0; z-index: 2147483000;
+    display: flex; align-items: center; justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    background: rgba(1, 10, 23, .84); backdrop-filter: blur(6px);
+  }
+  .lb-legal-viewer-panel {
+    width: min(900px, 100%); height: min(92vh, 980px); min-height: 240px;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: #0c1b2d; border: 1px solid #41617c;
+    border-radius: 16px; box-shadow: 0 24px 90px rgba(0,0,0,.58);
+  }
+  .lb-legal-viewer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 12px 16px; background: #12253a;
+    border-bottom: 1px solid #324960; flex: 0 0 auto;
+  }
+  .lb-legal-viewer-heading { font-size: 16px; font-weight: 800; color: #fff; }
+  .lb-legal-viewer-close {
+    border: 1px solid #6a86a3; border-radius: 9px; background: #254c79;
+    color: #fff; padding: 10px 15px; font-size: 14px; font-weight: 800;
+    cursor: pointer; flex: 0 0 auto;
+  }
+  .lb-legal-viewer-close:hover, .lb-legal-viewer-close:focus-visible {
+    background: #31639b; outline-offset: 2px;
+  }
+  .lb-legal-viewer-frame {
+    width: 100%; flex: 1 1 auto; min-height: 0; border: 0;
+    background: #071422;
+  }
+  .lb-legal-viewer-note {
+    font-size: 12px; color: #bcd1e5; padding: 9px 16px;
+    border-top: 1px solid #324960;
+  }
+  @media (max-width: 550px) {
+    .lb-legal-viewer { padding: 8px; }
+    .lb-legal-viewer-panel { height: calc(100dvh - 16px); border-radius: 12px; }
+    .lb-legal-viewer-heading { font-size: 14px; }
+    .lb-legal-viewer-header { padding: 10px; }
+    .lb-legal-viewer-close { padding: 10px 13px; }
+  }
+</style>
+<div id="lbLegalViewer" class="lb-legal-viewer" hidden role="dialog" aria-modal="true" aria-labelledby="lbLegalViewerHeading">
+  <div class="lb-legal-viewer-panel">
+    <div class="lb-legal-viewer-header">
+      <span id="lbLegalViewerHeading" class="lb-legal-viewer-heading">LiveBridge Agreement</span>
+      <button type="button" id="lbLegalViewerClose" class="lb-legal-viewer-close" aria-label="Close legal agreement">✕ Close</button>
+    </div>
+    <iframe id="lbLegalViewerFrame" class="lb-legal-viewer-frame" title="LiveBridge Legal Agreement" referrerpolicy="no-referrer"></iframe>
+    <div class="lb-legal-viewer-note">Close this window to return to your signup. Your information will stay filled in.</div>
+  </div>
+</div>
+<script>
+(() => {
+  "use strict";
+  const viewer = document.getElementById("lbLegalViewer");
+  const frame = document.getElementById("lbLegalViewerFrame");
+  const heading = document.getElementById("lbLegalViewerHeading");
+  const closeButton = document.getElementById("lbLegalViewerClose");
+  const documents = {
+    "/beta-agreement/": { path: "/beta-agreement/index.html", title: "Beta Participation Agreement" },
+    "/beta-agreement/index.html": { path: "/beta-agreement/index.html", title: "Beta Participation Agreement" },
+    "/terms/": { path: "/terms/index.html", title: "Terms of Service" },
+    "/terms/index.html": { path: "/terms/index.html", title: "Terms of Service" },
+    "/privacy/": { path: "/privacy/index.html", title: "Privacy Policy" },
+    "/privacy/index.html": { path: "/privacy/index.html", title: "Privacy Policy" }
+  };
+  let priorFocus = null;
+  let priorOverflow = "";
+  const close = () => {
+    if (viewer.hidden) return;
+    viewer.hidden = true;
+    frame.removeAttribute("src");
+    document.body.style.overflow = priorOverflow;
+    if (priorFocus && document.contains(priorFocus)) priorFocus.focus();
+  };
+  document.addEventListener("click", (event) => {
+    const anchor = event.target.closest?.("a[href]");
+    if (!anchor) return;
+    const url = new URL(anchor.href, window.location.href);
+    if (url.origin !== location.origin || !documents[url.pathname]) return;
+    event.preventDefault();
+    const doc = documents[url.pathname];
+    priorFocus = anchor;
+    priorOverflow = document.body.style.overflow;
+    heading.textContent = doc.title;
+    frame.src = doc.path;
+    viewer.hidden = false;
+    document.body.style.overflow = "hidden";
+    closeButton.focus();
+  }, true);
+  closeButton.addEventListener("click", close);
+  viewer.addEventListener("click", (event) => {
+    if (event.target === viewer) close();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!viewer.hidden && event.key === "Escape") {
+      event.preventDefault();
+      close();
+    }
+  });
+})();
+</script>
 </body>
 </html>
