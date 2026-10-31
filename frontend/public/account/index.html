@@ -5374,38 +5374,115 @@ function setupPasswordLogin(){
  const toggle=document.getElementById("passwordLoginToggle");
  const form=document.getElementById("passwordLoginForm");
  const fallback=document.getElementById("passwordEmailCodeButton");
+ const clerkBox=document.getElementById("clerk-auth");
  if(!toggle||!form||form.dataset.bound==="true")return;
  form.dataset.bound="true";
+ let verifyBox=null;
+ function resetVerification(){
+  verifyBox?.remove();verifyBox=null;
+  const passwordField=document.getElementById("passwordLoginPassword");
+  if(passwordField)passwordField.value="";
+ }
+ function mountEmailSignIn(){
+  if(!clerkBox)return;
+  clerkBox.style.display="";
+  try{
+   if(location.hash.includes("factor-two")||location.hash.includes("factor-two"))
+    history.replaceState(null,"",location.pathname+location.search);
+   Clerk.mountSignIn(clerkBox,{
+    routing:"hash",signUpUrl:"/signup",
+    forceRedirectUrl:new URLSearchParams(location.search).get("returnTo")==="/admin"?"/admin":"/account",
+    fallbackRedirectUrl:new URLSearchParams(location.search).get("returnTo")==="/admin"?"/admin":"/account"
+   });
+  }catch(e){console.warn("Clerk email-code sign-in could not be mounted:",e);}
+ }
+ function useEmailCode(){
+  resetVerification();form.reset();form.style.display="none";
+  toggle.textContent="Use password instead of email code";
+  mountEmailSignIn();
+ }
  toggle.addEventListener("click",()=>{
   const show=form.style.display==="none";
-  form.style.display=show?"block":"none";
-  toggle.textContent=show?"Use email code instead":"Use password instead of email code";
+  if(show){
+   try{Clerk.unmountSignIn(clerkBox);}catch(e){console.warn("Clerk sign-in unmount:",e);}
+   if(clerkBox)clerkBox.style.display="none";
+   if(location.hash.includes("factor-two"))
+    history.replaceState(null,"",location.pathname+location.search);
+   form.style.display="block";
+   toggle.textContent="Use email code instead";
+  }else useEmailCode();
  });
- fallback?.addEventListener("click",()=>{
-  form.reset();form.style.display="none";
-  toggle.textContent="Use password instead of email code";
-  document.getElementById("clerk-auth")?.scrollIntoView({block:"center",behavior:"smooth"});
- });
+ fallback?.addEventListener("click",useEmailCode);
+ const reportError=message=>{
+  const error=document.getElementById("passwordLoginError");
+  if(error)error.textContent=message;
+ };
+ const errorText=e=>e?.errors?.[0]?.longMessage||e?.errors?.[0]?.message||e?.message||"Password sign-in failed. Try email code.";
+ async function completePasswordSignIn(result){
+  if(result.status!=="complete"||!result.createdSessionId)
+   throw new Error("Sign-in needs additional verification.");
+  await Clerk.setActive({session:result.createdSessionId});
+  if(!(await checkPasswordAccess())){
+   await Clerk.signOut();
+   throw new Error("Password sign-in isn't enabled for this organization. Use an email code instead.");
+  }
+  location.replace(new URLSearchParams(location.search).get("returnTo")==="/admin"?"/admin":"/account");
+ }
+ async function showSecondFactor(result){
+  const factors=result.supportedSecondFactors||Clerk.client.signIn.supportedSecondFactors||[];
+  const email=factors.find(f=>f.strategy==="email_code");
+  const totp=factors.find(f=>f.strategy==="totp");
+  const strategy=email?"email_code":totp?"totp":null;
+  if(!strategy){
+   throw new Error("Clerk requires another sign-in step. Choose email code instead to continue.");
+  }
+  if(email){
+   await Clerk.client.signIn.prepareSecondFactor({
+    strategy:"email_code",emailAddressId:email.emailAddressId
+   });
+  }
+  resetVerification();
+  verifyBox=document.createElement("div");
+  verifyBox.id="passwordSecondFactor";
+  verifyBox.style.cssText="margin:13px 0;padding:15px;border:1px solid rgba(255,255,255,.2);border-radius:10px;color:#fff;background:#0e2035";
+  const message=document.createElement("p");
+  message.textContent=email?"For security, enter the verification code Clerk sent to your email.":"Enter the code from your authenticator app.";
+  message.style.cssText="font-size:13px;color:#dbe8f7;margin:0 0 10px";
+  const code=document.createElement("input");
+  code.type="text";code.autocomplete="one-time-code";code.inputMode="numeric";
+  code.maxLength=12;code.placeholder="Verification code";code.setAttribute("aria-label","Verification code");
+  code.style.cssText="display:block;width:100%;padding:12px;margin-bottom:10px;border-radius:8px";
+  const verify=document.createElement("button");
+  verify.type="button";verify.className="lb-secondary-button lb-wide";verify.textContent="Verify and sign in";
+  const messageBox=document.createElement("div");messageBox.setAttribute("role","alert");messageBox.style.cssText="margin-top:8px;color:#ffb5b5";
+  verifyBox.append(message,code,verify,messageBox);
+  form.parentNode.insertBefore(verifyBox,form.nextSibling);
+  form.style.display="none";
+  verify.onclick=async()=>{
+   verify.disabled=true;messageBox.textContent="";
+   try{
+    if(!code.value.trim())throw new Error("Enter your verification code.");
+    const done=await Clerk.client.signIn.attemptSecondFactor({strategy,code:code.value.trim()});
+    await completePasswordSignIn(done);
+   }catch(e){messageBox.textContent=errorText(e);verify.disabled=false;}
+  };
+  code.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();verify.click();}});
+  code.focus();
+ }
  form.addEventListener("submit",async event=>{
   event.preventDefault();
-  const submit=document.getElementById("passwordLoginSubmit"), error=document.getElementById("passwordLoginError");
-  submit.disabled=true;error.textContent="";
+  const submit=document.getElementById("passwordLoginSubmit");
+  submit.disabled=true;reportError("");
   try{
    const identifier=document.getElementById("passwordLoginEmail").value.trim();
    const password=document.getElementById("passwordLoginPassword").value;
    if(!identifier||!password)throw new Error("Enter your email and password.");
    const result=await Clerk.client.signIn.create({strategy:"password",identifier,password});
-   if(result.status!=="complete"||!result.createdSessionId)
-    throw new Error("More verification is needed. Use the email code option to finish signing in.");
-   await Clerk.setActive({session:result.createdSessionId});
-   const allowed=await checkPasswordAccess();
-   if(!allowed){
-    await Clerk.signOut();
-    throw new Error("Password sign-in isn't enabled for this organization. Choose email code instead.");
-   }
-   const destination=new URLSearchParams(location.search).get("returnTo")==="/admin"?"/admin":"/account";
-   window.location.replace(destination);
-  }catch(e){error.textContent=e?.errors?.[0]?.longMessage||e?.message||"Unable to sign in with password. Try email code.";}
+   if(result.status==="complete")await completePasswordSignIn(result);
+   else if(result.status==="needs_client_trust"||result.status==="needs_second_factor")
+    await showSecondFactor(result);
+   else throw new Error("Sign-in needs another step. Use email-code sign-in instead.");
+  }catch(e){reportError(errorText(e));}
   finally{submit.disabled=false;document.getElementById("passwordLoginPassword").value="";}
  });
 }
