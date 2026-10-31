@@ -2214,6 +2214,15 @@
   // Preview-only guard: a signed-in admin/existing Clerk account must never
   // be silently converted into the new organization being registered.
   const LB_PREVIEW_CLERK_START_KEY = "lb_preview_clerk_signup_started_v2";
+  function previewSignupActiveUser() {
+    const sessions = Clerk.client?.sessions || Clerk.client?.signedInSessions || [];
+    const session = Clerk.session ||
+      sessions.find(item => item.status === "active") ||
+      sessions.find(item => item.id === Clerk.client?.lastActiveSessionId) ||
+      null;
+    return Clerk.user || session?.user || null;
+  }
+
   function previewSignupUserEmail(user) {
     return String(
       user?.primaryEmailAddress?.emailAddress ||
@@ -2224,39 +2233,47 @@
   }
 
   function previewClerkSignupIsExpected(account) {
-    if (!account || !Clerk.user) return false;
+    const activeUser = previewSignupActiveUser();
+    if (!account || !activeUser) return false;
     try {
       const marker = JSON.parse(localStorage.getItem(LB_PREVIEW_CLERK_START_KEY) || "{}");
       return marker.checkoutId === account.stripeCheckoutSessionId &&
         marker.email === String(account.email || "").trim().toLowerCase() &&
-        previewSignupUserEmail(Clerk.user) === marker.email &&
-        Date.now() - Number(marker.at || 0) < 3600000;
+        previewSignupUserEmail(activeUser) === marker.email &&
+        Date.now() - Number(marker.at || 0) < LB_CHECKOUT_RECOVERY_MAX_AGE;
     } catch { return false; }
   }
 
   function previewShowSignedInBlocker(account) {
     const box = document.getElementById("lbs-clerk-signup");
-    const email = previewSignupUserEmail(Clerk.user) || "another LiveBridge user";
+    const email = previewSignupUserEmail(previewSignupActiveUser()) || "another LiveBridge user";
     box.replaceChildren();
     const wrapper = document.createElement("div");
     wrapper.style.cssText = "background:#fff;color:#1c2a37;padding:23px;border-radius:15px;line-height:1.6;";
     const heading = document.createElement("h3");
-    heading.textContent = "An account is already signed in";
+    const matchingSignup = previewClerkSignupIsExpected(account);
+    heading.textContent = matchingSignup ? "Email verified — finish LiveBridge setup" : "A different account is already signed in";
     const msg = document.createElement("p");
-    msg.textContent = "You are signed in as " + email + ". To create a separate test organization, sign out first. Your verified checkout and new-organization details will be saved for this signup.";
+    msg.textContent = matchingSignup
+      ? "You're already signed in as " + email + ". Complete the saved organization registration without creating another Clerk login."
+      : "You're signed in as " + email + ". Sign out to create a separate organization. Your test checkout and organization details will remain saved.";
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = "Sign out and continue creating this organization";
+    button.textContent = matchingSignup ? "Finish organization setup" : "Sign out and continue signup";
     button.style.cssText = "background:#1646ed;border:0;border-radius:8px;color:white;padding:13px;cursor:pointer;";
     button.addEventListener("click", async () => {
       button.disabled = true;
       try {
-        localStorage.removeItem(LB_PREVIEW_CLERK_START_KEY);
-        await Clerk.signOut();
-        window.location.reload();
+        if (matchingSignup) {
+          await window.finishLiveBridgeAccountSetup();
+        } else {
+          localStorage.removeItem(LB_PREVIEW_CLERK_START_KEY);
+          await Clerk.signOut();
+          window.location.reload();
+        }
       } catch(error) {
         button.disabled = false;
-        msg.textContent = "Could not sign out automatically: " + (error?.message || error);
+        msg.textContent = "Could not complete this step: " + (error?.message || error);
       }
     });
     wrapper.append(heading,msg,button);
@@ -2286,9 +2303,9 @@
 
     clerkBox.innerHTML = "";
 
-    if (Clerk.user) {
-      // A Clerk SignUp form with an active session reports "already signed in".
-      // Never sync the new organization's details to an existing admin user.
+    if (previewSignupActiveUser()) {
+      // Clerk can have an active session before Clerk.user is hydrated.
+      // Don't mount SignUp over an already verified account.
       previewShowSignedInBlocker(account);
       return;
     }
@@ -2753,17 +2770,23 @@
 
 
       const signupPendingRaw = localStorage.getItem(LB_PENDING_KEY);
-      if (signupPendingRaw && Clerk.user) {
+      if (signupPendingRaw && previewSignupActiveUser()) {
         let signupPending = null;
         try { signupPending = JSON.parse(signupPendingRaw); } catch {}
-        if (signupPending && !previewClerkSignupIsExpected(signupPending)) {
+        if (signupPending) {
+          if (previewClerkSignupIsExpected(signupPending)) {
+            // Clerk email-code verification may have completed on an earlier
+            // page load. Resume D1 registration instead of mounting SignUp.
+            await window.finishLiveBridgeAccountSetup();
+            return;
+          }
           showClerkSignup(signupPending);
           return;
         }
       }
 
       const finished =
-        await finishLiveBridgeAccountSetup();
+        await window.finishLiveBridgeAccountSetup();
 
 
       if (finished) {
@@ -2779,7 +2802,7 @@
 
       if (
         pendingRaw &&
-        !Clerk.user
+        !previewSignupActiveUser()
       ) {
 
         try {
