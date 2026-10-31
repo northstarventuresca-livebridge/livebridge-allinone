@@ -8102,7 +8102,7 @@ function passwordRuleError(value){
  if(Array.from(password).length<8)return "Choose at least 8 characters.";
  if(!/[a-z]/i.test(password))return "Add at least one letter.";
  if(!/[0-9]/.test(password))return "Add at least one number.";
- const normalized=password.toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]/gu,"");
+ const normalized=password.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,"");
  const account=window.liveBridgeServerAccount||{};
  const signedIn=Clerk.user||{};
  const restricted=[
@@ -8110,9 +8110,9 @@ function passwordRuleError(value){
   signedIn.fullName,signedIn.firstName,signedIn.lastName
  ].filter(Boolean);
  for(const name of restricted){
-  const clean=String(name).toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]/gu,"");
+  const clean=String(name).toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,"");
   if(clean.length>=3&&normalized.includes(clean))return "Don't include your organization or account holder name in your password.";
-  const tokens=String(name).toLocaleLowerCase().split(/[^\\p{L}\\p{N}]+/u);
+  const tokens=String(name).toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u);
   if(tokens.some(token=>token.length>=4&&normalized.includes(token)&&!["church","centre","center","incorporated","organization","company","home"].includes(token)))
    return "Don't use part of your organization or account holder name.";
  }
