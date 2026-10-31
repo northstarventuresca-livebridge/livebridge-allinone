@@ -11322,39 +11322,42 @@ if (
         );
       }
 
-      // Attach the campus and record consent before redeeming an offer.
-      // Both writes are idempotent, allowing a retry if the response is lost.
-      await recordBetaAcceptance(
-        env, Number(insertedOrganization?.id || 0), auth.clerkUserId, body, request
-      );
-      if (checkout.offerToken) {
-        await assignMinistryCampusFromOffer(
-          env, checkout.offerToken, Number(insertedOrganization?.id || 0)
+      // Always write the beta agreement and campus relationship before claiming
+      // the invitation. If any step fails, release only this just-created account.
+      // The business account must not remain partially provisioned.
+      const newOrganizationId = Number(insertedOrganization?.id || 0);
+      try {
+        await recordBetaAcceptance(
+          env, newOrganizationId, auth.clerkUserId, body, request
         );
-        try {
-          await claimOfferAfterAccountCreation(
-            env,
-            checkout.offerToken,
-            checkout.plan.planCode,
-            accountEmail
+        if (checkout.offerToken) {
+          await assignMinistryCampusFromOffer(
+            env, checkout.offerToken, newOrganizationId
           );
-        } catch (offerClaimError) {
-          await env.TRANSLATIONS_DB.prepare(`
-            DELETE FROM stripe_registrations
-            WHERE clerk_user_id = ?
-          `)
-          .bind(auth.clerkUserId)
-          .run();
-
-          await env.TRANSLATIONS_DB.prepare(`
-            DELETE FROM organizations
-            WHERE clerk_user_id = ?
-          `)
-          .bind(auth.clerkUserId)
-          .run();
-
-          throw offerClaimError;
+          await claimOfferAfterAccountCreation(
+            env, checkout.offerToken, checkout.plan.planCode, accountEmail
+          );
         }
+      } catch (finalizationError) {
+        try {
+          await env.TRANSLATIONS_DB.batch([
+            env.TRANSLATIONS_DB.prepare(
+              "DELETE FROM beta_agreement_acceptances WHERE organization_id = ?"
+            ).bind(newOrganizationId),
+            env.TRANSLATIONS_DB.prepare(
+              "DELETE FROM ministry_campuses WHERE organization_id = ?"
+            ).bind(newOrganizationId),
+            env.TRANSLATIONS_DB.prepare(
+              "DELETE FROM stripe_registrations WHERE organization_id = ? AND clerk_user_id = ?"
+            ).bind(newOrganizationId, auth.clerkUserId),
+            env.TRANSLATIONS_DB.prepare(
+              "DELETE FROM organizations WHERE id = ? AND clerk_user_id = ?"
+            ).bind(newOrganizationId, auth.clerkUserId)
+          ]);
+        } catch (cleanupError) {
+          console.error("Incomplete signup rollback needs attention:", cleanupError);
+        }
+        throw finalizationError;
       }
 
     } else {
