@@ -2190,6 +2190,9 @@
 
     };
 
+    // A new application must not reuse a previous Clerk handoff marker.
+    localStorage.removeItem(LB_PREVIEW_CLERK_START_KEY);
+
 
     localStorage.setItem(
       LB_PENDING_KEY,
@@ -2206,6 +2209,59 @@
   }
 
 
+
+
+  // Preview-only guard: a signed-in admin/existing Clerk account must never
+  // be silently converted into the new organization being registered.
+  const LB_PREVIEW_CLERK_START_KEY = "lb_preview_clerk_signup_started_v2";
+  function previewSignupUserEmail(user) {
+    return String(
+      user?.primaryEmailAddress?.emailAddress ||
+      user?.emailAddresses?.find(item => item?.id === user?.primaryEmailAddressId)?.emailAddress ||
+      user?.emailAddresses?.[0]?.emailAddress ||
+      ""
+    ).trim().toLowerCase();
+  }
+
+  function previewClerkSignupIsExpected(account) {
+    if (!account || !Clerk.user) return false;
+    try {
+      const marker = JSON.parse(localStorage.getItem(LB_PREVIEW_CLERK_START_KEY) || "{}");
+      return marker.checkoutId === account.stripeCheckoutSessionId &&
+        marker.email === String(account.email || "").trim().toLowerCase() &&
+        previewSignupUserEmail(Clerk.user) === marker.email &&
+        Date.now() - Number(marker.at || 0) < 3600000;
+    } catch { return false; }
+  }
+
+  function previewShowSignedInBlocker(account) {
+    const box = document.getElementById("lbs-clerk-signup");
+    const email = previewSignupUserEmail(Clerk.user) || "another LiveBridge user";
+    box.replaceChildren();
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = "background:#fff;color:#1c2a37;padding:23px;border-radius:15px;line-height:1.6;";
+    const heading = document.createElement("h3");
+    heading.textContent = "An account is already signed in";
+    const msg = document.createElement("p");
+    msg.textContent = "You are signed in as " + email + ". To create a separate test organization, sign out first. Your verified checkout and new-organization details will be saved for this signup.";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Sign out and continue creating this organization";
+    button.style.cssText = "background:#1646ed;border:0;border-radius:8px;color:white;padding:13px;cursor:pointer;";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        localStorage.removeItem(LB_PREVIEW_CLERK_START_KEY);
+        await Clerk.signOut();
+        window.location.reload();
+      } catch(error) {
+        button.disabled = false;
+        msg.textContent = "Could not sign out automatically: " + (error?.message || error);
+      }
+    });
+    wrapper.append(heading,msg,button);
+    box.append(wrapper);
+  }
 
   function showClerkSignup(
     account
@@ -2230,6 +2286,18 @@
 
     clerkBox.innerHTML = "";
 
+    if (Clerk.user) {
+      // A Clerk SignUp form with an active session reports "already signed in".
+      // Never sync the new organization's details to an existing admin user.
+      previewShowSignedInBlocker(account);
+      return;
+    }
+
+    localStorage.setItem(LB_PREVIEW_CLERK_START_KEY, JSON.stringify({
+      checkoutId: account.stripeCheckoutSessionId,
+      email: String(account.email || "").trim().toLowerCase(),
+      at: Date.now()
+    }));
 
     Clerk.mountSignUp(
   clerkBox,
@@ -2497,6 +2565,10 @@
 
     try {
 
+      if (!previewClerkSignupIsExpected(pendingAccount)) {
+        throw new Error("This browser is signed into a different account. Sign out and continue the new organization signup.");
+      }
+
       const existingMetadata =
         Clerk.user.unsafeMetadata ||
         {};
@@ -2673,6 +2745,16 @@
         return;
       }
 
+
+      const signupPendingRaw = localStorage.getItem(LB_PENDING_KEY);
+      if (signupPendingRaw && Clerk.user) {
+        let signupPending = null;
+        try { signupPending = JSON.parse(signupPendingRaw); } catch {}
+        if (signupPending && !previewClerkSignupIsExpected(signupPending)) {
+          showClerkSignup(signupPending);
+          return;
+        }
+      }
 
       const finished =
         await finishLiveBridgeAccountSetup();
@@ -3180,7 +3262,11 @@ Purpose:
 
       try{
 
-        const existingMetadata =
+        if (!previewClerkSignupIsExpected(pendingAccount)) {
+        throw new Error("Signed into a different Clerk account. Sign out and continue signup.");
+      }
+
+      const existingMetadata =
           user.unsafeMetadata ||
           {};
 
