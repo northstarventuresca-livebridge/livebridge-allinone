@@ -2666,6 +2666,18 @@ async function passwordPreferenceFetch(path, options={}){
 }
 async function loadOrganizationPasswordPreference(organizationId){
  const serial=++passwordPreferenceLoadSerial;
+ let widget=document.getElementById("passwordAdminControl");
+ if(!widget){
+  const profile=document.getElementById("orgProfileFields");
+  if(profile){
+   widget=document.createElement("section");
+   widget.id="passwordAdminControl";
+   widget.style.cssText="padding:14px;margin:10px 0 18px;border:1px solid #34536e;border-radius:11px;background:#10263b";
+   widget.innerHTML='<div class="lb-card-title">Password Sign-in</div><label style="display:flex;gap:10px;align-items:center;margin-top:12px;font-size:12px"><input type="checkbox" id="enableOrganizationPasswordLogin"> Allow password sign-in for this organization (email codes still work)</label><div id="passwordAdminStatus" class="lb-muted" style="margin-top:8px;font-size:11px"></div>';
+   profile.insertAdjacentElement("afterend",widget);
+   widget.querySelector("#enableOrganizationPasswordLogin").addEventListener("change",saveOrganizationPasswordPreference);
+  }
+ }
  const checkbox=document.getElementById("enableOrganizationPasswordLogin");
  const status=document.getElementById("passwordAdminStatus");
  if(!checkbox||!status)return;
@@ -2678,24 +2690,23 @@ async function loadOrganizationPasswordPreference(organizationId){
   status.textContent=value.enabled?"Password sign-in enabled for this organization.":"Email-code sign-in only for this organization.";
  }catch(error){if(serial===passwordPreferenceLoadSerial)status.textContent="Could not load preference: "+error.message;}
 }
-document.addEventListener("DOMContentLoaded",()=>{
+async function saveOrganizationPasswordPreference(){
  const checkbox=document.getElementById("enableOrganizationPasswordLogin");
- checkbox?.addEventListener("change",async()=>{
-  const org=Number(selectedOrganization?.id||0);
-  const prior=!checkbox.checked;
-  const status=document.getElementById("passwordAdminStatus");
-  if(!org){checkbox.checked=prior;return;}
-  checkbox.disabled=true;status.textContent="Saving…";
-  try{
-   const result=await passwordPreferenceFetch("/admin/password-login",{
-    method:"POST",body:JSON.stringify({organizationId:org,enabled:checkbox.checked})
-   });
-   checkbox.checked=result.enabled===true;
-   status.textContent=result.enabled?"Saved: password sign-in enabled; email codes still work.":"Saved: email-code sign-in only.";
-  }catch(e){checkbox.checked=prior;status.textContent="Not saved: "+e.message;}
-  finally{checkbox.disabled=false;}
- });
-});
+ const org=Number(selectedOrganization?.id||0);
+ const prior=!checkbox.checked;
+ const status=document.getElementById("passwordAdminStatus");
+ if(!org){checkbox.checked=prior;return;}
+ checkbox.disabled=true;status.textContent="Saving…";
+ try{
+  const result=await passwordPreferenceFetch("/admin/password-login",{
+   method:"POST",body:JSON.stringify({organizationId:org,enabled:checkbox.checked})
+  });
+  checkbox.checked=result.enabled===true;
+  status.textContent=result.enabled?"Saved: password login enabled; email codes also work.":"Saved: email-code login only.";
+ }catch(e){checkbox.checked=prior;status.textContent="Not saved: "+e.message;}
+ finally{checkbox.disabled=false;}
+}
+
 
 async function adminFetch(
   path,
