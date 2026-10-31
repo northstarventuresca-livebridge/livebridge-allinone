@@ -1510,6 +1510,11 @@ body{
             </div>
 
             <section id="ministryCampusEditor" style="border-top:1px solid #304052;padding-top:14px;margin-top:14px;margin-bottom:22px"></section>
+<section id="passwordAdminControl" style="padding:14px;margin:10px 0 18px;border:1px solid #34536e;border-radius:11px;background:#10263b">
+  <div class="lb-card-title">Password Sign-in</div>
+  <label style="display:flex;gap:10px;align-items:center;margin-top:12px;font-size:12px"><input type="checkbox" id="enableOrganizationPasswordLogin"> Allow this organization to sign in using a password (email codes stay available)</label>
+  <div id="passwordAdminStatus" class="lb-muted" style="margin-top:8px;font-size:11px">Loading login preference…</div>
+</section>
 
             <div class="lb-card-title" style="margin:0 0 14px;">
               Plan & Access
@@ -2646,6 +2651,51 @@ async function getAdminToken(){
   }
 }
 
+
+const PASSWORD_PREVIEW_GATEWAY="https://livebridge-password-login-test.northstarventures-ca.workers.dev";
+let passwordPreferenceLoadSerial=0;
+async function passwordPreferenceFetch(path, options={}){
+ const token=await getAdminToken();
+ if(!token)throw new Error("Please sign in again.");
+ const headers={...(options.headers||{}),"Authorization":"Bearer "+token};
+ if(options.body)headers["Content-Type"]="application/json";
+ const response=await fetch(PASSWORD_PREVIEW_GATEWAY+path,{...options,headers,cache:"no-store"});
+ const data=await response.json();
+ if(!response.ok||!data.success)throw new Error(data.error||"Unable to save login preference.");
+ return data;
+}
+async function loadOrganizationPasswordPreference(organizationId){
+ const serial=++passwordPreferenceLoadSerial;
+ const checkbox=document.getElementById("enableOrganizationPasswordLogin");
+ const status=document.getElementById("passwordAdminStatus");
+ if(!checkbox||!status)return;
+ checkbox.disabled=true;checkbox.checked=false;status.textContent="Loading login preference…";
+ try{
+  const value=await passwordPreferenceFetch("/admin/password-login?organizationId="+encodeURIComponent(organizationId));
+  if(serial!==passwordPreferenceLoadSerial||Number(selectedOrganization?.id)!==organizationId)return;
+  checkbox.checked=value.enabled===true;
+  checkbox.disabled=false;
+  status.textContent=value.enabled?"Password sign-in enabled for this organization.":"Email-code sign-in only for this organization.";
+ }catch(error){if(serial===passwordPreferenceLoadSerial)status.textContent="Could not load preference: "+error.message;}
+}
+document.addEventListener("DOMContentLoaded",()=>{
+ const checkbox=document.getElementById("enableOrganizationPasswordLogin");
+ checkbox?.addEventListener("change",async()=>{
+  const org=Number(selectedOrganization?.id||0);
+  const prior=!checkbox.checked;
+  const status=document.getElementById("passwordAdminStatus");
+  if(!org){checkbox.checked=prior;return;}
+  checkbox.disabled=true;status.textContent="Saving…";
+  try{
+   const result=await passwordPreferenceFetch("/admin/password-login",{
+    method:"POST",body:JSON.stringify({organizationId:org,enabled:checkbox.checked})
+   });
+   checkbox.checked=result.enabled===true;
+   status.textContent=result.enabled?"Saved: password sign-in enabled; email codes still work.":"Saved: email-code sign-in only.";
+  }catch(e){checkbox.checked=prior;status.textContent="Not saved: "+e.message;}
+  finally{checkbox.disabled=false;}
+ });
+});
 
 async function adminFetch(
   path,
@@ -5848,6 +5898,7 @@ async function openOrganization(id){
     data.account;
 
   window.LiveBridgeMinistryAdmin?.renderCampus(data.account);
+  loadOrganizationPasswordPreference(Number(data.account.id));
 
   const account =
     data.account;
