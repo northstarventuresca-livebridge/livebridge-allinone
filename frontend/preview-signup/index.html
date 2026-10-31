@@ -2312,11 +2312,15 @@
     signInUrl:
       window.location.origin + "/account",
 
+    // Keep Clerk email verification and password creation in preview signup.
+    // Only account-sync may redirect the user to the account dashboard.
     forceRedirectUrl:
-      window.location.origin + "/account",
+      window.location.origin + "/signup/?checkout=success&session_id=" +
+      encodeURIComponent(account.stripeCheckoutSessionId),
 
     fallbackRedirectUrl:
-      window.location.origin + "/account",
+      window.location.origin + "/signup/?checkout=success&session_id=" +
+      encodeURIComponent(account.stripeCheckoutSessionId),
 
     signInForceRedirectUrl:
       window.location.origin + "/account"
@@ -2645,6 +2649,8 @@
       localStorage.removeItem(
         LB_CHECKOUT_RECOVERY_KEY
       );
+      localStorage.removeItem(LB_PREVIEW_CLERK_START_KEY);
+      localStorage.removeItem("lb_preview_offer_token");
 
 
       const currentUserId =
