@@ -2179,10 +2179,28 @@ body{
       <button
         class="lb-secondary-button lb-wide"
         id="manageAccountButton"
+        type="button"
         style="margin-top:18px;"
       >
-        Manage Password & Security
+        Set or Change Password
       </button>
+
+      <form id="accountPasswordForm" autocomplete="off" style="display:none;margin-top:14px;padding:14px;background:#0a1727;border:1px solid #36536b;border-radius:12px;">
+        <div id="passwordCurrentWrapper" style="display:none;margin-bottom:12px;">
+          <label for="accountPasswordCurrent" class="lb-muted" style="display:block;margin-bottom:6px;">Current password</label>
+          <input id="accountPasswordCurrent" type="password" autocomplete="current-password" style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;">
+        </div>
+        <label for="accountPasswordNew" class="lb-muted" style="display:block;margin-bottom:6px;">New password</label>
+        <input id="accountPasswordNew" type="password" minlength="8" autocomplete="new-password" required style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;margin-bottom:12px;">
+        <label for="accountPasswordConfirm" class="lb-muted" style="display:block;margin-bottom:6px;">Confirm password</label>
+        <input id="accountPasswordConfirm" type="password" minlength="8" autocomplete="new-password" required style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;margin-bottom:12px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="saveAccountPassword" type="submit" class="lb-secondary-button">Save Password</button>
+          <button id="cancelAccountPassword" type="button" class="lb-secondary-button">Cancel</button>
+        </div>
+        <div id="accountPasswordMessage" role="status" aria-live="polite" style="margin-top:10px;font-size:12px;line-height:1.5;"></div>
+      </form>
+      <div id="accountPasswordResult" role="status" aria-live="polite" style="margin-top:9px;font-size:12px;line-height:1.5;"></div>
 
     </div>
 
@@ -5334,12 +5352,20 @@ async function checkPasswordAccess(){
 async function updatePasswordAccessDashboard(){
  const status=document.getElementById("passwordAccessStatus");
  const enabled=document.getElementById("passwordAccessEnabled");
- if(!status||!enabled)return;
+ const button=document.getElementById("manageAccountButton");
+ if(!status||!enabled||!button)return;
+ button.disabled=true;
  try {
   const allowed=await checkPasswordAccess();
   enabled.style.display=allowed?"block":"none";
+  button.style.display=allowed?"block":"none";
+  button.disabled=!allowed;
   status.textContent=allowed?"Use a password or an email code to sign in.":"Email code sign-in is enabled. Your organization administrator can enable optional password sign-in.";
- }catch(_e){enabled.style.display="none";status.textContent="Email code sign-in remains available.";}
+ }catch(_e){
+  enabled.style.display="none";
+  button.style.display="none";
+  status.textContent="Password settings could not be loaded. Email-code sign-in remains available.";
+ }
 }
 function setupPasswordLogin(){
  const toggle=document.getElementById("passwordLoginToggle");
@@ -8067,13 +8093,70 @@ document.getElementById(
   logout
 );
 
-document.getElementById(
-  "manageAccountButton"
-).addEventListener(
-  "click",
-  () =>
-    Clerk.openUserProfile()
-);
+// Keep password management inside the preview account dashboard.
+// The Clerk-hosted profile portal redirects preview.livebridge.ca to the
+// production homepage; this direct Clerk method avoids that redirect.
+const accountPasswordButton=document.getElementById("manageAccountButton");
+const accountPasswordForm=document.getElementById("accountPasswordForm");
+const accountPasswordMessage=document.getElementById("accountPasswordMessage");
+const accountPasswordResult=document.getElementById("accountPasswordResult");
+accountPasswordButton.addEventListener("click",async()=>{
+ accountPasswordResult.textContent="";
+ accountPasswordButton.disabled=true;
+ try{
+  if(!(await checkPasswordAccess()))throw new Error("Password sign-in is not enabled for this organization.");
+  const user=Clerk.user||await activateExistingClerkSession();
+  if(!user||typeof user.updatePassword!=="function")throw new Error("Your signed-in account could not be loaded.");
+  const hasPassword=user.passwordEnabled===true;
+  document.getElementById("passwordCurrentWrapper").style.display=hasPassword?"block":"none";
+  document.getElementById("accountPasswordCurrent").required=hasPassword;
+  accountPasswordForm.reset();
+  accountPasswordMessage.textContent="";
+  accountPasswordForm.style.display="block";
+  document.getElementById(hasPassword?"accountPasswordCurrent":"accountPasswordNew").focus();
+ }catch(error){
+  accountPasswordResult.style.color="#ffb5b5";
+  accountPasswordResult.textContent=error?.message||"Unable to open password settings.";
+ }finally{accountPasswordButton.disabled=false;}
+});
+document.getElementById("cancelAccountPassword").addEventListener("click",()=>{
+ accountPasswordForm.reset();
+ accountPasswordForm.style.display="none";
+ accountPasswordMessage.textContent="";
+});
+accountPasswordForm.addEventListener("submit",async event=>{
+ event.preventDefault();
+ const submit=document.getElementById("saveAccountPassword");
+ submit.disabled=true;
+ accountPasswordMessage.textContent="";
+ accountPasswordResult.textContent="";
+ let password=document.getElementById("accountPasswordNew").value;
+ let confirm=document.getElementById("accountPasswordConfirm").value;
+ let current=document.getElementById("accountPasswordCurrent").value;
+ try{
+  if(!(await checkPasswordAccess()))throw new Error("Password sign-in is no longer enabled for this organization.");
+  if(password.length<8)throw new Error("Choose a password with at least 8 characters.");
+  if(password!==confirm)throw new Error("The passwords don't match.");
+  const user=Clerk.user||await activateExistingClerkSession();
+  if(!user||typeof user.updatePassword!=="function")throw new Error("Your Clerk login needs to be refreshed.");
+  const options={newPassword:password,signOutOfOtherSessions:true};
+  if(user.passwordEnabled===true){
+   if(!current)throw new Error("Enter your current password to change it.");
+   options.currentPassword=current;
+  }
+  await user.updatePassword(options);
+  accountPasswordForm.reset();
+  accountPasswordForm.style.display="none";
+  accountPasswordResult.style.color="#8ef2bd";
+  accountPasswordResult.textContent="Password saved. You can now sign out and use password or email code to sign in.";
+ }catch(error){
+  accountPasswordMessage.style.color="#ffb5b5";
+  accountPasswordMessage.textContent=error?.errors?.[0]?.longMessage||error?.errors?.[0]?.message||error?.message||"Could not save password. Please sign in again using email code.";
+ }finally{
+  password="";confirm="";current="";
+  submit.disabled=false;
+ }
+});
 
 document.getElementById(
   "saveOrganizationStatsApiScopes"
