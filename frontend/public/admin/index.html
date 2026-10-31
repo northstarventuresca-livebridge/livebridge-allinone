@@ -1004,6 +1004,8 @@ body{
           </div>
 
 
+          <section id="ministryParentOverview" style="margin:0 0 18px;padding:16px;background:#102236;border:1px solid #2b4b65;border-radius:14px"></section>
+
           <div id="clientRows">
             <div class="lb-empty">
               Loading clients...
@@ -1350,6 +1352,30 @@ body{
                 <label>Optional Note</label>
                 <textarea id="offerNote" placeholder="A short personal note for this offer."></textarea>
               </div>
+
+              <div class="lb-field">
+                <label>Parent Organization (optional)</label>
+                <select id="offerMinistryParent"><option value="">Independent / No parent</option></select>
+              </div>
+              <div class="lb-field">
+                <label>Campus Name (optional)</label>
+                <input id="offerMinistryCampus" maxlength="120" placeholder="Calgary Campus">
+              </div>
+              <div class="lb-field">
+                <label>Ministry Classification</label>
+                <select id="offerMinistryType">
+                  <option value="standard_customer">Standard Customer</option>
+                  <option value="founding_ministry_partner">Founding Ministry Partner</option>
+                  <option value="ministry_gift">Ministry Gift — permanently complimentary</option>
+                </select>
+              </div>
+              <div class="lb-field">
+                <label>Partner Discount (%)</label>
+                <input id="offerMinistryDiscount" type="number" min="0" max="100" value="0">
+              </div>
+              <div class="lb-field full">
+                <div style="font-size:11px;color:#a9bed0">This invitation uses the exact Stripe price of the selected plan. Relationship and discount labels are internal; use a correctly priced private plan before issuing the invite. A Ministry Gift requires a $0 plan.</div>
+              </div>
             </div>
 
             <div class="lb-save-bar">
@@ -1482,6 +1508,8 @@ body{
               </div>
 
             </div>
+
+            <section id="ministryCampusEditor" style="border-top:1px solid #304052;padding-top:14px;margin-top:14px;margin-bottom:22px"></section>
 
             <div class="lb-card-title" style="margin:0 0 14px;">
               Plan & Access
@@ -3755,6 +3783,11 @@ function openOfferCreatorByPlanId(id){
   document.getElementById("offerSingleUse").checked = true;
   document.getElementById("offerMaxRedemptions").disabled = true;
   document.getElementById("offerNote").value = "";
+  document.getElementById("offerMinistryParent").value = "";
+  document.getElementById("offerMinistryCampus").value = "";
+  document.getElementById("offerMinistryType").value = "standard_customer";
+  document.getElementById("offerMinistryDiscount").value = "0";
+  window.LiveBridgeMinistryAdmin?.fillInviteParents();
   document.getElementById("offerFormArea").style.display = "block";
   document.getElementById("offerResultArea").style.display = "none";
   document.getElementById("offerCreateMessage").className = "lb-message";
@@ -3794,7 +3827,11 @@ async function createPrivateOffer(){
         expirationTimestamp,
         singleUse,
         maxRedemptions:singleUse ? 1 : Number(document.getElementById("offerMaxRedemptions").value || 1),
-        note:document.getElementById("offerNote").value.trim()
+        note:document.getElementById("offerNote").value.trim(),
+        parentId:document.getElementById("offerMinistryParent").value||null,
+        campusName:document.getElementById("offerMinistryCampus").value.trim(),
+        partnershipType:document.getElementById("offerMinistryType").value,
+        discountPercent:Number(document.getElementById("offerMinistryDiscount").value||0)
       })
     });
 
@@ -4498,6 +4535,7 @@ async function loadOrganizations(){
   renderOrganizations(
     adminOrganizations
   );
+  window.LiveBridgeMinistryAdmin?.refresh();
 }
 
 
@@ -5809,6 +5847,7 @@ async function openOrganization(id){
   selectedOrganization =
     data.account;
 
+  window.LiveBridgeMinistryAdmin?.renderCampus(data.account);
 
   const account =
     data.account;
@@ -11717,5 +11756,6 @@ Does NOT change admin data or Worker logic.
   setInterval(syncLiveDiagnosticButtons, 5000);
 })();
 </script>
+<script src="/assets/ministry-admin.js" defer></script>
 </body>
 </html>

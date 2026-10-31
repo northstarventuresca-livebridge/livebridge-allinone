@@ -3728,6 +3728,12 @@ async function checkStartingBroadcastTime(){
     }
 
 
+    if (data.account.unlimitedBroadcast === true) {
+      broadcastStartingRemainingMinutes = null;
+      usageWarningShown = new Set();
+      return true;
+    }
+
     const remainingMinutes =
       Number(
         data.account.remainingMinutes ??
