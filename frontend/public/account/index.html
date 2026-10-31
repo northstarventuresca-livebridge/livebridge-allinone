@@ -2191,6 +2191,8 @@ body{
           <input id="accountPasswordCurrent" type="password" autocomplete="current-password" style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;">
         </div>
         <label for="accountPasswordNew" class="lb-muted" style="display:block;margin-bottom:6px;">New password</label>
+        <div class="lb-muted" style="font-size:11px;line-height:1.5;margin:0 0 8px;">Preferred LiveBridge policy: 8+ characters, 1 letter and 1 number. No capitals or symbols required. Avoid your organization or account holder name.</div>
+        <div class="lb-muted" style="font-size:11px;line-height:1.5;margin:0 0 8px;">Testing note: Clerk's current application-wide minimum is still 15 until its central setting is changed.</div>
         <input id="accountPasswordNew" type="password" minlength="8" autocomplete="new-password" required style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;margin-bottom:12px;">
         <label for="accountPasswordConfirm" class="lb-muted" style="display:block;margin-bottom:6px;">Confirm password</label>
         <input id="accountPasswordConfirm" type="password" minlength="8" autocomplete="new-password" required style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;margin-bottom:12px;">
@@ -2198,6 +2200,7 @@ body{
           <button id="saveAccountPassword" type="submit" class="lb-secondary-button">Save Password</button>
           <button id="cancelAccountPassword" type="button" class="lb-secondary-button">Cancel</button>
         </div>
+        <div id="accountPasswordStrengthHint" role="status" aria-live="polite" style="margin-top:9px;font-size:12px;line-height:1.5;"></div>
         <div id="accountPasswordMessage" role="status" aria-live="polite" style="margin-top:10px;font-size:12px;line-height:1.5;"></div>
       </form>
       <div id="accountPasswordResult" role="status" aria-live="polite" style="margin-top:9px;font-size:12px;line-height:1.5;"></div>
@@ -8093,6 +8096,36 @@ document.getElementById(
   logout
 );
 
+function passwordRuleError(value){
+ // Local feedback only; never send this value to our D1 database or Worker.
+ const password=String(value||"");
+ if(Array.from(password).length<8)return "Choose at least 8 characters.";
+ if(!/[a-z]/i.test(password))return "Add at least one letter.";
+ if(!/[0-9]/.test(password))return "Add at least one number.";
+ const normalized=password.toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]/gu,"");
+ const account=window.liveBridgeServerAccount||{};
+ const signedIn=Clerk.user||{};
+ const restricted=[
+  account.organizationName,account.accountHolder,
+  signedIn.fullName,signedIn.firstName,signedIn.lastName
+ ].filter(Boolean);
+ for(const name of restricted){
+  const clean=String(name).toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]/gu,"");
+  if(clean.length>=3&&normalized.includes(clean))return "Don't include your organization or account holder name in your password.";
+  const tokens=String(name).toLocaleLowerCase().split(/[^\\p{L}\\p{N}]+/u);
+  if(tokens.some(token=>token.length>=4&&normalized.includes(token)&&!["church","centre","center","incorporated","organization","company","home"].includes(token)))
+   return "Don't use part of your organization or account holder name.";
+ }
+ const generic=["password","qwerty","letmein","welcome","admin123","12345678","abcd1234","test1234"];
+ if(generic.some(item=>normalized.includes(item)))return "This password is too common or predictable. Choose something less obvious.";
+ return "";
+}
+const passwordStrengthHint=document.getElementById("accountPasswordStrengthHint");
+document.getElementById("accountPasswordNew").addEventListener("input",event=>{
+ const error=event.target.value?passwordRuleError(event.target.value):"";
+ passwordStrengthHint.textContent=event.target.value?(error||"✓ Meets the proposed LiveBridge rules. Clerk still applies its current minimum. "):"";
+ passwordStrengthHint.style.color=error?"#ffb5b5":"#8ef2bd";
+});
 // Keep password management inside the preview account dashboard.
 // The Clerk-hosted profile portal redirects preview.livebridge.ca to the
 // production homepage; this direct Clerk method avoids that redirect.
@@ -8135,7 +8168,8 @@ accountPasswordForm.addEventListener("submit",async event=>{
  let current=document.getElementById("accountPasswordCurrent").value;
  try{
   if(!(await checkPasswordAccess()))throw new Error("Password sign-in is no longer enabled for this organization.");
-  if(password.length<8)throw new Error("Choose a password with at least 8 characters.");
+  const localRuleError=passwordRuleError(password);
+  if(localRuleError)throw new Error(localRuleError);
   if(password!==confirm)throw new Error("The passwords don't match.");
   const user=Clerk.user||await activateExistingClerkSession();
   if(!user||typeof user.updatePassword!=="function")throw new Error("Your Clerk login needs to be refreshed.");
