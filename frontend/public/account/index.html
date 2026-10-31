@@ -857,7 +857,7 @@ body{
     <div class="lb-login-card">
       <div id="clerk-auth"></div>
       <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,.15);padding-top:16px;">
-        <button type="button" class="lb-secondary-button lb-wide" id="passwordLoginToggle">Sign in with password instead</button>
+        <button type="button" class="lb-secondary-button lb-wide" id="passwordLoginToggle">Use password instead of email code</button>
         <form id="passwordLoginForm" style="display:none;margin-top:15px;">
           <label style="display:block;margin-bottom:10px;">Email
             <input type="email" id="passwordLoginEmail" autocomplete="username" required
@@ -868,6 +868,7 @@ body{
               style="display:block;width:100%;padding:12px;margin-top:6px;border-radius:8px;">
           </label>
           <button type="submit" class="lb-secondary-button lb-wide" id="passwordLoginSubmit">Sign in with password</button>
+<button type="button" class="lb-secondary-button lb-wide" id="passwordEmailCodeButton" style="margin-top:9px">Forgot password? Use email code instead</button>
           <div id="passwordLoginError" role="alert" style="color:#ffb5b5;margin-top:10px;"></div>
         </form>
       </div>
@@ -2172,15 +2173,37 @@ body{
       <div class="lb-muted">
         Manage your password, sign-in methods and account security.
       </div>
-      <div class="lb-muted" style="margin-top:12px;">Optional: add a password in Manage Password & Security. You can continue using an email verification code instead.</div>
+      <div class="lb-muted" style="margin-top:12px;"><span id="passwordAccessStatus">Email codes remain available for sign-in.</span>
+<div id="passwordAccessEnabled" style="display:none;margin-top:8px;color:#93efbf;font-size:11px;font-weight:800">Password sign-in enabled for your organization. Choose Manage Password &amp; Security below to set or change it.</div></div>
 
       <button
         class="lb-secondary-button lb-wide"
         id="manageAccountButton"
+        type="button"
         style="margin-top:18px;"
       >
-        Manage Password & Security
+        Set or Change Password
       </button>
+
+      <form id="accountPasswordForm" autocomplete="off" style="display:none;margin-top:14px;padding:14px;background:#0a1727;border:1px solid #36536b;border-radius:12px;">
+        <div id="passwordCurrentWrapper" style="display:none;margin-bottom:12px;">
+          <label for="accountPasswordCurrent" class="lb-muted" style="display:block;margin-bottom:6px;">Current password</label>
+          <input id="accountPasswordCurrent" type="password" autocomplete="current-password" style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;">
+        </div>
+        <label for="accountPasswordNew" class="lb-muted" style="display:block;margin-bottom:6px;">New password</label>
+        <div class="lb-muted" style="font-size:11px;line-height:1.5;margin:0 0 8px;">Preferred LiveBridge policy: 8+ characters, 1 letter and 1 number. No capitals or symbols required. Avoid your organization or account holder name.</div>
+        <div class="lb-muted" style="font-size:11px;line-height:1.5;margin:0 0 8px;">Testing note: Clerk's current application-wide minimum is still 15 until its central setting is changed.</div>
+        <input id="accountPasswordNew" type="password" minlength="8" autocomplete="new-password" required style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;margin-bottom:12px;">
+        <label for="accountPasswordConfirm" class="lb-muted" style="display:block;margin-bottom:6px;">Confirm password</label>
+        <input id="accountPasswordConfirm" type="password" minlength="8" autocomplete="new-password" required style="width:100%;padding:12px;border-radius:8px;border:1px solid #38506a;background:#111f31;color:#fff;margin-bottom:12px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="saveAccountPassword" type="submit" class="lb-secondary-button">Save Password</button>
+          <button id="cancelAccountPassword" type="button" class="lb-secondary-button">Cancel</button>
+        </div>
+        <div id="accountPasswordStrengthHint" role="status" aria-live="polite" style="margin-top:9px;font-size:12px;line-height:1.5;"></div>
+        <div id="accountPasswordMessage" role="status" aria-live="polite" style="margin-top:10px;font-size:12px;line-height:1.5;"></div>
+      </form>
+      <div id="accountPasswordResult" role="status" aria-live="polite" style="margin-top:9px;font-size:12px;line-height:1.5;"></div>
 
     </div>
 
@@ -5212,6 +5235,7 @@ async function renderDashboard(
       !marketingEnabled;
   }
 
+  updatePasswordAccessDashboard();
   loadOrganizationStatsApi();
 
   initializeUsageStatsControls();
@@ -5319,39 +5343,148 @@ async function renderDashboard(
   );
 }
 
-function setupPasswordLogin() {
-  const toggle = document.getElementById("passwordLoginToggle");
-  const form = document.getElementById("passwordLoginForm");
-  if (!toggle || !form || form.dataset.bound === "true") return;
-  form.dataset.bound = "true";
-  toggle.addEventListener("click", () => {
-    form.style.display = form.style.display === "none" ? "block" : "none";
-  });
-  form.addEventListener("submit", async event => {
-    event.preventDefault();
-    const submit = document.getElementById("passwordLoginSubmit");
-    const errorBox = document.getElementById("passwordLoginError");
-    submit.disabled = true;
-    errorBox.textContent = "";
-    try {
-      const result = await Clerk.client.signIn.create({
-        strategy:"password",
-        identifier:document.getElementById("passwordLoginEmail").value.trim(),
-        password:document.getElementById("passwordLoginPassword").value
-      });
-      if (result.status !== "complete" || !result.createdSessionId) {
-        throw new Error("Additional verification required. Please use the standard email sign-in.");
-      }
-      await Clerk.setActive({session:result.createdSessionId});
-      const destination = new URLSearchParams(location.search).get("returnTo") === "/admin" ? "/admin" : "/account";
-      window.location.replace(destination);
-    } catch(error) {
-      errorBox.textContent = error?.errors?.[0]?.longMessage || error.message || "Password sign-in failed.";
-    } finally {
-      submit.disabled = false;
-      document.getElementById("passwordLoginPassword").value = "";
-    }
-  });
+const PASSWORD_PREVIEW_API="https://livebridge-password-login-test.northstarventures-ca.workers.dev";
+async function checkPasswordAccess(){
+ const token=await getLiveBridgeSessionToken();
+ if(!token)throw new Error("Please sign in again.");
+ const r=await fetch(PASSWORD_PREVIEW_API+"/account/password-login",{headers:{"Authorization":"Bearer "+token},cache:"no-store"});
+ const data=await r.json();
+ if(!r.ok||data.success!==true)throw new Error("Unable to verify password sign-in access.");
+ return data.enabled===true;
+}
+async function updatePasswordAccessDashboard(){
+ const status=document.getElementById("passwordAccessStatus");
+ const enabled=document.getElementById("passwordAccessEnabled");
+ const button=document.getElementById("manageAccountButton");
+ if(!status||!enabled||!button)return;
+ button.disabled=true;
+ try {
+  const allowed=await checkPasswordAccess();
+  enabled.style.display=allowed?"block":"none";
+  button.style.display=allowed?"block":"none";
+  button.disabled=!allowed;
+  status.textContent=allowed?"Use a password or an email code to sign in.":"Email code sign-in is enabled. Your organization administrator can enable optional password sign-in.";
+ }catch(_e){
+  enabled.style.display="none";
+  button.style.display="none";
+  status.textContent="Password settings could not be loaded. Email-code sign-in remains available.";
+ }
+}
+function setupPasswordLogin(){
+ const toggle=document.getElementById("passwordLoginToggle");
+ const form=document.getElementById("passwordLoginForm");
+ const fallback=document.getElementById("passwordEmailCodeButton");
+ const clerkBox=document.getElementById("clerk-auth");
+ if(!toggle||!form||form.dataset.bound==="true")return;
+ form.dataset.bound="true";
+ let verifyBox=null;
+ function resetVerification(){
+  verifyBox?.remove();verifyBox=null;
+  const passwordField=document.getElementById("passwordLoginPassword");
+  if(passwordField)passwordField.value="";
+ }
+ function mountEmailSignIn(){
+  if(!clerkBox)return;
+  clerkBox.style.display="";
+  try{
+   if(location.hash.includes("factor-two")||location.hash.includes("factor-two"))
+    history.replaceState(null,"",location.pathname+location.search);
+   Clerk.mountSignIn(clerkBox,{
+    routing:"hash",signUpUrl:"/signup",
+    forceRedirectUrl:new URLSearchParams(location.search).get("returnTo")==="/admin"?"/admin":"/account",
+    fallbackRedirectUrl:new URLSearchParams(location.search).get("returnTo")==="/admin"?"/admin":"/account"
+   });
+  }catch(e){console.warn("Clerk email-code sign-in could not be mounted:",e);}
+ }
+ function useEmailCode(){
+  resetVerification();form.reset();form.style.display="none";
+  toggle.textContent="Use password instead of email code";
+  mountEmailSignIn();
+ }
+ toggle.addEventListener("click",()=>{
+  const show=form.style.display==="none";
+  if(show){
+   try{Clerk.unmountSignIn(clerkBox);}catch(e){console.warn("Clerk sign-in unmount:",e);}
+   if(clerkBox)clerkBox.style.display="none";
+   if(location.hash.includes("factor-two"))
+    history.replaceState(null,"",location.pathname+location.search);
+   form.style.display="block";
+   toggle.textContent="Use email code instead";
+  }else useEmailCode();
+ });
+ fallback?.addEventListener("click",useEmailCode);
+ const reportError=message=>{
+  const error=document.getElementById("passwordLoginError");
+  if(error)error.textContent=message;
+ };
+ const errorText=e=>e?.errors?.[0]?.longMessage||e?.errors?.[0]?.message||e?.message||"Password sign-in failed. Try email code.";
+ async function completePasswordSignIn(result){
+  if(result.status!=="complete"||!result.createdSessionId)
+   throw new Error("Sign-in needs additional verification.");
+  await Clerk.setActive({session:result.createdSessionId});
+  if(!(await checkPasswordAccess())){
+   await Clerk.signOut();
+   throw new Error("Password sign-in isn't enabled for this organization. Use an email code instead.");
+  }
+  location.replace(new URLSearchParams(location.search).get("returnTo")==="/admin"?"/admin":"/account");
+ }
+ async function showSecondFactor(result){
+  const factors=result.supportedSecondFactors||Clerk.client.signIn.supportedSecondFactors||[];
+  const email=factors.find(f=>f.strategy==="email_code");
+  const totp=factors.find(f=>f.strategy==="totp");
+  const strategy=email?"email_code":totp?"totp":null;
+  if(!strategy){
+   throw new Error("Clerk requires another sign-in step. Choose email code instead to continue.");
+  }
+  if(email){
+   await Clerk.client.signIn.prepareSecondFactor({
+    strategy:"email_code",emailAddressId:email.emailAddressId
+   });
+  }
+  resetVerification();
+  verifyBox=document.createElement("div");
+  verifyBox.id="passwordSecondFactor";
+  verifyBox.style.cssText="margin:13px 0;padding:15px;border:1px solid rgba(255,255,255,.2);border-radius:10px;color:#fff;background:#0e2035";
+  const message=document.createElement("p");
+  message.textContent=email?"For security, enter the verification code Clerk sent to your email.":"Enter the code from your authenticator app.";
+  message.style.cssText="font-size:13px;color:#dbe8f7;margin:0 0 10px";
+  const code=document.createElement("input");
+  code.type="text";code.autocomplete="one-time-code";code.inputMode="numeric";
+  code.maxLength=12;code.placeholder="Verification code";code.setAttribute("aria-label","Verification code");
+  code.style.cssText="display:block;width:100%;padding:12px;margin-bottom:10px;border-radius:8px";
+  const verify=document.createElement("button");
+  verify.type="button";verify.className="lb-secondary-button lb-wide";verify.textContent="Verify and sign in";
+  const messageBox=document.createElement("div");messageBox.setAttribute("role","alert");messageBox.style.cssText="margin-top:8px;color:#ffb5b5";
+  verifyBox.append(message,code,verify,messageBox);
+  form.parentNode.insertBefore(verifyBox,form.nextSibling);
+  form.style.display="none";
+  verify.onclick=async()=>{
+   verify.disabled=true;messageBox.textContent="";
+   try{
+    if(!code.value.trim())throw new Error("Enter your verification code.");
+    const done=await Clerk.client.signIn.attemptSecondFactor({strategy,code:code.value.trim()});
+    await completePasswordSignIn(done);
+   }catch(e){messageBox.textContent=errorText(e);verify.disabled=false;}
+  };
+  code.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();verify.click();}});
+  code.focus();
+ }
+ form.addEventListener("submit",async event=>{
+  event.preventDefault();
+  const submit=document.getElementById("passwordLoginSubmit");
+  submit.disabled=true;reportError("");
+  try{
+   const identifier=document.getElementById("passwordLoginEmail").value.trim();
+   const password=document.getElementById("passwordLoginPassword").value;
+   if(!identifier||!password)throw new Error("Enter your email and password.");
+   const result=await Clerk.client.signIn.create({strategy:"password",identifier,password});
+   if(result.status==="complete")await completePasswordSignIn(result);
+   else if(result.status==="needs_client_trust"||result.status==="needs_second_factor")
+    await showSecondFactor(result);
+   else throw new Error("Sign-in needs another step. Use email-code sign-in instead.");
+  }catch(e){reportError(errorText(e));}
+  finally{submit.disabled=false;document.getElementById("passwordLoginPassword").value="";}
+ });
 }
 
 function showLogin(){
@@ -8040,13 +8173,101 @@ document.getElementById(
   logout
 );
 
-document.getElementById(
-  "manageAccountButton"
-).addEventListener(
-  "click",
-  () =>
-    Clerk.openUserProfile()
-);
+function passwordRuleError(value){
+ // Local feedback only; never send this value to our D1 database or Worker.
+ const password=String(value||"");
+ if(Array.from(password).length<8)return "Choose at least 8 characters.";
+ if(!/[a-z]/i.test(password))return "Add at least one letter.";
+ if(!/[0-9]/.test(password))return "Add at least one number.";
+ const normalized=password.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,"");
+ const account=window.liveBridgeServerAccount||{};
+ const signedIn=Clerk.user||{};
+ const restricted=[
+  account.organizationName,account.accountHolder,
+  signedIn.fullName,signedIn.firstName,signedIn.lastName
+ ].filter(Boolean);
+ for(const name of restricted){
+  const clean=String(name).toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,"");
+  if(clean.length>=3&&normalized.includes(clean))return "Don't include your organization or account holder name in your password.";
+  const tokens=String(name).toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u);
+  if(tokens.some(token=>token.length>=4&&normalized.includes(token)&&!["church","centre","center","incorporated","organization","company","home"].includes(token)))
+   return "Don't use part of your organization or account holder name.";
+ }
+ const generic=["password","qwerty","letmein","welcome","admin123","12345678","abcd1234","test1234"];
+ if(generic.some(item=>normalized.includes(item)))return "This password is too common or predictable. Choose something less obvious.";
+ return "";
+}
+const passwordStrengthHint=document.getElementById("accountPasswordStrengthHint");
+document.getElementById("accountPasswordNew").addEventListener("input",event=>{
+ const error=event.target.value?passwordRuleError(event.target.value):"";
+ passwordStrengthHint.textContent=event.target.value?(error||"✓ Meets the proposed LiveBridge rules. Clerk still applies its current minimum. "):"";
+ passwordStrengthHint.style.color=error?"#ffb5b5":"#8ef2bd";
+});
+// Keep password management inside the preview account dashboard.
+// The Clerk-hosted profile portal redirects preview.livebridge.ca to the
+// production homepage; this direct Clerk method avoids that redirect.
+const accountPasswordButton=document.getElementById("manageAccountButton");
+const accountPasswordForm=document.getElementById("accountPasswordForm");
+const accountPasswordMessage=document.getElementById("accountPasswordMessage");
+const accountPasswordResult=document.getElementById("accountPasswordResult");
+accountPasswordButton.addEventListener("click",async()=>{
+ accountPasswordResult.textContent="";
+ accountPasswordButton.disabled=true;
+ try{
+  if(!(await checkPasswordAccess()))throw new Error("Password sign-in is not enabled for this organization.");
+  const user=Clerk.user||await activateExistingClerkSession();
+  if(!user||typeof user.updatePassword!=="function")throw new Error("Your signed-in account could not be loaded.");
+  const hasPassword=user.passwordEnabled===true;
+  document.getElementById("passwordCurrentWrapper").style.display=hasPassword?"block":"none";
+  document.getElementById("accountPasswordCurrent").required=hasPassword;
+  accountPasswordForm.reset();
+  accountPasswordMessage.textContent="";
+  accountPasswordForm.style.display="block";
+  document.getElementById(hasPassword?"accountPasswordCurrent":"accountPasswordNew").focus();
+ }catch(error){
+  accountPasswordResult.style.color="#ffb5b5";
+  accountPasswordResult.textContent=error?.message||"Unable to open password settings.";
+ }finally{accountPasswordButton.disabled=false;}
+});
+document.getElementById("cancelAccountPassword").addEventListener("click",()=>{
+ accountPasswordForm.reset();
+ accountPasswordForm.style.display="none";
+ accountPasswordMessage.textContent="";
+});
+accountPasswordForm.addEventListener("submit",async event=>{
+ event.preventDefault();
+ const submit=document.getElementById("saveAccountPassword");
+ submit.disabled=true;
+ accountPasswordMessage.textContent="";
+ accountPasswordResult.textContent="";
+ let password=document.getElementById("accountPasswordNew").value;
+ let confirm=document.getElementById("accountPasswordConfirm").value;
+ let current=document.getElementById("accountPasswordCurrent").value;
+ try{
+  if(!(await checkPasswordAccess()))throw new Error("Password sign-in is no longer enabled for this organization.");
+  const localRuleError=passwordRuleError(password);
+  if(localRuleError)throw new Error(localRuleError);
+  if(password!==confirm)throw new Error("The passwords don't match.");
+  const user=Clerk.user||await activateExistingClerkSession();
+  if(!user||typeof user.updatePassword!=="function")throw new Error("Your Clerk login needs to be refreshed.");
+  const options={newPassword:password,signOutOfOtherSessions:true};
+  if(user.passwordEnabled===true){
+   if(!current)throw new Error("Enter your current password to change it.");
+   options.currentPassword=current;
+  }
+  await user.updatePassword(options);
+  accountPasswordForm.reset();
+  accountPasswordForm.style.display="none";
+  accountPasswordResult.style.color="#8ef2bd";
+  accountPasswordResult.textContent="Password saved. You can now sign out and use password or email code to sign in.";
+ }catch(error){
+  accountPasswordMessage.style.color="#ffb5b5";
+  accountPasswordMessage.textContent=error?.errors?.[0]?.longMessage||error?.errors?.[0]?.message||error?.message||"Could not save password. Please sign in again using email code.";
+ }finally{
+  password="";confirm="";current="";
+  submit.disabled=false;
+ }
+});
 
 document.getElementById(
   "saveOrganizationStatsApiScopes"
