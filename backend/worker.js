@@ -1,3 +1,44 @@
+import { WorkerEntrypoint } from "cloudflare:workers";
+
+// Internal-only RPC entrypoint. It is NOT reachable via a public HTTP route.
+// Only the explicitly configured owner, with an active LiveBridge administrator
+// record and the expected broadcast room, may receive a one-use Clerk ticket.
+// This deliberately never accepts a userId from a caller.
+export class NorthStarClerkSignIn extends WorkerEntrypoint {
+  async issueOwnerTicket() {
+    const userId = String(this.env.NSV_LIVEBRIDGE_OWNER_CLERK_USER_ID || "").trim();
+    const clerkSecret = String(this.env.CLERK_PRODUCTION_SECRET_KEY || "").trim();
+    if (!/^user_[A-Za-z0-9]+$/.test(userId) || !clerkSecret || !this.env.TRANSLATIONS_DB) {
+      throw new Error("LiveBridge Command Center authentication is not configured");
+    }
+    const owner = await this.env.TRANSLATIONS_DB.prepare(
+      `SELECT a.clerk_user_id
+         FROM admin_users a
+         INNER JOIN organizations o ON o.clerk_user_id = a.clerk_user_id
+         WHERE a.clerk_user_id = ?
+           AND a.active = 1
+           AND UPPER(o.room_name) = 'EXAMPLE'
+         LIMIT 1`
+    ).bind(userId).first();
+    if (!owner) throw new Error("LiveBridge owner account is not active or mapped");
+
+    const response = await fetch("https://api.clerk.com/v1/sign_in_tokens", {
+      method: "POST",
+      headers: {
+        "authorization": "Bearer " + clerkSecret,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({user_id: owner.clerk_user_id, expires_in_seconds: 60}),
+    });
+    if (!response.ok) throw new Error("Clerk ticket issuance failed");
+    const result = await response.json();
+    if (!result || typeof result.token !== "string" || !result.token) {
+      throw new Error("Clerk ticket missing");
+    }
+    return {token: result.token};
+  }
+}
+
 import { BETA_AGREEMENT_VERSION, ministryAdminRoute, saveMinistryOfferAssignment, assignMinistryCampusFromOffer, recordBetaAcceptance, isGiftedMinistry } from "./ministry-partners.mjs";
 // LiveBridge production deployment marker: effective-room display sync 2026-10-07
 var __defProp = Object.defineProperty;
