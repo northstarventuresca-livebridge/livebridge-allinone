@@ -8582,6 +8582,30 @@ window.addEventListener(
 
       await Clerk.load();
 
+      // North Star Command Center supplies a one-use, 60-second Clerk sign-in ticket.
+      // URL fragments are not sent to the web server; remove the ticket from history
+      // before making any network calls. No ticket means normal Clerk login applies.
+      const commandCenterTicket = new URLSearchParams(
+        window.location.hash.slice(1)
+      ).get("nsv_sso");
+      if (commandCenterTicket) {
+        window.history.replaceState(
+          null, "",
+          window.location.pathname + window.location.search
+        );
+        const signInAttempt = await Clerk.client.signIn.create({
+          strategy: "ticket",
+          ticket: commandCenterTicket
+        });
+        if (signInAttempt.status !== "complete" ||
+            !signInAttempt.createdSessionId) {
+          throw new Error("North Star sign-in ticket could not complete.");
+        }
+        await Clerk.setActive({
+          session: signInAttempt.createdSessionId
+        });
+      }
+
       const token =
         await getAdminToken();
 
