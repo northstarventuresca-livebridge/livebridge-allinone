@@ -10,7 +10,7 @@ for (const pathname of ["/login/", "/admin/"]) {
   assert.ok(inline, "inline preview client is rendered");
   new Function(inline); // Parse generated browser JavaScript, do not execute.
   assert.match(inline, /modern\.password\(\{emailAddress:identifier,password\}\)/);
-  assert.match(inline, /modern\.finalize/);
+  assert.match(inline, /Clerk\.signIn\.finalize/);
   assert.match(inline, /Clerk\.mountSignIn/);
   assert.match(inline, /doPasswordLogin/);
 }
