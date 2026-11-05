@@ -27,8 +27,9 @@ async function doPasswordLogin(identifier,password){
  }
  const legacy=Clerk.client?.signIn;
  if(legacy&&typeof legacy.create==='function'){
-  const result=await legacy.create({strategy:'password',identifier,password});
-  if(result.status!=='complete'||!result.createdSessionId)throw new Error('Clerk requires an additional verification step. Use email-code sign-in.');
+  const result=await legacy.create({identifier,password});
+  if(result.status==='needs_second_factor')throw new Error('Clerk requires a second verification factor. Use email-code sign-in.');
+  if(result.status!=='complete'||!result.createdSessionId)throw new Error('Clerk password sign-in did not complete.');
   await Clerk.setActive({session:result.createdSessionId});
   return;
  }
