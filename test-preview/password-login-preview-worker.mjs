@@ -1,6 +1,6 @@
 
 const LIVE="https://livebridge.northstarventures-ca.workers.dev";
-const CLERK="https://clerk.livebridge.ca/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
+const CLERK="https://clerk.livebridge.ca/npm/@clerk/clerk-js@6/dist/clerk.browser.js";
 const KEY="pk_live_Y2xlcmsubGl2ZWJyaWRnZS5jYSQ";
 function reply(data,status=200){return new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json","cache-control":"no-store"}})}
 async function upstream(path,token){return fetch(LIVE+path,{method:"GET",headers:{Authorization:"Bearer "+token},cf:{cacheTtl:0}})}
@@ -14,6 +14,25 @@ function say(s,err=false){msg.className=err?'error':'ok';msg.textContent=s}
 async function token(){return await Clerk.session?.getToken()}
 async function api(path,method='GET',payload){let t=await token();const r=await fetch('/api/'+path,{method,headers:{Authorization:'Bearer '+t,'content-type':'application/json'},body:payload?JSON.stringify(payload):undefined});const v=await r.json();if(!r.ok)throw new Error(v.error||'Request failed');return v}
 function signout(){Clerk.signOut().then(()=>location.reload())}
+async function doPasswordLogin(identifier,password){
+ const modern=Clerk.signIn;
+ if(modern&&typeof modern.password==='function'){
+  const result=await modern.password({emailAddress:identifier,password});
+  if(result&&result.error)throw result.error;
+  if(Clerk.signIn.status!=='complete')throw new Error('Clerk requires an additional verification step. Use email-code sign-in.');
+  const finalized=await Clerk.signIn.finalize({navigate:()=>{}});
+  if(finalized&&finalized.error)throw finalized.error;
+  return;
+ }
+ const legacy=Clerk.client?.signIn;
+ if(legacy&&typeof legacy.create==='function'){
+  const result=await legacy.create({strategy:'password',identifier,password});
+  if(result.status!=='complete'||!result.createdSessionId)throw new Error('Clerk requires an additional verification step. Use email-code sign-in.');
+  await Clerk.setActive({session:result.createdSessionId});
+  return;
+ }
+ throw new Error('Clerk password sign-in API unavailable');
+}
 async function afterSignIn(){
  root.innerHTML='<p>Signed in: '+String(Clerk.user?.primaryEmailAddress?.emailAddress||'')+'</p><button id="out">Sign out</button>';
  document.getElementById('out').onclick=signout;
@@ -39,7 +58,7 @@ async function init(){
  if(${admin}){Clerk.mountSignIn(root,{routing:'hash'});return}
  root.innerHTML='<h2>Test password sign-in</h2><form id="pw"><label>Email<br><input id="email" type="email" autocomplete="username" required></label><label>Password<br><input id="pass" type="password" autocomplete="current-password" required></label><button id="submit">Sign in with password</button></form><p>Need to set a password? <button id="standard" type="button">Sign in by email code first</button></p><div id="standardMount"></div>';
  document.getElementById('standard').onclick=()=>{document.getElementById('pw').style.display='none';Clerk.mountSignIn(document.getElementById('standardMount'),{routing:'hash'})};
- document.getElementById('pw').onsubmit=async e=>{e.preventDefault();const b=document.getElementById('submit');b.disabled=true;try{const v=await Clerk.client.signIn.create({strategy:'password',identifier:document.getElementById('email').value.trim(),password:document.getElementById('pass').value});if(v.status!=='complete'||!v.createdSessionId)throw new Error('Clerk requires an additional verification step. Use standard sign-in.');await Clerk.setActive({session:v.createdSessionId});const policy=await api('policy');if(!policy.enabled){await Clerk.signOut();throw new Error('Password sign-in is not enabled for this account in the test settings.')}say('Password sign-in successful.');await afterSignIn()}catch(err){say(err.errors?.[0]?.longMessage||err.message,true)}finally{b.disabled=false;document.getElementById('pass').value=''}};
+ document.getElementById('pw').onsubmit=async e=>{e.preventDefault();const b=document.getElementById('submit');b.disabled=true;try{await doPasswordLogin(document.getElementById('email').value.trim(),document.getElementById('pass').value);const policy=await api('policy');if(!policy.enabled){await Clerk.signOut();throw new Error('Password sign-in is not enabled for this account in the test settings.')}say('Password sign-in successful.');await afterSignIn()}catch(err){say(err.errors?.[0]?.longMessage||err.message,true)}finally{b.disabled=false;document.getElementById('pass').value=''}};
 }
 window.addEventListener('load',()=>init().catch(e=>say(e.message,true)));
 `}
