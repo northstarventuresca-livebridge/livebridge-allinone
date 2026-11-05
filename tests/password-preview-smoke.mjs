@@ -16,6 +16,7 @@ for (const pathname of ["/login/", "/admin/"]) {
   assert.match(inline, /Clerk\.signIn\.finalize/);
   assert.match(inline, /Clerk\.mountSignIn/);
   assert.match(inline, /doPasswordLogin/);
+  assert.match(inline, /if\(field\)field\.value/);
   assert.match(inline, /legacy\.create\(\{identifier,password\}\)/);
   assert.match(inline, /needs_second_factor/);
 }
