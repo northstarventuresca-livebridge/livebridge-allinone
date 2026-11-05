@@ -18,5 +18,5 @@ assert.match(script, /passwordEnabled === true/);
 assert.match(script, /clerk\.openUserProfile\(\)/);
 assert.match(script, /Set Up Password Login/);
 const source = fs.readFileSync(new URL("../frontend/worker.js", import.meta.url), "utf8");
-assert.match(source, /<script src=\\"\/account\/password-login-upgrade\.js\\"><\/script>/);
+assert.ok(source.includes('<script src="/account/password-login-upgrade.js"></script>'));
 console.log("PASS: Password login bundle parses; existing email-code login is preserved; onboarding button is included.");
