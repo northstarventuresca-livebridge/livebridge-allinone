@@ -443,6 +443,39 @@ async function enhanceBroadcasterPage(
     );
 }
 
+// The existing account asset still loads Clerk's floating @latest bundle without the UI bundle.
+// Use the same verified pinned Clerk initialization as the isolated password preview.
+// This only rewrites the /account/ HTML response; the underlying asset is unchanged.
+async function normalizeAccountClerkBootstrap(response) {
+  if (!response || response.status >= 400) return response;
+  let html = await response.text();
+  const oldScript = [
+    '<script',
+    'async',
+    'crossorigin="anonymous"',
+    'data-clerk-publishable-key="pk_live_Y2xlcmsubGl2ZWJyaWRnZS5jYSQ"',
+    'src="https://clerk.livebridge.ca/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"',
+    'type="text/javascript">',
+    '</script>'
+  ].join('\n');
+  if (html.includes(oldScript) && html.includes('await Clerk.load();')) {
+    const nextScript = [
+      '<script defer crossorigin="anonymous" src="https://clerk.livebridge.ca/npm/@clerk/ui@1/dist/ui.browser.js"></script>',
+      '<script defer crossorigin="anonymous" data-clerk-publishable-key="pk_live_Y2xlcmsubGl2ZWJyaWRnZS5jYSQ" src="https://clerk.livebridge.ca/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>'
+    ].join('\n');
+    html = html.replace(oldScript, nextScript).replace(
+      'await Clerk.load();',
+      'await Clerk.load({ ui: { ClerkUI: window.__internal_ClerkUICtor } });'
+    );
+  } else {
+    console.warn("LiveBridge account Clerk script differs from reviewed baseline; leaving page unchanged");
+  }
+  const headers = new Headers(response.headers);
+  headers.delete("content-encoding");
+  headers.set("Cache-Control", "no-store");
+  return new Response(html, { status: response.status, headers });
+}
+
 function enhanceAccountPage(
   response
 ) {
@@ -527,9 +560,7 @@ async function fetchExactAsset(
     assetPath ===
     "/account/index.html"
   ) {
-    return enhanceAccountPage(
-      response
-    );
+    return enhanceAccountPage(await normalizeAccountClerkBootstrap(response));
   }
 
   return response;
