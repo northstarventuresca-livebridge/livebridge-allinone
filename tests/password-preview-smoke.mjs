@@ -16,5 +16,7 @@ for (const pathname of ["/login/", "/admin/"]) {
   assert.match(inline, /Clerk\.signIn\.finalize/);
   assert.match(inline, /Clerk\.mountSignIn/);
   assert.match(inline, /doPasswordLogin/);
+  assert.match(inline, /legacy\.create\(\{identifier,password\}\)/);
+  assert.match(inline, /needs_second_factor/);
 }
 console.log("PASS: Isolated LiveBridge preview renders and its client-side JS parses.");
