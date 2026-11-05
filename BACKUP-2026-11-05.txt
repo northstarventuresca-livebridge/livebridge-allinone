@@ -1,0 +1,7 @@
+LiveBridge pre-password-rollout backup (2026-11-05)
+GitHub baseline main: 9e08d9c570588688dd8557a331ba9618220ca849
+Backup branch: backup/pre-password-login-2026-11-05
+Cloudflare production frontend: livebridge-production version a1b9c1ab-a929-472b-add0-a7bd243bb641; deployment bc45e795-bbbe-4e86-8dd2-ec3f609d8da9
+Cloudflare backend: livebridge version 6ceaf32c-bd23-40bf-ace5-fc144dea7c22; deployment 51fc2618-e410-4843-ba20-68273f7a103c
+Cloudflare staging frontend: livebridge-allinone-frontend-test version dcd3b0ac-fe6b-4345-a1dd-6974140f7aa0; deployment 1b73f791-19de-45bb-ad46-7c9b26685edc
+Cloudflare versions verified retrievable before rollout. To roll back redeploy corresponding previous version 100%. Source backup is branch baseline. No DB or secrets are exported.
