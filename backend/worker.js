@@ -1,4 +1,5 @@
 import { BETA_AGREEMENT_VERSION, ministryAdminRoute, saveMinistryOfferAssignment, assignMinistryCampusFromOffer, recordBetaAcceptance, isGiftedMinistry } from "./ministry-partners.mjs";
+import { VocabularyValidationError, listOrganizationVocabulary, saveOrganizationVocabulary, deleteOrganizationVocabulary, buildVocabularyHint } from "./organization-vocabulary.mjs";
 // LiveBridge production deployment marker: effective-room display sync 2026-10-07
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -22986,6 +22987,40 @@ return jsonResponse({
   activeListeners
 });
     }
+    // Authenticated organization dictionary. Never accept an organization ID from the client.
+    if (
+      url.pathname === "/account/vocabulary" &&
+      (request.method === "GET" || request.method === "POST")
+    ) {
+      try {
+        const auth = await verifyClerkRequest(request, env);
+        const owner = await env.TRANSLATIONS_DB.prepare(
+          "SELECT id FROM organizations WHERE clerk_user_id = ? LIMIT 1"
+        ).bind(auth.clerkUserId).first();
+        if (!owner) {
+          return jsonResponse({ success: false, error: "LiveBridge organization not found." }, 404);
+        }
+        const organizationId = Number(owner.id);
+        if (request.method === "GET") {
+          const entries = await listOrganizationVocabulary(env, organizationId);
+          return jsonResponse({ success: true, entries });
+        }
+        const payload = await request.json();
+        if (payload?.action === "delete") {
+          const deleted = await deleteOrganizationVocabulary(env, organizationId, payload.id);
+          return jsonResponse({ success: true, deleted });
+        }
+        const entry = await saveOrganizationVocabulary(env, organizationId, payload);
+        return jsonResponse({ success: true, entry });
+      } catch (error) {
+        if (error instanceof VocabularyValidationError) {
+          return jsonResponse({ success: false, error: error.message }, error.status);
+        }
+        console.error("Organization vocabulary request failed:", error);
+        return jsonResponse({ success: false, error: "Unable to access organization vocabulary. Check your sign-in." }, 403);
+      }
+    }
+
     if (
       request.method === "POST" &&
       url.pathname === "/realtime-transcription-token"
@@ -23032,11 +23067,21 @@ return jsonResponse({
           );
         }
 
-        await getOwnedBroadcastOrganization(
-          env,
-          auth.clerkUserId,
-          room
-        );
+        const broadcastOwnership =
+          await getOwnedBroadcastOrganization(
+            env,
+            auth.clerkUserId,
+            room
+          );
+
+        const vocabularyEntries =
+          await listOrganizationVocabulary(
+            env,
+            Number(broadcastOwnership.organization.id)
+          );
+
+        const vocabularyHint =
+          buildVocabularyHint(vocabularyEntries);
 
         const safetyIdentifier =
           (
@@ -23084,7 +23129,8 @@ return jsonResponse({
                           "low",
 
                         prompt:
-                          "Live church or event speech. Preserve names, numbers, Scripture references, sentence meaning, and natural punctuation."
+                          "Live church or event speech. Preserve names, numbers, Scripture references, sentence meaning, and natural punctuation." +
+                          (vocabularyHint ? "\n\n" + vocabularyHint : "")
                       },
 
                       turn_detection:
