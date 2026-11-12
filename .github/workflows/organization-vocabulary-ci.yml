@@ -1,0 +1,34 @@
+name: Organization Vocabulary Test Branch
+
+on:
+  push:
+    branches:
+      - 'feature/organization-vocabulary-*'
+  pull_request:
+    paths:
+      - 'backend/organization-vocabulary.mjs'
+      - 'backend/worker.js'
+      - 'frontend/public/account/vocabulary.js'
+      - 'frontend/public/account/index.html'
+      - 'tests/organization-vocabulary.test.mjs'
+  workflow_dispatch:
+
+jobs:
+  vocabulary-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test tenant isolation and name hints
+        run: node --test tests/organization-vocabulary.test.mjs
+      - name: Check frontend vocabulary editor syntax
+        run: node --check frontend/public/account/vocabulary.js
+      - name: Check backend Worker module syntax
+        run: node --input-type=module --check < backend/worker.js
+      - name: Verify feature is wired to account page
+        run: |
+          grep -q 'organizationVocabularyCard' frontend/public/account/index.html
+          grep -q '/account/vocabulary' backend/worker.js
+          grep -q 'buildVocabularyHint(vocabularyEntries)' backend/worker.js
