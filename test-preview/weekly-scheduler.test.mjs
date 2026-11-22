@@ -60,7 +60,7 @@ const correctionStop=frontend.indexOf("function lbShowScheduleTimeIssue(",correc
 assert.ok(correctionStart>=0&&correctionStop>correctionStart);
 const correction=frontend.slice(correctionStart,correctionStop);
 const correctionCase=(startValue,endValue)=>{
-  const value=runInNewContext(correction+"\\n;lbSuggestCorrectEnd();",{
+  const value=runInNewContext(correction+";lbSuggestCorrectEnd();",{
     lbScheduledStart:{value:startValue},lbScheduledEnd:{value:endValue}
   });
   return value&&{hour:value.getHours(),minute:value.getMinutes()};
