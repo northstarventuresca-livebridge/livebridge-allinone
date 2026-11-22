@@ -1456,7 +1456,7 @@ async function sendBroadcastAlertEmail(
     scheduled_start_failed:
       "A scheduled broadcast did not successfully start within the expected start window.",
     scheduled_broadcaster_offline:
-      "The broadcaster page has not checked in with a valid login token. The microphone, computer, network, or session may need attention BEFORE the service begins."
+      "The broadcaster page has not confirmed a valid login and readiness in the last four minutes. The computer, login session, microphone permissions or Terms confirmation may need attention BEFORE the service begins."
   }[reason] ||
     "The broadcast ended automatically.";
 
@@ -8387,7 +8387,11 @@ var LiveBridgeRoom = class {
     if (url.pathname === "/schedules-list" && request.method === "GET") {
       const now=Date.now();
       // Route reached only after Clerk authorization and room ownership verification.
-      await this.state.storage.put("broadcast-scheduler-presence-v1",{lastSeenAt:now});
+      const ready=new URL(request.url).searchParams.get("ready")==="1";
+      const previous=await this.state.storage.get("broadcast-scheduler-presence-v1")||{};
+      await this.state.storage.put("broadcast-scheduler-presence-v1",{
+        lastSeenAt:now,readyAt:ready?now:Number(previous.readyAt||0)
+      });
       const schedules=(await this.state.storage.get("broadcast-schedules-v2")||[])
         .filter(x=>Number(x.endAt)>now-86400000).sort((a,b)=>a.startAt-b.startAt);
       const weekly=(await this.state.storage.get("broadcast-weekly-schedules-v1")||[])
@@ -8859,7 +8863,8 @@ var LiveBridgeRoom = class {
       }
     }
     const presence=await this.state.storage.get("broadcast-scheduler-presence-v1")||{};
-    const hasRecentLogin=Number(presence.lastSeenAt||0)>now-4*60000;
+    const hasRecentLogin=Number(presence.lastSeenAt||0)>now-4*60000
+      &&Number(presence.readyAt||0)>now-4*60000;
     const checkPreflight=async(item,start,stage)=>{
       const flag=stage===30?"preflight30Checked":"preflight5Checked";
       if(item[flag]||now<start-stage*60000)return false;
@@ -23670,7 +23675,8 @@ return jsonResponse({
         if(!buildEffectivePlanEntitlements(owned.organization).scheduledBroadcasts)
           return jsonResponse({success:false,error:"Scheduled broadcasts require LiveBridge Growth or Pro.",code:"PLAN_UPGRADE_REQUIRED"},403);
         const stub=env.LIVEBRIDGE_ROOMS.get(env.LIVEBRIDGE_ROOMS.idFromName(room));
-        const target=request.method==="GET"?"/schedules-list":
+        const target=request.method==="GET"
+          ?"/schedules-list?ready="+(url.searchParams.get("ready")==="1"?"1":"0"):
           url.pathname==="/broadcast-schedules-remove"?"/schedules-remove":"/schedules-add";
         const response=await stub.fetch(new Request("https://livebridge.internal"+target,{
           method:request.method==="GET"?"GET":"POST",
