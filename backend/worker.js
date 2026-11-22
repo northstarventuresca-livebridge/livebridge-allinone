@@ -8379,6 +8379,40 @@ var LiveBridgeRoom = class {
       });
     }
 
+
+    // Multiple persistent, nonoverlapping broadcast windows per room.
+    if (url.pathname === "/schedules-list" && request.method === "GET") {
+      const schedules = await this.state.storage.get("broadcast-schedules-v2") || [];
+      return jsonResponse({success:true,schedules:schedules.filter(x=>Number(x.endAt)>Date.now()-86400000).sort((a,b)=>a.startAt-b.startAt)});
+    }
+    if (url.pathname === "/schedules-add" && request.method === "POST") {
+      const body=await request.json(),room=normalizeRoom(body.room),
+        startAt=Number(body.startAt),endAt=Number(body.endAt),now=Date.now();
+      if(!room||!Number.isSafeInteger(startAt)||!Number.isSafeInteger(endAt)
+        ||startAt<now+5000||startAt>now+90*86400000||endAt<=startAt||endAt-startAt>12*3600000)
+        return jsonResponse({success:false,error:"Choose a future start and a later end (max 12 hours per broadcast, within 90 days)."},400);
+      const current=await this.state.storage.get("broadcast-schedules-v2")||[];
+      const schedules=current.filter(x=>Number(x.endAt)>now-86400000);
+      if(schedules.filter(x=>Number(x.endAt)>now).length>=32)
+        return jsonResponse({success:false,error:"Maximum 32 upcoming schedules per room."},409);
+      if(schedules.some(x=>startAt<Number(x.endAt)&&endAt>Number(x.startAt)))
+        return jsonResponse({success:false,error:"Broadcast times cannot overlap in the same room."},409);
+      const schedule={id:crypto.randomUUID(),room,startAt,endAt,armedAt:now,alertChecked:false,stopHandled:false};
+      schedules.push(schedule);schedules.sort((a,b)=>a.startAt-b.startAt);
+      await this.state.storage.put("broadcast-schedules-v2",schedules);
+      await this.updateEventDrivenAlarm();
+      return jsonResponse({success:true,schedule,schedules});
+    }
+    if(url.pathname==="/schedules-remove"&&request.method==="POST"){
+      const body=await request.json(),id=String(body.id||"");
+      const current=await this.state.storage.get("broadcast-schedules-v2")||[];
+      if(!current.some(x=>x.id===id))return jsonResponse({success:false,error:"Schedule not found."},404);
+      const schedules=current.filter(x=>x.id!==id);
+      await this.state.storage.put("broadcast-schedules-v2",schedules);
+      await this.updateEventDrivenAlarm();
+      return jsonResponse({success:true,schedules});
+    }
+
     if (
       url.pathname === "/schedule-arm" &&
       request.method === "POST"
@@ -8566,6 +8600,18 @@ var LiveBridgeRoom = class {
             );
     }
 
+
+    const queuedSchedules=await this.state.storage.get("broadcast-schedules-v2")||[];
+    for(const item of queuedSchedules){
+      if(!item.alertChecked){
+        const at=Number(item.startAt)+SCHEDULE_START_GRACE_MS;
+        nextAt=nextAt===null?at:Math.min(nextAt,at);
+      }
+      if(!item.stopHandled){
+        const at=Number(item.endAt);
+        nextAt=nextAt===null?at:Math.min(nextAt,at);
+      }
+    }
     if (nextAt !== null) {
       await this.state.storage.setAlarm(
         Math.max(
@@ -8724,6 +8770,39 @@ var LiveBridgeRoom = class {
       );
     }
 
+
+    // Server alarms detect missed starts and reliably stop scheduled sessions if tab timers sleep.
+    const schedules=await this.state.storage.get("broadcast-schedules-v2")||[];
+    let changedSchedules=false;
+    for(const item of schedules){
+      const scheduledRoom=normalizeRoom(item.room||room);
+      if(!scheduledRoom)continue;
+      if(!item.alertChecked&&now>=Number(item.startAt)+SCHEDULE_START_GRACE_MS){
+        const active=await this.env.TRANSLATIONS_DB.prepare(
+          "SELECT started_at FROM active_broadcasts WHERE room = ? LIMIT 1"
+        ).bind(scheduledRoom).first();
+        const started=!!active&&Number(active.started_at)>=Number(item.startAt)-300000
+          &&Number(active.started_at)<Number(item.endAt);
+        if(!started){
+          const org=await getOrganizationForRoom(this.env,scheduledRoom);
+          if(org)await sendBroadcastAlertEmail(this.env,org,"scheduled_start_failed",scheduledRoom,0);
+        }
+        item.alertChecked=true;changedSchedules=true;
+      }
+      if(!item.stopHandled&&now>=Number(item.endAt)){
+        const active=await this.env.TRANSLATIONS_DB.prepare(
+          "SELECT started_at FROM active_broadcasts WHERE room = ? LIMIT 1"
+        ).bind(scheduledRoom).first();
+        // Do not terminate a broadcast started outside this scheduled window.
+        if(active&&Number(active.started_at)>=Number(item.startAt)-300000
+          &&Number(active.started_at)<Number(item.endAt))
+          await finalizeBroadcastForReason(this.env,scheduledRoom,"scheduled_end");
+        item.stopHandled=true;changedSchedules=true;
+      }
+    }
+    if(changedSchedules)
+      await this.state.storage.put("broadcast-schedules-v2",
+        schedules.filter(x=>Number(x.endAt)>now-86400000));
     await this.updateEventDrivenAlarm();
   }
 
@@ -23465,6 +23544,28 @@ return jsonResponse({
       }
     }
 
+
+
+    if((request.method==="GET"||request.method==="POST")
+      &&(url.pathname==="/broadcast-schedules"||url.pathname==="/broadcast-schedules-remove")){
+      try{
+        const auth=await verifyClerkRequest(request,env);
+        const body=request.method==="GET"?{room:url.searchParams.get("room")}:await request.json();
+        const room=normalizeRoom(body.room);
+        if(!room)return jsonResponse({success:false,error:"Room is required."},400);
+        const owned=await getOwnedBroadcastOrganization(env,auth.clerkUserId,room);
+        if(!buildEffectivePlanEntitlements(owned.organization).scheduledBroadcasts)
+          return jsonResponse({success:false,error:"Scheduled broadcasts require LiveBridge Growth or Pro.",code:"PLAN_UPGRADE_REQUIRED"},403);
+        const stub=env.LIVEBRIDGE_ROOMS.get(env.LIVEBRIDGE_ROOMS.idFromName(room));
+        const target=request.method==="GET"?"/schedules-list":
+          url.pathname==="/broadcast-schedules-remove"?"/schedules-remove":"/schedules-add";
+        const response=await stub.fetch(new Request("https://livebridge.internal"+target,{
+          method:request.method==="GET"?"GET":"POST",
+          ...(request.method==="GET"?{}:{headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,room})})
+        }));
+        return jsonResponse(await response.json(),response.status);
+      }catch(error){return jsonResponse({success:false,error:error.message||"Unable to manage schedules."},403);}
+    }
 
     if (
       request.method === "POST" &&

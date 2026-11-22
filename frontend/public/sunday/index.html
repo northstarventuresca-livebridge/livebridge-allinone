@@ -848,13 +848,15 @@ body{
           "
         >
 
+        <button id="lbSchedulerPickerOK" type="button" class="lb-btn" style="margin-bottom:9px;min-height:38px;width:100%;">OK — Done Choosing Time</button>
+        <div style="font-size:11px;color:#9fb2c6;margin-bottom:9px;">Add up to 32 separate broadcasts for the same day or future dates. Times follow your device's timezone.</div>
         <button
           id="lbEnableSchedule"
           type="button"
           class="lb-btn"
           style="margin-bottom:8px;"
         >
-          Enable Scheduled Broadcast
+          + Add Schedule
         </button>
 
         <button
@@ -866,6 +868,8 @@ body{
           Cancel Schedule
         </button>
 
+        <div id="lbScheduleList" aria-live="polite" style="display:grid;gap:8px;margin:5px 0 10px;"></div>
+        <button id="lbScheduleDone" type="button" class="lb-btn" style="margin-bottom:8px;">Done</button>
         <div
           id="lbScheduleStatus"
           style="
@@ -874,7 +878,7 @@ body{
             line-height:1.45;
           "
         >
-          Page must remain open for automatic start and stop.
+          Schedules are saved. Keep this broadcaster page open and the microphone ready for automatic start. Server alarms safeguard scheduled ending.
         </div>
         </div>
       </details>
@@ -2306,6 +2310,8 @@ async function initializeLiveBridgeBroadcaster() {
 
     await loadAudioInputs();
 
+    if(broadcasterCanSchedule())lbLoadSchedules(true);
+
     updateRoomStatus();
 
     document.getElementById(
@@ -2345,457 +2351,156 @@ const emailBroadcastButton =
     "emailBroadcastButton"
   );
 
+
 /* =====================================================
-   PAGE-OPEN BROADCAST SCHEDULER
-   The page must remain open. This scheduler intentionally
-   reuses the existing toggleBroadcast() start/stop path.
+   PERSISTENT MULTI-BROADCAST SCHEDULER
+   Browser provides audio; server stores slots and
+   enforces scheduled endings with Durable Object alarms.
 ===================================================== */
-
-const lbScheduledStart =
-  document.getElementById(
-    "lbScheduledStart"
-  );
-
-const lbScheduledEnd =
-  document.getElementById(
-    "lbScheduledEnd"
-  );
-
-const lbEnableSchedule =
-  document.getElementById(
-    "lbEnableSchedule"
-  );
-
-const lbCancelSchedule =
-  document.getElementById(
-    "lbCancelSchedule"
-  );
-
-const lbScheduleStatus =
-  document.getElementById(
-    "lbScheduleStatus"
-  );
-
-let lbScheduleTimer = null;
-let lbScheduleStartAt = null;
-let lbScheduleEndAt = null;
-let lbScheduleStartTriggered = false;
-let lbScheduleStopTriggered = false;
-
-async function lbArmScheduledBroadcastAlert(
-  startAt,
-  endAt
-) {
-
-  if(
-    !broadcasterCanSchedule()
-  ){
-    throw new Error(
-      "Scheduled broadcasts are available on LiveBridge Growth and Pro."
-    );
-  }
-
-  const token =
-    await getBroadcasterSessionToken();
-
-  if (!token) {
-    throw new Error(
-      "LiveBridge session could not be verified."
-    );
-  }
-
-  const response =
-    await fetch(
-      WORKER_URL +
-      "/broadcast-schedule-arm",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          "Authorization":
-            "Bearer " +
-            token
-        },
-
-        body: JSON.stringify({
-          room: ROOM_ID,
-          startAt:
-            startAt.getTime(),
-          endAt:
-            endAt.getTime()
-        })
-      }
-    );
-
-  const data =
-    await response.json();
-
-  if (
-    !response.ok ||
-    !data.success
-  ) {
-    throw new Error(
-      data.error ||
-      "Unable to arm scheduled-start monitoring."
-    );
-  }
-
+const lbScheduledStart=document.getElementById("lbScheduledStart");
+const lbScheduledEnd=document.getElementById("lbScheduledEnd");
+const lbEnableSchedule=document.getElementById("lbEnableSchedule");
+const lbCancelSchedule=document.getElementById("lbCancelSchedule");
+const lbScheduleStatus=document.getElementById("lbScheduleStatus");
+const lbScheduleList=document.getElementById("lbScheduleList");
+const lbSchedulePanel=document.getElementById("lbBroadcastScheduler");
+let lbBroadcastSchedules=[],lbSchedulesRoom="",lbLastScheduleLoad=0;
+let lbSchedulesLoading=false,lbScheduleTickBusy=false;
+const lbStartedScheduledSlots=new Set(),lbEndedScheduledSlots=new Set();
+const lbScheduledAttempts=new Map();
+lbCancelSchedule.style.display="none";
+function lbScheduleText(ms){return new Date(ms).toLocaleString(undefined,
+  {weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});}
+function lbScheduleNote(message){lbScheduleStatus.textContent=message;}
+async function lbScheduleApi(method,path,body){
+  const token=await getBroadcasterSessionToken();
+  if(!token)throw new Error("LiveBridge account session could not be verified.");
+  const response=await fetch(WORKER_URL+path,{
+    method,headers:{"Authorization":"Bearer "+token,...(body?{"Content-Type":"application/json"}:{})},
+    ...(body?{body:JSON.stringify(body)}:{})
+  });
+  let data={};try{data=await response.json()}catch{}
+  if(!response.ok||!data.success)throw new Error(data.error||"Schedule request failed.");
   return data;
 }
-
-
-async function lbClearScheduledBroadcastAlert() {
-
-  if (!ROOM_ID) {
-    return;
+function lbRenderScheduleList(){
+  lbScheduleList.replaceChildren();
+  const now=Date.now(),items=lbBroadcastSchedules.filter(x=>Number(x.endAt)>now-60000)
+    .sort((a,b)=>a.startAt-b.startAt);
+  if(!items.length){
+    const empty=document.createElement("div");
+    empty.textContent="No upcoming broadcasts. Choose start and end, then Add Schedule.";
+    empty.style.cssText="color:#9fb2c6;font-size:11px;line-height:1.5;padding:9px;border:1px dashed #436078;border-radius:8px";
+    lbScheduleList.appendChild(empty);return;
   }
-
-  try {
-
-    const token =
-      await getBroadcasterSessionToken();
-
-    if (!token) {
-      return;
-    }
-
-    await fetch(
-      WORKER_URL +
-      "/broadcast-schedule-clear",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          "Authorization":
-            "Bearer " +
-            token
-        },
-
-        body: JSON.stringify({
-          room: ROOM_ID
-        }),
-
-        keepalive: true
+  for(const item of items){
+    const row=document.createElement("div");
+    row.style.cssText="background:rgba(35,72,105,.35);border:1px solid rgba(160,196,225,.18);border-radius:9px;padding:10px;display:flex;gap:8px;align-items:center;justify-content:space-between";
+    const info=document.createElement("div");
+    info.style.cssText="min-width:0;line-height:1.55;font-size:11px;color:#e5f4ff";
+    const first=document.createElement("strong");first.textContent=lbScheduleText(item.startAt);
+    const second=document.createElement("div");second.textContent="Ends "+lbScheduleText(item.endAt);second.style.color="#a8bfd3";
+    info.append(first,second);
+    const btn=document.createElement("button");btn.type="button";btn.className="lb-btn";
+    btn.style.cssText="flex-shrink:0;padding:8px;font-size:11px";
+    btn.textContent="Remove";btn.setAttribute("aria-label","Remove schedule "+lbScheduleText(item.startAt));
+    btn.addEventListener("click",async()=>{
+      btn.disabled=true;
+      try{
+        await lbScheduleApi("POST","/broadcast-schedules-remove",{room:ROOM_ID,id:item.id});
+        lbBroadcastSchedules=lbBroadcastSchedules.filter(x=>x.id!==item.id);
+        lbStartedScheduledSlots.delete(item.id);lbEndedScheduledSlots.delete(item.id);
+        lbRenderScheduleList();lbScheduleNote("Schedule removed.");
+      }catch(e){btn.disabled=false;showLiveBridgeAccountNotice(e.message);}
+    });
+    row.append(info,btn);lbScheduleList.appendChild(row);
+  }
+}
+async function lbLoadSchedules(force=false){
+  if(lbSchedulesLoading||!ROOM_ID||!broadcasterCanSchedule())return;
+  if(!force&&ROOM_ID===lbSchedulesRoom&&Date.now()-lbLastScheduleLoad<35000)return;
+  lbSchedulesLoading=true;
+  try{
+    const room=ROOM_ID;
+    const data=await lbScheduleApi("GET","/broadcast-schedules?room="+encodeURIComponent(room));
+    if(room!==ROOM_ID)return;
+    lbBroadcastSchedules=Array.isArray(data.schedules)?data.schedules:[];
+    lbSchedulesRoom=room;lbLastScheduleLoad=Date.now();
+    lbRenderScheduleList();
+  }catch(e){lbScheduleNote("Could not load schedules: "+e.message);}
+  finally{lbSchedulesLoading=false;}
+}
+async function lbCheckBroadcastSchedule(){
+  if(lbScheduleTickBusy||!ROOM_ID||!broadcasterCanSchedule())return;
+  lbScheduleTickBusy=true;
+  try{
+    const now=Date.now(),items=lbBroadcastSchedules.slice().sort((a,b)=>a.startAt-b.startAt);
+    for(const item of items){
+      const start=Number(item.startAt),end=Number(item.endAt);
+      if(now>=start&&now<end&&!lbStartedScheduledSlots.has(item.id)&&!lbEndedScheduledSlots.has(item.id)){
+        if(broadcasting)lbStartedScheduledSlots.add(item.id);
+        else if(now-(lbScheduledAttempts.get(item.id)||0)>=15000){
+          lbScheduledAttempts.set(item.id,now);lbScheduleNote("Starting scheduled broadcast...");
+          await toggleBroadcast();
+          if(broadcasting)lbStartedScheduledSlots.add(item.id);
+          else lbScheduleNote("Automatic start could not complete. Check microphone, connection and Terms confirmation.");
+        }
       }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Scheduled-start alert cleanup failed:",
-      error
-    );
-  }
+      if(now>=end&&!lbEndedScheduledSlots.has(item.id)){
+        if(broadcasting&&lbStartedScheduledSlots.has(item.id)&&now-end<12*3600000){
+          lbScheduleNote("Ending scheduled broadcast...");
+          await toggleBroadcast();
+        }
+        if(!broadcasting||!lbStartedScheduledSlots.has(item.id)){
+          lbEndedScheduledSlots.add(item.id);
+          lbRenderScheduleList();
+        }
+      }
+    }
+    const next=items.find(x=>Number(x.endAt)>now);
+    if(next&&!(now>=Number(next.startAt)&&now<Number(next.endAt)&&!broadcasting)){
+      lbScheduleNote(now>=Number(next.startAt)
+        ?"Scheduled service in progress — ends "+lbScheduleText(next.endAt)
+        :"Next: "+lbScheduleText(next.startAt)+" to "+lbScheduleText(next.endAt)+
+        ". Keep this broadcaster page open with microphone ready.");
+    }
+  }catch(e){lbScheduleNote("Schedule action failed: "+(e?.message||e));}
+  finally{lbScheduleTickBusy=false;}
 }
-
-
-function lbFormatScheduleTime(value) {
-  return new Intl.DateTimeFormat(
-    undefined,
-    {
-      weekday: "short",
-      hour: "numeric",
-      minute: "2-digit"
-    }
-  ).format(value);
+lbEnableSchedule.addEventListener("click",async()=>{
+  if(!broadcasterCanSchedule()){window.location.href="/plans/index.html";return;}
+  const authority=document.getElementById("lbBroadcastAuthorityConfirm");
+  if(!authority?.checked){
+    showLiveBridgeAccountNotice("Confirm your organization's authority and required consent before scheduling.");return;
+  }
+  const start=new Date(lbScheduledStart.value).getTime(),end=new Date(lbScheduledEnd.value).getTime();
+  if(!Number.isFinite(start)||!Number.isFinite(end)){
+    showLiveBridgeAccountNotice("Choose both start and end dates and times.");return;
+  }
+  lbEnableSchedule.disabled=true;lbEnableSchedule.textContent="Saving...";
+  try{
+    const data=await lbScheduleApi("POST","/broadcast-schedules",{room:ROOM_ID,startAt:start,endAt:end});
+    lbBroadcastSchedules=Array.isArray(data.schedules)?data.schedules:[];
+    lbSchedulesRoom=ROOM_ID;lbLastScheduleLoad=Date.now();
+    lbScheduledStart.value="";lbScheduledEnd.value="";
+    lbRenderScheduleList();lbScheduleNote("Saved "+lbScheduleText(start)+" to "+lbScheduleText(end)+". Add another or press Done.");
+  }catch(e){showLiveBridgeAccountNotice(e.message||"Could not save schedule.");}
+  finally{lbEnableSchedule.disabled=false;lbEnableSchedule.textContent="+ Add Schedule";}
+});
+function lbCloseDateTimePicker(){
+  lbScheduledStart.blur();lbScheduledEnd.blur();
+  if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
 }
-
-function lbFormatCountdown(ms) {
-  const totalSeconds =
-    Math.max(
-      0,
-      Math.floor(ms / 1000)
-    );
-
-  const hours =
-    Math.floor(totalSeconds / 3600);
-
-  const minutes =
-    Math.floor(
-      (totalSeconds % 3600) / 60
-    );
-
-  const seconds =
-    totalSeconds % 60;
-
-  return [hours, minutes, seconds]
-    .map(value =>
-      String(value).padStart(2, "0")
-    )
-    .join(":");
-}
-
-function lbSetSchedulerControls(
-  scheduled
-) {
-  lbScheduledStart.disabled =
-    scheduled;
-
-  lbScheduledEnd.disabled =
-    scheduled;
-
-  lbEnableSchedule.style.display =
-    scheduled ? "none" : "";
-
-  lbCancelSchedule.style.display =
-    scheduled ? "" : "none";
-}
-
-function lbClearBroadcastSchedule(
-  message =
-    "Page must remain open for automatic start and stop."
-) {
-  if (lbScheduleTimer) {
-    clearInterval(
-      lbScheduleTimer
-    );
-  }
-
-  lbScheduleTimer = null;
-  lbScheduleStartAt = null;
-  lbScheduleEndAt = null;
-  lbScheduleStartTriggered = false;
-  lbScheduleStopTriggered = false;
-
-  lbSetSchedulerControls(
-    false
-  );
-
-  lbScheduleStatus.textContent =
-    message;
-}
-
-async function lbCheckBroadcastSchedule() {
-  if (
-    !lbScheduleStartAt ||
-    !lbScheduleEndAt
-  ) {
-    return;
-  }
-
-  const now = Date.now();
-
-  if (
-    !lbScheduleStartTriggered &&
-    now >= lbScheduleStartAt.getTime()
-  ) {
-    lbScheduleStartTriggered = true;
-
-    lbScheduleStatus.textContent =
-      "Starting scheduled broadcast...";
-
-    if (!broadcasting) {
-      await toggleBroadcast();
-    }
-
-    if (broadcasting) {
-      lbScheduleStatus.textContent =
-        "Started automatically • Scheduled to end " +
-        lbFormatScheduleTime(
-          lbScheduleEndAt
-        );
-    } else {
-      lbScheduleStatus.textContent =
-        "Scheduled start did not complete. Start manually if needed. Automatic end remains armed.";
-    }
-  }
-
-  if (
-    !lbScheduleStopTriggered &&
-    now >= lbScheduleEndAt.getTime()
-  ) {
-    lbScheduleStopTriggered = true;
-
-    lbScheduleStatus.textContent =
-      "Ending scheduled broadcast...";
-
-    if (broadcasting) {
-      await toggleBroadcast();
-    }
-
-    await lbClearScheduledBroadcastAlert();
-
-    lbClearBroadcastSchedule(
-      "Scheduled broadcast window completed."
-    );
-
-    return;
-  }
-
-  if (!lbScheduleStartTriggered) {
-    lbScheduleStatus.textContent =
-      "Scheduled for " +
-      lbFormatScheduleTime(
-        lbScheduleStartAt
-      ) +
-      " • Starts in " +
-      lbFormatCountdown(
-        lbScheduleStartAt.getTime() -
-        now
-      );
-  }
-}
-
-lbEnableSchedule.addEventListener(
-  "click",
-  async () => {
-
-    if(
-      !broadcasterCanSchedule()
-    ){
-      window.location.href =
-        "/plans/index.html";
-      return;
-    }
-
-    const authorityConfirmation =
-      document.getElementById(
-        "lbBroadcastAuthorityConfirm"
-      );
-
-    if (
-      !authorityConfirmation ||
-      !authorityConfirmation.checked
-    ) {
-      showLiveBridgeAccountNotice(
-        "Please confirm that your organization has the authority and any required consent before enabling a scheduled broadcast."
-      );
-      return;
-    }
-
-    const startAt =
-      new Date(
-        lbScheduledStart.value
-      );
-
-    const endAt =
-      new Date(
-        lbScheduledEnd.value
-      );
-
-    if (
-      Number.isNaN(
-        startAt.getTime()
-      ) ||
-      Number.isNaN(
-        endAt.getTime()
-      )
-    ) {
-      showLiveBridgeAccountNotice(
-        "Choose both a scheduled start time and end time."
-      );
-      return;
-    }
-
-    if (
-      endAt.getTime() <=
-      startAt.getTime()
-    ) {
-      showLiveBridgeAccountNotice(
-        "The scheduled end time must be after the start time."
-      );
-      return;
-    }
-
-    if (
-      endAt.getTime() <=
-      Date.now()
-    ) {
-      showLiveBridgeAccountNotice(
-        "The scheduled end time must be in the future."
-      );
-      return;
-    }
-
-    lbEnableSchedule.disabled =
-      true;
-
-    lbEnableSchedule.textContent =
-      "Arming Schedule...";
-
-    try {
-
-      await lbArmScheduledBroadcastAlert(
-        startAt,
-        endAt
-      );
-
-    } catch (error) {
-
-      lbEnableSchedule.disabled =
-        false;
-
-      lbEnableSchedule.textContent =
-        "Enable Scheduled Broadcast";
-
-      showLiveBridgeAccountNotice(
-        error.message ||
-        "The scheduled broadcast could not be armed."
-      );
-
-      return;
-    }
-
-    lbEnableSchedule.disabled =
-      false;
-
-    lbEnableSchedule.textContent =
-      "Enable Scheduled Broadcast";
-
-    lbScheduleStartAt =
-      startAt;
-
-    lbScheduleEndAt =
-      endAt;
-
-    lbScheduleStartTriggered =
-      startAt.getTime() <=
-      Date.now();
-
-    lbScheduleStopTriggered =
-      false;
-
-    lbSetSchedulerControls(
-      true
-    );
-
-    if (
-      startAt.getTime() <=
-      Date.now() &&
-      !broadcasting
-    ) {
-      lbScheduleStartTriggered =
-        false;
-    }
-
-    lbScheduleTimer =
-      setInterval(
-        lbCheckBroadcastSchedule,
-        1000
-      );
-
-    lbCheckBroadcastSchedule();
-  }
-);
-
-lbCancelSchedule.addEventListener(
-  "click",
-  async () => {
-
-    await lbClearScheduledBroadcastAlert();
-
-    lbClearBroadcastSchedule(
-      "Scheduled broadcast cancelled."
-    );
-  }
-);
-
+document.getElementById("lbSchedulerPickerOK").addEventListener("click",lbCloseDateTimePicker);
+document.getElementById("lbScheduleDone").addEventListener("click",()=>{
+  lbCloseDateTimePicker();lbSchedulePanel.open=false;
+});
+lbSchedulePanel.addEventListener("toggle",()=>{if(lbSchedulePanel.open)lbLoadSchedules(true);});
+window.addEventListener("focus",()=>{lbLoadSchedules(true);lbCheckBroadcastSchedule();});
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){lbLoadSchedules(true);lbCheckBroadcastSchedule();}
+});
+setInterval(()=>{lbLoadSchedules();lbCheckBroadcastSchedule();},1000);
 
 /* =====================================================
    AUDIO INPUTS
