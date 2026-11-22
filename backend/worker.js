@@ -1,3 +1,4 @@
+import {nextWeeklyWindow,weeklyOccurrenceNear,windowsOverlap,conflictsWithWeekly,isValidTimeZone} from "./weekly-schedule-utils.mjs";
 import { BETA_AGREEMENT_VERSION, ministryAdminRoute, saveMinistryOfferAssignment, assignMinistryCampusFromOffer, recordBetaAcceptance, isGiftedMinistry } from "./ministry-partners.mjs";
 // LiveBridge production deployment marker: effective-room display sync 2026-10-07
 var __defProp = Object.defineProperty;
@@ -1453,15 +1454,17 @@ async function sendBroadcastAlertEmail(
     broadcaster_disconnected:
       "LiveBridge stopped receiving broadcaster heartbeats. The browser, computer, or internet connection may have closed or failed.",
     scheduled_start_failed:
-      "A scheduled broadcast did not successfully start within the expected start window."
+      "A scheduled broadcast did not successfully start within the expected start window.",
+    scheduled_broadcaster_offline:
+      "The broadcaster page has not confirmed a valid login and readiness in the last four minutes. The computer, login session, microphone permissions or Terms confirmation may need attention BEFORE the service begins."
   }[reason] ||
     "The broadcast ended automatically.";
 
   const isScheduleFailure =
-    reason === "scheduled_start_failed";
+    reason === "scheduled_start_failed" || reason === "scheduled_broadcaster_offline";
 
   const closingText = isScheduleFailure
-    ? "Please open the LiveBridge broadcaster and start the broadcast manually if it is still needed."
+    ? "Please check your broadcaster computer, sign in again if required, and confirm the microphone and connection are ready."
     : "The broadcast has been ended to protect your account and usage.";
 
   try {
@@ -8382,35 +8385,86 @@ var LiveBridgeRoom = class {
 
     // Multiple persistent, nonoverlapping broadcast windows per room.
     if (url.pathname === "/schedules-list" && request.method === "GET") {
-      const schedules = await this.state.storage.get("broadcast-schedules-v2") || [];
-      return jsonResponse({success:true,schedules:schedules.filter(x=>Number(x.endAt)>Date.now()-86400000).sort((a,b)=>a.startAt-b.startAt)});
+      const now=Date.now();
+      // Route reached only after Clerk authorization and room ownership verification.
+      const ready=new URL(request.url).searchParams.get("ready")==="1";
+      const previous=await this.state.storage.get("broadcast-scheduler-presence-v1")||{};
+      await this.state.storage.put("broadcast-scheduler-presence-v1",{
+        lastSeenAt:now,readyAt:ready?now:Number(previous.readyAt||0)
+      });
+      const schedules=(await this.state.storage.get("broadcast-schedules-v2")||[])
+        .filter(x=>Number(x.endAt)>now-86400000).sort((a,b)=>a.startAt-b.startAt);
+      const weekly=(await this.state.storage.get("broadcast-weekly-schedules-v1")||[])
+        .map(item=>({ ...item, type:"weekly",
+          ...weeklyOccurrenceNear(item,now) })).filter(x=>Number.isFinite(x.startAt));
+      return jsonResponse({success:true,schedules,weeklySchedules:weekly});
     }
     if (url.pathname === "/schedules-add" && request.method === "POST") {
+
+      // One-time and weekly slots share the same authorized endpoint.
+
       const body=await request.json(),room=normalizeRoom(body.room),
         startAt=Number(body.startAt),endAt=Number(body.endAt),now=Date.now();
+      if(body.repeat==="weekly"){
+        const weekday=Number(body.weekday),startMinute=Number(body.startMinute),
+          durationMinutes=Number(body.durationMinutes),timeZone=String(body.timeZone||"America/Edmonton");
+        if(!room||!Number.isInteger(weekday)||weekday<0||weekday>6
+          ||!Number.isInteger(startMinute)||startMinute<0||startMinute>=1440
+          ||!Number.isInteger(durationMinutes)||durationMinutes<1||durationMinutes>720
+          ||startMinute+durationMinutes>1440||!isValidTimeZone(timeZone))
+          return jsonResponse({success:false,error:"Choose a valid day, local start time, end time and timezone (up to 12 hours, same day)."},400);
+        const weekly=await this.state.storage.get("broadcast-weekly-schedules-v1")||[];
+        const scheduled=await this.state.storage.get("broadcast-schedules-v2")||[];
+        const candidate={id:crypto.randomUUID(),type:"weekly",room,weekday,startMinute,durationMinutes,
+          timeZone,createdAt:now};
+        if(weekly.length+scheduled.filter(x=>x.endAt>now).length>=32)
+          return jsonResponse({success:false,error:"Maximum 32 upcoming or recurring schedules per room."},409);
+        if(weekly.some(x=>conflictsWithWeekly(x,candidate,now)))
+          return jsonResponse({success:false,error:"This repeats at the same time as another weekly broadcast."},409);
+        if(scheduled.some(x=>Number(x.endAt)>now&&windowsOverlap(
+          {startAt:Number(x.startAt),endAt:Number(x.endAt)},
+          nextWeeklyWindow(candidate,Number(x.startAt)-durationMinutes*60000-1000))))
+          return jsonResponse({success:false,error:"Weekly broadcast overlaps a saved one-time broadcast."},409);
+        weekly.push(candidate);
+        await this.state.storage.put("broadcast-weekly-schedules-v1",weekly);
+        await this.updateEventDrivenAlarm();
+        return jsonResponse({success:true,schedule:{...candidate,...weeklyOccurrenceNear(candidate,now)},
+          schedules:scheduled.filter(x=>Number(x.endAt)>now-86400000),
+          weeklySchedules:weekly.map(x=>({...x,type:"weekly",...weeklyOccurrenceNear(x,now)}))});
+      }
       if(!room||!Number.isSafeInteger(startAt)||!Number.isSafeInteger(endAt)
         ||startAt<now+5000||startAt>now+90*86400000||endAt<=startAt||endAt-startAt>12*3600000)
         return jsonResponse({success:false,error:"Choose a future start and a later end (max 12 hours per broadcast, within 90 days)."},400);
       const current=await this.state.storage.get("broadcast-schedules-v2")||[];
       const schedules=current.filter(x=>Number(x.endAt)>now-86400000);
-      if(schedules.filter(x=>Number(x.endAt)>now).length>=32)
+      const weekly=await this.state.storage.get("broadcast-weekly-schedules-v1")||[];
+      if(schedules.filter(x=>Number(x.endAt)>now).length+weekly.length>=32)
         return jsonResponse({success:false,error:"Maximum 32 upcoming schedules per room."},409);
       if(schedules.some(x=>startAt<Number(x.endAt)&&endAt>Number(x.startAt)))
         return jsonResponse({success:false,error:"Broadcast times cannot overlap in the same room."},409);
+      if(weekly.some(x=>windowsOverlap({startAt,endAt},
+        nextWeeklyWindow(x,startAt-Number(x.durationMinutes)*60000-1000))))
+        return jsonResponse({success:false,error:"This broadcast overlaps a recurring weekly schedule."},409);
       const schedule={id:crypto.randomUUID(),room,startAt,endAt,armedAt:now,alertChecked:false,stopHandled:false};
       schedules.push(schedule);schedules.sort((a,b)=>a.startAt-b.startAt);
       await this.state.storage.put("broadcast-schedules-v2",schedules);
       await this.updateEventDrivenAlarm();
-      return jsonResponse({success:true,schedule,schedules});
+      return jsonResponse({success:true,schedule,schedules,
+        weeklySchedules:weekly.map(x=>({...x,type:"weekly",...weeklyOccurrenceNear(x,now)}))});
     }
     if(url.pathname==="/schedules-remove"&&request.method==="POST"){
       const body=await request.json(),id=String(body.id||"");
       const current=await this.state.storage.get("broadcast-schedules-v2")||[];
-      if(!current.some(x=>x.id===id))return jsonResponse({success:false,error:"Schedule not found."},404);
+      const weekly=await this.state.storage.get("broadcast-weekly-schedules-v1")||[];
+      if(!current.some(x=>x.id===id)&&!weekly.some(x=>x.id===id))
+        return jsonResponse({success:false,error:"Schedule not found."},404);
       const schedules=current.filter(x=>x.id!==id);
-      await this.state.storage.put("broadcast-schedules-v2",schedules);
+      const weeklySchedules=weekly.filter(x=>x.id!==id);
+      if(schedules.length!==current.length)await this.state.storage.put("broadcast-schedules-v2",schedules);
+      if(weeklySchedules.length!==weekly.length)await this.state.storage.put("broadcast-weekly-schedules-v1",weeklySchedules);
       await this.updateEventDrivenAlarm();
-      return jsonResponse({success:true,schedules});
+      return jsonResponse({success:true,schedules,
+        weeklySchedules:weeklySchedules.map(x=>({...x,type:"weekly",...weeklyOccurrenceNear(x,Date.now())}))});
     }
 
     if (
@@ -8602,15 +8656,25 @@ var LiveBridgeRoom = class {
 
 
     const queuedSchedules=await this.state.storage.get("broadcast-schedules-v2")||[];
+    const nowForAlarm=Date.now();
+    const considerAlarm=at=>{if(Number.isFinite(at))nextAt=nextAt===null?at:Math.min(nextAt,at)};
     for(const item of queuedSchedules){
-      if(!item.alertChecked){
-        const at=Number(item.startAt)+SCHEDULE_START_GRACE_MS;
-        nextAt=nextAt===null?at:Math.min(nextAt,at);
-      }
-      if(!item.stopHandled){
-        const at=Number(item.endAt);
-        nextAt=nextAt===null?at:Math.min(nextAt,at);
-      }
+      if(!item.preflight30Checked)considerAlarm(Number(item.startAt)-30*60000);
+      if(!item.preflight5Checked)considerAlarm(Number(item.startAt)-5*60000);
+      if(!item.alertChecked)considerAlarm(Number(item.startAt)+SCHEDULE_START_GRACE_MS);
+      if(!item.stopHandled)considerAlarm(Number(item.endAt));
+    }
+    const weeklyQueued=await this.state.storage.get("broadcast-weekly-schedules-v1")||[];
+    for(const item of weeklyQueued){
+      let window=nextWeeklyWindow(item,
+        nowForAlarm-(Number(item.durationMinutes)+35)*60000-SCHEDULE_START_GRACE_MS);
+      if(window&&item.lastStopFor===window.startAt)
+        window=nextWeeklyWindow(item,window.startAt+60000);
+      if(!window)continue;
+      if(item.lastPreflight30For!==window.startAt)considerAlarm(window.startAt-30*60000);
+      if(item.lastPreflight5For!==window.startAt)considerAlarm(window.startAt-5*60000);
+      if(item.lastAlertFor!==window.startAt)considerAlarm(window.startAt+SCHEDULE_START_GRACE_MS);
+      if(item.lastStopFor!==window.startAt)considerAlarm(window.endAt);
     }
     if (nextAt !== null) {
       await this.state.storage.setAlarm(
@@ -8800,9 +8864,65 @@ var LiveBridgeRoom = class {
         item.stopHandled=true;changedSchedules=true;
       }
     }
+    const presence=await this.state.storage.get("broadcast-scheduler-presence-v1")||{};
+    const hasRecentLogin=Number(presence.lastSeenAt||0)>now-4*60000
+      &&Number(presence.readyAt||0)>now-4*60000;
+    const checkPreflight=async(item,start,stage)=>{
+      const flag=stage===30?"preflight30Checked":"preflight5Checked";
+      if(item[flag]||now<start-stage*60000)return false;
+      item[flag]=true;
+      // A late alarm must not send stale pre-service warnings after start.
+      if(now<start&&!hasRecentLogin&&!item.preflightWarned){
+        const org=await getOrganizationForRoom(this.env,normalizeRoom(item.room||room));
+        if(org)await sendBroadcastAlertEmail(this.env,org,"scheduled_broadcaster_offline",item.room||room,0);
+        item.preflightWarned=true;
+      }
+      return true;
+    };
+    for(const item of schedules){
+      if(await checkPreflight(item,Number(item.startAt),30))changedSchedules=true;
+      if(await checkPreflight(item,Number(item.startAt),5))changedSchedules=true;
+    }
     if(changedSchedules)
       await this.state.storage.put("broadcast-schedules-v2",
         schedules.filter(x=>Number(x.endAt)>now-86400000));
+    const weekly=await this.state.storage.get("broadcast-weekly-schedules-v1")||[];
+    let changedWeekly=false;
+    for(const item of weekly){
+      const window=nextWeeklyWindow(item,
+        now-(Number(item.durationMinutes)+35)*60000-SCHEDULE_START_GRACE_MS);
+      if(!window)continue;
+      const {startAt,endAt}=window;
+      for(const stage of [30,5]){
+        const field=stage===30?"lastPreflight30For":"lastPreflight5For";
+        if(item[field]===startAt||now<startAt-stage*60000)continue;
+        item[field]=startAt;changedWeekly=true;
+        if(now<startAt&&!hasRecentLogin&&item.lastPreflightWarnedFor!==startAt){
+          const org=await getOrganizationForRoom(this.env,normalizeRoom(item.room||room));
+          if(org)await sendBroadcastAlertEmail(this.env,org,"scheduled_broadcaster_offline",item.room||room,0);
+          item.lastPreflightWarnedFor=startAt;
+        }
+      }
+      if(item.lastAlertFor!==startAt&&now>=startAt+SCHEDULE_START_GRACE_MS){
+        const active=await this.env.TRANSLATIONS_DB.prepare(
+          "SELECT started_at FROM active_broadcasts WHERE room=? LIMIT 1"
+        ).bind(normalizeRoom(item.room||room)).first();
+        if(!(active&&Number(active.started_at)>=startAt-300000&&Number(active.started_at)<endAt)){
+          const org=await getOrganizationForRoom(this.env,normalizeRoom(item.room||room));
+          if(org)await sendBroadcastAlertEmail(this.env,org,"scheduled_start_failed",item.room||room,0);
+        }
+        item.lastAlertFor=startAt;changedWeekly=true;
+      }
+      if(item.lastStopFor!==startAt&&now>=endAt){
+        const active=await this.env.TRANSLATIONS_DB.prepare(
+          "SELECT started_at FROM active_broadcasts WHERE room=? LIMIT 1"
+        ).bind(normalizeRoom(item.room||room)).first();
+        if(active&&Number(active.started_at)>=startAt-300000&&Number(active.started_at)<endAt)
+          await finalizeBroadcastForReason(this.env,normalizeRoom(item.room||room),"scheduled_end");
+        item.lastStopFor=startAt;changedWeekly=true;
+      }
+    }
+    if(changedWeekly)await this.state.storage.put("broadcast-weekly-schedules-v1",weekly);
     await this.updateEventDrivenAlarm();
   }
 
@@ -23557,7 +23677,8 @@ return jsonResponse({
         if(!buildEffectivePlanEntitlements(owned.organization).scheduledBroadcasts)
           return jsonResponse({success:false,error:"Scheduled broadcasts require LiveBridge Growth or Pro.",code:"PLAN_UPGRADE_REQUIRED"},403);
         const stub=env.LIVEBRIDGE_ROOMS.get(env.LIVEBRIDGE_ROOMS.idFromName(room));
-        const target=request.method==="GET"?"/schedules-list":
+        const target=request.method==="GET"
+          ?"/schedules-list?ready="+(url.searchParams.get("ready")==="1"?"1":"0"):
           url.pathname==="/broadcast-schedules-remove"?"/schedules-remove":"/schedules-add";
         const response=await stub.fetch(new Request("https://livebridge.internal"+target,{
           method:request.method==="GET"?"GET":"POST",
