@@ -877,7 +877,7 @@ body{
           <button id="lbEnableSchedulerAlerts" type="button" class="lb-btn" style="font-size:11px;padding:8px 10px;">Enable desktop alerts</button>
           <span style="font-size:10px;color:#92bad0;">Email warnings also go to the account address before unattended services.</span>
         </div>
-        <div id="lbScheduleList" aria-live="polite" style="display:grid;gap:8px;margin:5px 0 10px;"></div>
+        <div id="lbScheduleList" aria-live="polite" style="display:grid;grid-template-columns:minmax(0,1fr);min-width:0;width:100%;gap:8px;margin:5px 0 10px;"></div>
         <button id="lbScheduleDone" type="button" class="lb-btn" style="margin-bottom:8px;">Done</button>
         <div
           id="lbScheduleStatus"
@@ -2541,9 +2541,9 @@ function lbRenderScheduleList(){
   }
   for(const item of items){
     const row=document.createElement("div");
-    row.style.cssText="background:rgba(35,72,105,.35);border:1px solid rgba(160,196,225,.18);border-radius:9px;padding:10px;display:flex;gap:8px;align-items:center;justify-content:space-between";
+    row.style.cssText="box-sizing:border-box;min-width:0;width:100%;background:rgba(35,72,105,.35);border:1px solid rgba(160,196,225,.18);border-radius:9px;padding:10px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:start";
     const info=document.createElement("div");
-    info.style.cssText="min-width:0;line-height:1.55;font-size:11px;color:#e5f4ff";
+    info.style.cssText="display:block;min-width:0;width:100%;line-height:1.55;font-size:11px;color:#e5f4ff;overflow-wrap:break-word;word-break:normal";
     const first=document.createElement("strong");
     const second=document.createElement("div");
     if(item.type==="weekly"){
@@ -2555,9 +2555,11 @@ function lbRenderScheduleList(){
       first.textContent=lbScheduleText(item.startAt);
       second.textContent="Ends "+lbScheduleText(item.endAt);
     }
-    second.style.color="#a8bfd3";info.append(first,second);
+    first.style.cssText="display:block;white-space:normal;overflow-wrap:break-word;word-break:normal";
+    second.style.cssText="display:block;margin-top:3px;color:#a8bfd3;white-space:normal;overflow-wrap:break-word;word-break:normal";
+    info.append(first,second);
     const btn=document.createElement("button");btn.type="button";btn.className="lb-btn";
-    btn.style.cssText="flex-shrink:0;padding:8px;font-size:11px";
+    btn.style.cssText="box-sizing:border-box;width:auto;min-width:78px;max-width:100%;justify-self:end;flex:none;padding:8px 12px;font-size:11px;white-space:nowrap";
     btn.textContent="Remove";btn.setAttribute("aria-label","Remove schedule "+first.textContent);
     btn.addEventListener("click",async()=>{
       btn.disabled=true;
