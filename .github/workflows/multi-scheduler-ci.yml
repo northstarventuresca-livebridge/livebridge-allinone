@@ -1,0 +1,26 @@
+name: Multi-broadcast scheduler smoke
+on:
+  pull_request:
+    paths:
+      - backend/worker.js
+      - frontend/public/sunday/index.html
+      - test-preview/multi-scheduler-smoke.test.mjs
+      - .github/workflows/multi-scheduler-ci.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/worker.js
+      - frontend/public/sunday/index.html
+      - test-preview/multi-scheduler-smoke.test.mjs
+      - .github/workflows/multi-scheduler-ci.yml
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Scheduler contracts and inline script parsing
+        run: node test-preview/multi-scheduler-smoke.test.mjs
