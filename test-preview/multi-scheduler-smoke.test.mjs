@@ -15,14 +15,14 @@ for(const part of [
   'id="lbScheduleDone"','id="lbSchedulerPickerOK"',
   'lbLoadSchedules','lbCheckBroadcastSchedule'
 ])assert.ok(html.includes(part),`Missing UI contract: ${part}`);
-const scripts=[...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script>/gi)];
+const scripts=[...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
 let verified=0;
 for(const part of scripts){
-  if(/\\bsrc\\s*=/.test(part[1])||!part[2].trim())continue;
+  if(/\bsrc\s*=/.test(part[1])||!part[2].trim())continue;
   new vm.Script(part[2],{filename:"sunday.html inline script "+verified});
   verified++;
 }
 assert.ok(verified>=1);
-assert.match(html,/broadcasting&&lbStartedScheduledSlots.has\\(item.id\\)/,
+assert.match(html,/broadcasting&&lbStartedScheduledSlots.has\(item.id\)/,
   "Ending must not interrupt unrelated manually started broadcasts.");
 console.log("Scheduler smoke PASS: "+verified+" scripts parse; API, UI and safety guards present.");
