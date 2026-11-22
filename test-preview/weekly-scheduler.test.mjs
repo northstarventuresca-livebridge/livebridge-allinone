@@ -53,4 +53,29 @@ for(const script of frontend.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)
   new Script(script[2]);parsed++;
 }
 assert.ok(parsed>=6);
+// Regression: the native 12-hour picker can select 12:30 AM after 11:25 AM.
+// In that case, offer the precise PM correction without saving an unintended time.
+const correctionStart=frontend.indexOf("function lbSuggestCorrectEnd(){");
+const correctionStop=frontend.indexOf("function lbShowScheduleTimeIssue(",correctionStart);
+assert.ok(correctionStart>=0&&correctionStop>correctionStart);
+const correction=frontend.slice(correctionStart,correctionStop);
+const correctionCase=(startValue,endValue)=>{
+  const value=runInNewContext(correction+"\\n;lbSuggestCorrectEnd();",{
+    lbScheduledStart:{value:startValue},lbScheduledEnd:{value:endValue}
+  });
+  return value&&{hour:value.getHours(),minute:value.getMinutes()};
+};
+assert.deepEqual(correctionCase("2026-11-22T11:25","2026-11-22T00:30"),{hour:12,minute:30});
+assert.equal(correctionCase("2026-11-22T11:25","2026-11-22T12:30"),null);
+assert.equal(correctionCase("2026-11-22T11:25","2026-11-22T09:00"),null);
+for(const fragment of [
+  'id="lbScheduleCorrectEnd"','id="lbScheduleInputError"',
+  'id="lbScheduleTimezone"','/broadcast-schedules-edit',
+  'lbValidateScheduleTime(true)','lbEditingScheduleId',
+  'lbTimeZoneLabel(item.timeZone||lbBrowserTimezone)'
+])assert.ok(frontend.includes(fragment),"Missing scheduler UX "+fragment);
+assert.ok(backend.includes('url.pathname==="/schedules-edit"'));
+assert.ok(backend.includes('url.pathname==="/broadcast-schedules-edit"'));
+console.log("PASS native AM/PM validation regression, explicit timezone selection and safe weekly edit.");
+
 console.log("PASS weekly schedules, overlap checks, DST, auth watchdog, and "+parsed+" inline scripts.");
