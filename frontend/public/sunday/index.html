@@ -4138,6 +4138,8 @@ async function toggleBroadcast() {
 
       await startRealtimeTranscription();
 
+      // Verify actual server room state and live audio immediately.
+      setTimeout(lbSendBroadcastHeartbeat,500);
       startBroadcastTimer();
 
       broadcastButton.disabled =
@@ -4158,16 +4160,9 @@ async function toggleBroadcast() {
           "lb-btn-danger"
         );
 
-      document.getElementById(
-        "broadcastDot"
-      ).classList.add(
-        "live"
-      );
-
-      document.getElementById(
-        "broadcastStatus"
-      ).textContent =
-        "LIVE BROADCASTING";
+      document.getElementById("broadcastDot").classList.remove("live");
+      document.getElementById("broadcastStatus").textContent =
+        "BROADCASTING · VERIFYING SERVER";
 
     } catch (error) {
 
@@ -4292,126 +4287,93 @@ async function toggleBroadcast() {
    HEARTBEAT
 ===================================================== */
 
-function startBroadcastHeartbeat() {
-
-  stopBroadcastHeartbeat();
-
-  broadcastHeartbeat =
-    setInterval(
-      async () => {
-
-        if (
-          !broadcasting ||
-          !ROOM_ID ||
-          !roomReserved
-        ) {
-          return;
+let lbHeartbeatTickActive=false;
+async function lbSendBroadcastHeartbeat(){
+  if(lbHeartbeatTickActive||!broadcasting||!ROOM_ID||!roomReserved)return;
+  lbHeartbeatTickActive=true;
+  try{
+    for(let attempt=0;attempt<2;attempt++){
+      let token="";
+      try{token=await getBroadcasterSessionToken(attempt===1);}
+      catch(error){
+        if(attempt===0)continue;
+        lbReportHealthIssue("auth","The LiveBridge login expired. Sign in again: broadcast delivery is NOT verified.");
+        return;
+      }
+      if(!token){
+        if(attempt===0)continue;
+        lbReportHealthIssue("auth","LiveBridge is no longer signed in. Sign in again to resume verified broadcasting.");
+        return;
+      }
+      lastBroadcastAuthToken=token;
+      let response,data={};
+      try{
+        response=await fetch(WORKER_URL+"/broadcast-heartbeat",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},
+          body:JSON.stringify({room:ROOM_ID})
+        });
+        try{data=await response.json();}catch{}
+      }catch(error){
+        lbUnverifiedHeartbeats++;
+        if(lbUnverifiedHeartbeats>=2)
+          lbReportHealthIssue("connection","The broadcaster has lost contact with LiveBridge. Broadcast status is NOT VERIFIED; check the network.");
+        console.error("Broadcast heartbeat failed:",error);
+        return;
+      }
+      if(response.ok&&data.success){
+        if(data.remainingSeconds!=null)
+          maybeShowRemainingTimeWarning(Number(data.remainingSeconds));
+        const audioTrack=mediaStream?.getAudioTracks?.()[0];
+        const rtcConnected=realtimeTranscriptionDc?.readyState==="open"&&
+          realtimeTranscriptionPc?.connectionState!=="failed"&&
+          realtimeTranscriptionPc?.connectionState!=="closed";
+        if(!audioTrack||audioTrack.readyState!=="live"||!rtcConnected){
+          lbReportHealthIssue("connection","The room is online, but microphone or realtime transcription audio is disconnected. Broadcast is NOT VERIFIED.");
+        }else{
+          lbHeartbeatVerified();
         }
-
-        try {
-
-          const heartbeatToken =
-            await getBroadcasterSessionToken();
-
-          if (!heartbeatToken) {
-            return;
-          }
-
-          lastBroadcastAuthToken =
-            heartbeatToken;
-
-          const response =
-            await fetch(
-              WORKER_URL +
-              "/broadcast-heartbeat",
-              {
-                method: "POST",
-
-                headers: {
-                  "Content-Type":
-                    "application/json",
-
-                  "Authorization":
-                    "Bearer " +
-                    heartbeatToken
-                },
-
-                body: JSON.stringify({
-                  room: ROOM_ID
-                })
-              }
-            );
-
-
-          const data =
-            await response.json();
-
-
-          if(
-            !response.ok ||
-            !data.success
-          ){
-
-            if(
-              data.code ===
-              "BROADCAST_TIME_EXHAUSTED"
-            ){
-
-              maybeShowRemainingTimeWarning(
-                0
-              );
-
-              return;
-            }
-
-
-            if(
-              data.code ===
-              "ACCOUNT_NOT_ACTIVE"
-            ){
-
-              await endBroadcastForTimeLimit();
-
-              return;
-            }
-
-
-            console.warn(
-              "Broadcast heartbeat rejected:",
-              data
-            );
-
-            return;
-          }
-
-
-          if(
-            data.remainingSeconds !==
-            null &&
-            data.remainingSeconds !==
-            undefined
-          ){
-
-            maybeShowRemainingTimeWarning(
-              Number(
-                data.remainingSeconds
-              )
-            );
-          }
-
-        } catch (error) {
-
-          console.error(
-            "Broadcast room heartbeat failed:",
-            error
-          );
-        }
-
-      },
-      45000
-    );
+        return;
+      }
+      if(data.code==="ACCOUNT_NOT_ACTIVE"){
+        lbReportHealthIssue("connection","LiveBridge account is inactive; broadcast stopped.");
+        await endBroadcastForTimeLimit();return;
+      }
+      if(data.code==="BROADCAST_TIME_EXHAUSTED"){
+        maybeShowRemainingTimeWarning(0);return;
+      }
+      if(data.code==="BROADCAST_NOT_ACTIVE"){
+        // A local button state is not evidence of a live server session.
+        await toggleBroadcast();
+        lbReportHealthIssue("connection","The server reports this broadcast has ended. The displayed LIVE state was cleared; check broadcaster settings.");
+        return;
+      }
+      if(lbIsAuthError(response.status,data)){
+        if(attempt===0)continue; // reissue a fresh JWT once
+        lbReportHealthIssue("auth","LiveBridge rejected the current login token. Sign in again; the broadcast is NOT verified.");
+        return;
+      }
+      lbUnverifiedHeartbeats++;
+      if(lbUnverifiedHeartbeats>=2)
+        lbReportHealthIssue("connection","LiveBridge cannot confirm an active broadcast. Check the computer and connection.");
+      console.warn("Broadcast heartbeat rejected:",data);
+      return;
+    }
+  }catch(error){
+    lbUnverifiedHeartbeats++;
+    if(/(?:clerk|session|token|expired|sign.?in)/i.test(String(error?.message||error))){
+      lbReportHealthIssue("auth","LiveBridge login validation failed. Sign in again to resume safe scheduled starts.");
+    }else if(lbUnverifiedHeartbeats>=2){
+      lbReportHealthIssue("connection","LiveBridge broadcast verification failed twice. Please check the computer.");
+    }
+    console.error("Broadcast heartbeat verification:",error);
+  }finally{lbHeartbeatTickActive=false;}
 }
-
+function startBroadcastHeartbeat(){
+  stopBroadcastHeartbeat();
+  lbVerifiedHeartbeatAt=0;lbUnverifiedHeartbeats=0;
+  broadcastHeartbeat=setInterval(lbSendBroadcastHeartbeat,45000);
+}
 
 function stopBroadcastHeartbeat() {
 
