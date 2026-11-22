@@ -23,6 +23,6 @@ for(const part of scripts){
   verified++;
 }
 assert.ok(verified>=1);
-assert.match(html,/broadcasting&&lbStartedScheduledSlots.has\(item.id\)/,
+assert.ok(html.includes("broadcasting&&lbStartedScheduledSlots.has(key)"),
   "Ending must not interrupt unrelated manually started broadcasts.");
 console.log("Scheduler smoke PASS: "+verified+" scripts parse; API, UI and safety guards present.");
