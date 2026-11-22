@@ -852,7 +852,27 @@ body{
           <input id="lbRepeatWeekly" type="checkbox" style="width:17px;height:17px;accent-color:#4ca9ff;">
           Repeat this service every week
         </label>
-        <div id="lbWeeklyTimezone" style="font-size:11px;color:#92bad0;margin:-4px 0 12px;display:none;"></div>
+        <div id="lbWeeklyTimezone" style="font-size:11px;color:#92bad0;margin:-4px 0 12px;display:none;">
+          <label for="lbScheduleTimezone" style="display:block;margin:6px 0;color:#c5dff3;font-weight:800;">Service time zone</label>
+          <select id="lbScheduleTimezone" style="box-sizing:border-box;width:100%;padding:10px;border:1px solid #52718b;border-radius:8px;background:#0d1b2a;color:#fff;font-size:12px;">
+            <option value="America/Edmonton">Mountain — Alberta (Edmonton / Calgary)</option>
+            <option value="America/Vancouver">Pacific — Vancouver</option>
+            <option value="America/Winnipeg">Central — Winnipeg</option>
+            <option value="America/Rankin_Inlet">Central — Rankin Inlet</option>
+            <option value="America/Regina">Saskatchewan — Regina</option>
+            <option value="America/Toronto">Eastern — Toronto</option>
+            <option value="America/Halifax">Atlantic — Halifax</option>
+            <option value="America/St_Johns">Newfoundland — St. John's</option>
+            <option value="America/Denver">US Mountain — Denver</option>
+            <option value="America/Los_Angeles">US Pacific — Los Angeles</option>
+            <option value="America/Chicago">US Central — Chicago</option>
+            <option value="America/New_York">US Eastern — New York</option>
+            <option value="Europe/London">United Kingdom — London</option>
+          </select>
+          <div id="lbScheduleTimezoneNote" style="margin-top:6px;line-height:1.4;">Choose where your services take place. The clock time stays the same every week.</div>
+        </div>
+        <div id="lbScheduleInputError" role="alert" style="display:none;margin:0 0 9px;color:#ffe9be;background:#4a2d11;border:1px solid #a67426;border-radius:8px;padding:10px;font-size:11px;line-height:1.5;"></div>
+        <button id="lbScheduleCorrectEnd" type="button" class="lb-btn" style="display:none;width:100%;margin:-1px 0 10px;background:#215b5a;color:#eafffa;padding:9px;font-size:12px;"></button>
         <button id="lbSchedulerPickerOK" type="button" class="lb-btn" style="margin-bottom:9px;min-height:38px;width:100%;">OK — Done Choosing Time</button>
         <div style="font-size:11px;color:#9fb2c6;margin-bottom:9px;">Add up to 32 one-time or recurring services. Weekly times stay fixed in your local timezone through daylight-saving changes.</div>
         <button
