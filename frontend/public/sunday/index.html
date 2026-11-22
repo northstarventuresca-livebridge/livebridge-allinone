@@ -1566,7 +1566,16 @@ async function getSignedInLiveBridgeUser() {
 }
 
 
-async function getBroadcasterSessionToken() {
+function lbTokenExpirySeconds(jwt) {
+  try {
+    const part=String(jwt||"").split(".")[1]||"";
+    const value=part.replace(/-/g,"+").replace(/_/g,"/");
+    const payload=JSON.parse(atob(value.padEnd(Math.ceil(value.length/4)*4,"=")));
+    return Number(payload.exp||0);
+  }catch{return 0;}
+}
+
+async function getBroadcasterSessionToken(forceFresh=false) {
 
   const currentUserId =
     Clerk.user?.id || "";
@@ -1617,7 +1626,13 @@ async function getBroadcasterSessionToken() {
     });
   }
 
-  return await session.getToken();
+  const token=await session.getToken(forceFresh?{skipCache:true}:undefined);
+  if(!token)return null;
+  // Session JWTs are short-lived. Always reissue when about to expire.
+  const exp=lbTokenExpirySeconds(token);
+  if(!forceFresh&&exp&&exp*1000<Date.now()+30000)
+    return await session.getToken({skipCache:true});
+  return token;
 }
 
 
