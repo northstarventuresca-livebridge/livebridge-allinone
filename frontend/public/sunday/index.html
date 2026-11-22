@@ -2411,6 +2411,12 @@ const lbScheduleList=document.getElementById("lbScheduleList");
 const lbSchedulePanel=document.getElementById("lbBroadcastScheduler");
 const lbRepeatWeekly=document.getElementById("lbRepeatWeekly");
 const lbWeeklyTimezone=document.getElementById("lbWeeklyTimezone");
+const lbScheduleTimezone=document.getElementById("lbScheduleTimezone");
+const lbScheduleTimezoneNote=document.getElementById("lbScheduleTimezoneNote");
+const lbScheduleInputError=document.getElementById("lbScheduleInputError");
+const lbScheduleCorrectEnd=document.getElementById("lbScheduleCorrectEnd");
+const lbBrowserTimezone=Intl.DateTimeFormat().resolvedOptions().timeZone||"America/Edmonton";
+let lbEditingScheduleId=null;
 const lbEnableSchedulerAlerts=document.getElementById("lbEnableSchedulerAlerts");
 const lbWeekdayNames=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 let lbBroadcastSchedules=[],lbSchedulesRoom="",lbLastScheduleLoad=0;
@@ -2421,6 +2427,21 @@ let lbRtcRecoveryBusy=false,lbLastRtcRecoveryAt=0;
 const lbStartedScheduledSlots=new Set(),lbEndedScheduledSlots=new Set();
 const lbScheduledAttempts=new Map();
 lbCancelSchedule.style.display="none";
+if(!Array.from(lbScheduleTimezone.options).some(option=>option.value===lbBrowserTimezone)){
+  const option=document.createElement("option");
+  option.value=lbBrowserTimezone;option.textContent="Computer timezone — "+lbBrowserTimezone;
+  lbScheduleTimezone.appendChild(option);
+}
+lbScheduleTimezone.value=lbBrowserTimezone;
+function lbUpdateTimezoneNote(){
+  const zone=lbScheduleTimezone.value;
+  lbScheduleTimezoneNote.textContent=zone==="America/Rankin_Inlet"
+    ?"This is Rankin Inlet (Central time). For Alberta services select Mountain — Alberta (Edmonton / Calgary)."
+    :"Weekly service times use "+lbScheduleTimezone.selectedOptions[0].textContent+
+      " regardless of your computer's timezone. Check this matches where the services take place.";
+}
+lbUpdateTimezoneNote();
+lbScheduleTimezone.addEventListener("change",lbUpdateTimezoneNote);
 const lbWarningBanner=document.createElement("div");
 lbWarningBanner.id="lbBroadcasterHealthBanner";
 lbWarningBanner.setAttribute("role","alert");
@@ -2436,6 +2457,75 @@ document.body.appendChild(lbWarningBanner);
 function lbScheduleText(ms){return new Date(ms).toLocaleString(undefined,
   {weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});}
 function lbScheduleNote(message){lbScheduleStatus.textContent=message;}
+function lbLocalInputDate(date){
+  const p=value=>String(value).padStart(2,"0");
+  return date.getFullYear()+"-"+p(date.getMonth()+1)+"-"+p(date.getDate())+
+    "T"+p(date.getHours())+":"+p(date.getMinutes());
+}
+function lbTimeOfDay(date){
+  return date.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+}
+function lbTimeZoneLabel(timeZone){
+  return Array.from(lbScheduleTimezone.options).find(x=>x.value===timeZone)?.textContent||timeZone;
+}
+function lbSuggestCorrectEnd(){
+  if(!lbScheduledStart.value||!lbScheduledEnd.value)return null;
+  const start=new Date(lbScheduledStart.value),end=new Date(lbScheduledEnd.value);
+  if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||
+     end>start||start.toDateString()!==end.toDateString()||end.getHours()>=12)return null;
+  const proposed=new Date(end);
+  proposed.setHours(proposed.getHours()+12);
+  return proposed>start&&proposed-start<=12*3600000?proposed:null;
+}
+function lbShowScheduleTimeIssue(message){
+  const suggestion=lbSuggestCorrectEnd();
+  lbScheduleInputError.style.display="block";
+  lbScheduleInputError.textContent=message;
+  lbScheduleCorrectEnd.style.display=suggestion?"block":"none";
+  if(suggestion)lbScheduleCorrectEnd.textContent="Use "+lbTimeOfDay(suggestion)+" instead";
+}
+function lbClearScheduleTimeIssue(){
+  lbScheduleInputError.style.display="none";lbScheduleInputError.textContent="";
+  lbScheduleCorrectEnd.style.display="none";
+}
+function lbValidateScheduleTime(showMissing=false){
+  if(!lbScheduledStart.value||!lbScheduledEnd.value){
+    if(showMissing)lbShowScheduleTimeIssue("Choose a start time and an end time for this service.");
+    else lbClearScheduleTimeIssue();
+    return false;
+  }
+  const start=new Date(lbScheduledStart.value),end=new Date(lbScheduledEnd.value);
+  if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())){
+    lbShowScheduleTimeIssue("The selected time is invalid. Please select both dates and times again.");
+    return false;
+  }
+  if(end<=start){
+    lbShowScheduleTimeIssue("End is "+lbTimeOfDay(end)+" — before start at "+
+      lbTimeOfDay(start)+". Check AM versus PM; the end must be later.");
+    return false;
+  }
+  if(end-start>12*3600000){
+    lbShowScheduleTimeIssue("Each broadcast can last up to 12 hours. Choose a shorter time window.");
+    return false;
+  }
+  if(lbRepeatWeekly.checked&&start.toDateString()!==end.toDateString()){
+    lbShowScheduleTimeIssue("Weekly services must start and end on the same calendar day.");
+    return false;
+  }
+  lbClearScheduleTimeIssue();
+  return true;
+}
+for(const input of [lbScheduledStart,lbScheduledEnd]){
+  input.addEventListener("change",()=>lbValidateScheduleTime(false));
+}
+lbScheduleCorrectEnd.addEventListener("click",()=>{
+  const suggestion=lbSuggestCorrectEnd();
+  if(!suggestion)return;
+  lbScheduledEnd.value=lbLocalInputDate(suggestion);
+  lbValidateScheduleTime(false);
+  lbScheduleNote("End corrected to "+lbTimeOfDay(suggestion)+". Press "+
+    (lbEditingScheduleId?"Save Changes":"Add Schedule")+" to save.");
+});
 function lbOccurrenceKey(item){return String(item.id)+":"+String(item.startAt);}
 function lbTimeMinutesLabel(value){
   const hour=Math.floor(Number(value)/60),minute=Number(value)%60;
@@ -2570,7 +2660,10 @@ function lbRenderScheduleList(){
       const endMinute=Number(item.startMinute)+Number(item.durationMinutes);
       first.textContent="Every "+lbWeekdayNames[Number(item.weekday)]+
         " · "+lbTimeMinutesLabel(item.startMinute)+" – "+lbTimeMinutesLabel(endMinute);
-      second.textContent="Next "+lbScheduleText(item.startAt)+" · "+(item.timeZone||"local timezone");
+      second.textContent="Next "+new Date(item.startAt).toLocaleString(undefined,{
+        weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit",
+        timeZone:item.timeZone||lbBrowserTimezone
+      })+" · "+lbTimeZoneLabel(item.timeZone||lbBrowserTimezone);
     }else{
       first.textContent=lbScheduleText(item.startAt);
       second.textContent="Ends "+lbScheduleText(item.endAt);
@@ -2588,7 +2681,36 @@ function lbRenderScheduleList(){
         lbScheduleResponseSet(data);lbScheduleNote("Schedule removed.");
       }catch(error){btn.disabled=false;showLiveBridgeAccountNotice(error.message);}
     });
-    row.append(info,btn);lbScheduleList.appendChild(row);
+    const actions=document.createElement("div");
+    actions.style.cssText="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;width:100%";
+    if(item.type==="weekly"){
+      const edit=document.createElement("button");edit.type="button";edit.className="lb-btn";
+      edit.textContent="Edit";edit.setAttribute("aria-label","Edit "+first.textContent);
+      edit.style.cssText="box-sizing:border-box;width:auto;min-width:78px;padding:8px 12px;font-size:11px;white-space:nowrap";
+      edit.addEventListener("click",()=>{
+        lbEditingScheduleId=item.id;
+        const today=new Date(),offset=(Number(item.weekday)-today.getDay()+7)%7;
+        const localDay=new Date(today.getFullYear(),today.getMonth(),today.getDate()+offset);
+        const start=new Date(localDay);start.setMinutes(Number(item.startMinute));
+        const end=new Date(start);end.setMinutes(start.getMinutes()+Number(item.durationMinutes));
+        lbScheduledStart.value=lbLocalInputDate(start);
+        lbScheduledEnd.value=lbLocalInputDate(end);
+        lbRepeatWeekly.checked=true;lbWeeklyTimezone.style.display="block";
+        if(!Array.from(lbScheduleTimezone.options).some(x=>x.value===item.timeZone)){
+          const opt=document.createElement("option");opt.value=item.timeZone;
+          opt.textContent="Saved timezone — "+item.timeZone;lbScheduleTimezone.appendChild(opt);
+        }
+        lbScheduleTimezone.value=item.timeZone||lbBrowserTimezone;
+        lbUpdateTimezoneNote();lbValidateScheduleTime(false);
+        lbEnableSchedule.textContent="Save Changes";
+        lbCancelSchedule.textContent="Cancel Edit";lbCancelSchedule.style.display="block";
+        lbScheduleNote("Editing recurring service. Confirm its time zone, then press Save Changes.");
+        lbScheduledStart.focus();
+      });
+      actions.appendChild(edit);
+    }
+    actions.appendChild(btn);
+    row.append(info,actions);lbScheduleList.appendChild(row);
   }
 }
 async function lbHoldScreenWakeLock(){
@@ -2659,45 +2781,57 @@ async function lbCheckBroadcastSchedule(){
 }
 lbRepeatWeekly.addEventListener("change",()=>{
   lbWeeklyTimezone.style.display=lbRepeatWeekly.checked?"block":"none";
-  lbWeeklyTimezone.textContent=lbRepeatWeekly.checked
-    ?"Repeats on the same weekday and times in "+
-      (Intl.DateTimeFormat().resolvedOptions().timeZone||"America/Edmonton")+
-      ". Automatic start requires this page, a working microphone, valid sign-in and Terms confirmation."
-    :"";
+  if(!lbRepeatWeekly.checked&&lbEditingScheduleId)lbScheduleCancelEdit();
+  lbValidateScheduleTime(false);
+});
+function lbScheduleCancelEdit(){
+  lbEditingScheduleId=null;
+  lbCancelSchedule.style.display="none";
+  lbEnableSchedule.textContent="+ Add Schedule";
+  lbScheduledStart.value="";lbScheduledEnd.value="";
+  lbClearScheduleTimeIssue();
+}
+lbCancelSchedule.addEventListener("click",()=>{
+  lbScheduleCancelEdit();lbScheduleNote("Schedule edit cancelled.");
 });
 lbEnableSchedule.addEventListener("click",async()=>{
   if(!broadcasterCanSchedule()){window.location.href="/plans/index.html";return;}
   const authority=document.getElementById("lbBroadcastAuthorityConfirm");
   if(!authority?.checked){
-    showLiveBridgeAccountNotice("Confirm your organization's authority and consent before scheduling.");return;
+    lbShowScheduleTimeIssue("Confirm your organization's authority and consent before scheduling.");return;
   }
+  if(!lbValidateScheduleTime(true))return;
   const startDate=new Date(lbScheduledStart.value),endDate=new Date(lbScheduledEnd.value);
   const start=startDate.getTime(),end=endDate.getTime();
-  if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start){
-    showLiveBridgeAccountNotice("Choose valid start and end times, with the end after the start.");return;
-  }
   let body={room:ROOM_ID,startAt:start,endAt:end};
   if(lbRepeatWeekly.checked){
-    if(startDate.getDay()!==endDate.getDay()||startDate.toDateString()!==endDate.toDateString()){
-      showLiveBridgeAccountNotice("Recurring services must start and end on the same day.");return;
-    }
     body={
       room:ROOM_ID,repeat:"weekly",weekday:startDate.getDay(),
       startMinute:startDate.getHours()*60+startDate.getMinutes(),
       durationMinutes:Math.round((end-start)/60000),
-      timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone||"America/Edmonton"
+      timeZone:lbScheduleTimezone.value
     };
+    if(lbEditingScheduleId)body.id=lbEditingScheduleId;
   }
+  const editing=!!lbEditingScheduleId;
   lbEnableSchedule.disabled=true;lbEnableSchedule.textContent="Saving...";
   try{
-    const data=await lbScheduleApi("POST","/broadcast-schedules",body);
+    const data=await lbScheduleApi("POST",
+      editing?"/broadcast-schedules-edit":"/broadcast-schedules",body);
     lbScheduleResponseSet(data);
-    lbScheduledStart.value="";lbScheduledEnd.value="";
-    lbScheduleNote(lbRepeatWeekly.checked
-      ?"Weekly service saved; it will repeat every "+lbWeekdayNames[body.weekday]+"."
-      :"One-time broadcast saved. Add another or press Done.");
-  }catch(error){showLiveBridgeAccountNotice(error.message||"Could not save schedule.");}
-  finally{lbEnableSchedule.disabled=false;lbEnableSchedule.textContent="+ Add Schedule";}
+    lbScheduleCancelEdit();
+    lbScheduleNote(editing
+      ?"Recurring service updated, including its time zone."
+      :lbRepeatWeekly.checked
+        ?"Weekly service saved; it repeats every "+lbWeekdayNames[body.weekday]+
+          " in "+lbTimeZoneLabel(body.timeZone)+"."
+        :"One-time broadcast saved. Add another or press Done.");
+  }catch(error){
+    lbShowScheduleTimeIssue(error.message||"Could not save schedule. Please check the details.");
+  }finally{
+    lbEnableSchedule.disabled=false;
+    lbEnableSchedule.textContent=lbEditingScheduleId?"Save Changes":"+ Add Schedule";
+  }
 });
 function lbCloseDateTimePicker(){
   lbScheduledStart.blur();lbScheduledEnd.blur();
