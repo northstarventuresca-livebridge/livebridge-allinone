@@ -67,7 +67,7 @@ const correctionCase=(startValue,endValue)=>{
 };
 assert.deepEqual(correctionCase("2026-11-22T11:25","2026-11-22T00:30"),{hour:12,minute:30});
 assert.equal(correctionCase("2026-11-22T11:25","2026-11-22T12:30"),null);
-assert.equal(correctionCase("2026-11-22T11:25","2026-11-22T09:00"),null);
+assert.equal(correctionCase("2026-11-22T23:00","2026-11-22T01:00"),null);
 for(const fragment of [
   'id="lbScheduleCorrectEnd"','id="lbScheduleInputError"',
   'id="lbScheduleTimezone"','/broadcast-schedules-edit',
