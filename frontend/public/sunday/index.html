@@ -2397,6 +2397,7 @@ let lbBroadcastSchedules=[],lbSchedulesRoom="",lbLastScheduleLoad=0;
 let lbSchedulesLoading=false,lbScheduleTickBusy=false,lbSchedulerAuthBlocked=false;
 let lbBroadcastHealthIssue="",lbLastHealthNotificationAt=0,lbLastHealthNotificationReason="";
 let lbVerifiedHeartbeatAt=0,lbUnverifiedHeartbeats=0,lbWakeLock=null;
+let lbRtcRecoveryBusy=false,lbLastRtcRecoveryAt=0;
 const lbStartedScheduledSlots=new Set(),lbEndedScheduledSlots=new Set();
 const lbScheduledAttempts=new Map();
 lbCancelSchedule.style.display="none";
@@ -2448,6 +2449,23 @@ function lbClearHealthIssue(){
   lbSchedulerAuthBlocked=false;
   lbBroadcastHealthIssue="";
   lbWarningBanner.style.display="none";
+}
+async function lbAttemptRealtimeRecovery(){
+  if(lbRtcRecoveryBusy||!broadcasting||!mediaStream||
+    Date.now()-lbLastRtcRecoveryAt<60000)return;
+  const track=mediaStream.getAudioTracks?.()[0];
+  if(!track||track.readyState!=="live")return;
+  lbLastRtcRecoveryAt=Date.now();lbRtcRecoveryBusy=true;
+  try{
+    await stopRealtimeTranscription(false);
+    await startRealtimeTranscription();
+    if(realtimeTranscriptionDc?.readyState==="open"){
+      lbHeartbeatVerified();
+    }
+  }catch(error){
+    console.error("LiveBridge automatic audio reconnection failed:",error);
+    lbReportHealthIssue("connection","LiveBridge could not reconnect realtime transcription. Check the computer and microphone.");
+  }finally{lbRtcRecoveryBusy=false;}
 }
 function lbHeartbeatVerified(){
   lbVerifiedHeartbeatAt=Date.now();lbUnverifiedHeartbeats=0;
@@ -2573,6 +2591,7 @@ async function lbLoadSchedules(force=false){
     if(room!==ROOM_ID)return;
     lbScheduleResponseSet(data);
   }catch(error){
+    lbSchedulesRoom=ROOM_ID;
     lbLastScheduleLoad=Date.now(); // Do not retry an expired login every second.
     lbScheduleNote("Schedule check: "+error.message);
   }finally{lbSchedulesLoading=false;}
@@ -4330,6 +4349,7 @@ async function lbSendBroadcastHeartbeat(){
           realtimeTranscriptionPc?.connectionState!=="closed";
         if(!audioTrack||audioTrack.readyState!=="live"||!rtcConnected){
           lbReportHealthIssue("connection","The room is online, but microphone or realtime transcription audio is disconnected. Broadcast is NOT VERIFIED.");
+          if(audioTrack?.readyState==="live")await lbAttemptRealtimeRecovery();
         }else{
           lbHeartbeatVerified();
         }
