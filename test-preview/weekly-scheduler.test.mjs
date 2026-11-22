@@ -7,18 +7,29 @@ const sunday930={weekday:0,startMinute:570,durationMinutes:75,timeZone:"America/
 const sunday1100={weekday:0,startMinute:660,durationMinutes:75,timeZone:"America/Edmonton"};
 const sunday1000={weekday:0,startMinute:600,durationMinutes:60,timeZone:"America/Edmonton"};
 const at=t=>Date.parse(t);
-assert.equal(nextWeeklyWindow(sunday930,at("2026-11-22T12:00:00Z")).startAt,at("2026-11-22T16:30:00Z"));
-assert.equal(nextWeeklyWindow(sunday930,at("2026-11-22T17:00:00Z")).startAt,at("2026-11-29T16:30:00Z"));
-assert.equal(weeklyOccurrenceNear(sunday930,at("2026-11-22T17:00:00Z")).startAt,at("2026-11-22T16:30:00Z"));
-assert.equal(nextWeeklyWindow(sunday930,at("2027-03-14T12:00:00Z")).startAt,at("2027-03-14T15:30:00Z"));
-assert.equal(nextWeeklyWindow(sunday930,at("2027-11-07T12:00:00Z")).startAt,at("2027-11-07T16:30:00Z"));
+const formatter=new Intl.DateTimeFormat("en-CA",{
+  timeZone:"America/Edmonton",year:"numeric",month:"2-digit",day:"2-digit",
+  hour:"2-digit",minute:"2-digit",hourCycle:"h23"
+});
+const localTime=epoch=>{
+  const p=Object.fromEntries(formatter.formatToParts(new Date(epoch))
+    .filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));
+  return p.year+"-"+p.month+"-"+p.day+" "+p.hour+":"+p.minute;
+};
+// Assert wall-clock times, never a fixed UTC offset. IANA timezone rules can change.
+const first=nextWeeklyWindow(sunday930,at("2026-11-22T12:00:00Z"));
+assert.equal(localTime(first.startAt),"2026-11-22 09:30");
+const next=nextWeeklyWindow(sunday930,first.startAt+60000);
+assert.equal(localTime(next.startAt),"2026-11-29 09:30");
+assert.equal(weeklyOccurrenceNear(sunday930,first.startAt+30*60000).startAt,first.startAt);
+assert.equal(localTime(nextWeeklyWindow(sunday930,at("2027-03-14T12:00:00Z")).startAt),"2027-03-14 09:30");
+assert.equal(localTime(nextWeeklyWindow(sunday930,at("2027-11-07T12:00:00Z")).startAt),"2027-11-07 09:30");
 assert.equal(conflictsWithWeekly(sunday930,sunday1100),false);
 assert.equal(conflictsWithWeekly(sunday930,sunday1000),true);
 assert.equal(isValidTimeZone("America/Edmonton"),true);
 assert.equal(isValidTimeZone("invalid/timezone"),false);
-const last=nextWeeklyWindow(sunday930,at("2026-11-22T14:00:00Z"));
-const afterCompleted=nextWeeklyWindow(sunday930,last.startAt+60000);
-assert.equal(afterCompleted.startAt,at("2026-11-29T16:30:00Z"),"Weekly alarms must advance to next Sunday");
+assert.equal(localTime(nextWeeklyWindow(sunday930,first.startAt+60000).startAt),"2026-11-29 09:30",
+  "Weekly alarms must advance to next Sunday");
 assert.equal(windowsOverlap({startAt:100,endAt:200},{startAt:200,endAt:300}),false);
 
 const backend=readFileSync(new URL("../backend/worker.js",import.meta.url),"utf8");
