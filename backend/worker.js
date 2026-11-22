@@ -8666,8 +8666,10 @@ var LiveBridgeRoom = class {
     }
     const weeklyQueued=await this.state.storage.get("broadcast-weekly-schedules-v1")||[];
     for(const item of weeklyQueued){
-      const window=nextWeeklyWindow(item,
+      let window=nextWeeklyWindow(item,
         nowForAlarm-(Number(item.durationMinutes)+35)*60000-SCHEDULE_START_GRACE_MS);
+      if(window&&item.lastStopFor===window.startAt)
+        window=nextWeeklyWindow(item,window.startAt+60000);
       if(!window)continue;
       if(item.lastPreflight30For!==window.startAt)considerAlarm(window.startAt-30*60000);
       if(item.lastPreflight5For!==window.startAt)considerAlarm(window.startAt-5*60000);
