@@ -8452,6 +8452,38 @@ var LiveBridgeRoom = class {
       return jsonResponse({success:true,schedule,schedules,
         weeklySchedules:weekly.map(x=>({...x,type:"weekly",...weeklyOccurrenceNear(x,now)}))});
     }
+    if(url.pathname==="/schedules-edit"&&request.method==="POST"){
+      const body=await request.json(),id=String(body.id||"").trim(),room=normalizeRoom(body.room);
+      const weekday=Number(body.weekday),startMinute=Number(body.startMinute);
+      const durationMinutes=Number(body.durationMinutes),timeZone=String(body.timeZone||"");
+      if(!id||!room||!Number.isInteger(weekday)||weekday<0||weekday>6
+        ||!Number.isInteger(startMinute)||startMinute<0||startMinute>=1440
+        ||!Number.isInteger(durationMinutes)||durationMinutes<1||durationMinutes>720
+        ||startMinute+durationMinutes>1440||!isValidTimeZone(timeZone))
+        return jsonResponse({success:false,error:"Please check the weekday, start, end, and selected timezone (up to 12 hours; same day)."},400);
+      const now=Date.now();
+      const weekly=await this.state.storage.get("broadcast-weekly-schedules-v1")||[];
+      const current=weekly.find(x=>x.id===id&&normalizeRoom(x.room)===room);
+      if(!current)return jsonResponse({success:false,error:"Recurring schedule not found."},404);
+      const activeOccurrence=weeklyOccurrenceNear(current,now);
+      if(activeOccurrence&&activeOccurrence.startAt<=now&&now<activeOccurrence.endAt)
+        return jsonResponse({success:false,error:"A service in progress cannot be edited. Wait until it finishes."},409);
+      const candidate={...current,weekday,startMinute,durationMinutes,timeZone,
+        lastPreflight30For:null,lastPreflight5For:null,lastPreflightWarnedFor:null,
+        lastAlertFor:null,lastStopFor:null};
+      if(weekly.some(x=>x.id!==id&&conflictsWithWeekly(x,candidate,now)))
+        return jsonResponse({success:false,error:"This change overlaps another weekly broadcast."},409);
+      const schedules=await this.state.storage.get("broadcast-schedules-v2")||[];
+      if(schedules.some(x=>Number(x.endAt)>now&&windowsOverlap(
+        {startAt:Number(x.startAt),endAt:Number(x.endAt)},
+        nextWeeklyWindow(candidate,Number(x.startAt)-durationMinutes*60000-1000))))
+        return jsonResponse({success:false,error:"This change overlaps a saved one-time broadcast."},409);
+      const updated=weekly.map(x=>x.id===id?candidate:x);
+      await this.state.storage.put("broadcast-weekly-schedules-v1",updated);
+      await this.updateEventDrivenAlarm();
+      return jsonResponse({success:true,schedules:schedules.filter(x=>Number(x.endAt)>now-86400000),
+        weeklySchedules:updated.map(x=>({...x,type:"weekly",...weeklyOccurrenceNear(x,now)}))});
+    }
     if(url.pathname==="/schedules-remove"&&request.method==="POST"){
       const body=await request.json(),id=String(body.id||"");
       const current=await this.state.storage.get("broadcast-schedules-v2")||[];
@@ -23667,7 +23699,7 @@ return jsonResponse({
 
 
     if((request.method==="GET"||request.method==="POST")
-      &&(url.pathname==="/broadcast-schedules"||url.pathname==="/broadcast-schedules-remove")){
+      &&(url.pathname==="/broadcast-schedules"||url.pathname==="/broadcast-schedules-remove"||url.pathname==="/broadcast-schedules-edit")){
       try{
         const auth=await verifyClerkRequest(request,env);
         const body=request.method==="GET"?{room:url.searchParams.get("room")}:await request.json();
@@ -23679,7 +23711,8 @@ return jsonResponse({
         const stub=env.LIVEBRIDGE_ROOMS.get(env.LIVEBRIDGE_ROOMS.idFromName(room));
         const target=request.method==="GET"
           ?"/schedules-list?ready="+(url.searchParams.get("ready")==="1"?"1":"0"):
-          url.pathname==="/broadcast-schedules-remove"?"/schedules-remove":"/schedules-add";
+          url.pathname==="/broadcast-schedules-remove"?"/schedules-remove":
+          url.pathname==="/broadcast-schedules-edit"?"/schedules-edit":"/schedules-add";
         const response=await stub.fetch(new Request("https://livebridge.internal"+target,{
           method:request.method==="GET"?"GET":"POST",
           ...(request.method==="GET"?{}:{headers:{"Content-Type":"application/json"},body:JSON.stringify({...body,room})})
