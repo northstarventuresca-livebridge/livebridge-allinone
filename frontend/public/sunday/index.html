@@ -848,13 +848,15 @@ body{
           "
         >
 
+        <button id="lbSchedulerPickerOK" type="button" class="lb-btn" style="margin-bottom:9px;min-height:38px;width:100%;">OK — Done Choosing Time</button>
+        <div style="font-size:11px;color:#9fb2c6;margin-bottom:9px;">Add up to 32 separate broadcasts for the same day or future dates. Times follow your device's timezone.</div>
         <button
           id="lbEnableSchedule"
           type="button"
           class="lb-btn"
           style="margin-bottom:8px;"
         >
-          Enable Scheduled Broadcast
+          + Add Schedule
         </button>
 
         <button
@@ -866,6 +868,8 @@ body{
           Cancel Schedule
         </button>
 
+        <div id="lbScheduleList" aria-live="polite" style="display:grid;gap:8px;margin:5px 0 10px;"></div>
+        <button id="lbScheduleDone" type="button" class="lb-btn" style="margin-bottom:8px;">Done</button>
         <div
           id="lbScheduleStatus"
           style="
@@ -874,7 +878,7 @@ body{
             line-height:1.45;
           "
         >
-          Page must remain open for automatic start and stop.
+          Schedules are saved. Keep this broadcaster page open and the microphone ready for automatic start. Server alarms safeguard scheduled ending.
         </div>
         </div>
       </details>
