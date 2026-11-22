@@ -2376,10 +2376,11 @@ const emailBroadcastButton =
   );
 
 
+
 /* =====================================================
-   PERSISTENT MULTI-BROADCAST SCHEDULER
-   Browser provides audio; server stores slots and
-   enforces scheduled endings with Durable Object alarms.
+   RECURRING BROADCAST SCHEDULER AND LOGIN WATCHDOG
+   Weekly dates are calculated on the server in the
+   selected IANA timezone; passwords/tokens are never saved.
 ===================================================== */
 const lbScheduledStart=document.getElementById("lbScheduledStart");
 const lbScheduledEnd=document.getElementById("lbScheduledEnd");
@@ -2388,32 +2389,135 @@ const lbCancelSchedule=document.getElementById("lbCancelSchedule");
 const lbScheduleStatus=document.getElementById("lbScheduleStatus");
 const lbScheduleList=document.getElementById("lbScheduleList");
 const lbSchedulePanel=document.getElementById("lbBroadcastScheduler");
+const lbRepeatWeekly=document.getElementById("lbRepeatWeekly");
+const lbWeeklyTimezone=document.getElementById("lbWeeklyTimezone");
+const lbEnableSchedulerAlerts=document.getElementById("lbEnableSchedulerAlerts");
+const lbWeekdayNames=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 let lbBroadcastSchedules=[],lbSchedulesRoom="",lbLastScheduleLoad=0;
-let lbSchedulesLoading=false,lbScheduleTickBusy=false;
+let lbSchedulesLoading=false,lbScheduleTickBusy=false,lbSchedulerAuthBlocked=false;
+let lbBroadcastHealthIssue="",lbLastHealthNotificationAt=0,lbLastHealthNotificationReason="";
+let lbVerifiedHeartbeatAt=0,lbUnverifiedHeartbeats=0,lbWakeLock=null;
 const lbStartedScheduledSlots=new Set(),lbEndedScheduledSlots=new Set();
 const lbScheduledAttempts=new Map();
 lbCancelSchedule.style.display="none";
+const lbWarningBanner=document.createElement("div");
+lbWarningBanner.id="lbBroadcasterHealthBanner";
+lbWarningBanner.setAttribute("role","alert");
+lbWarningBanner.style.cssText="display:none;position:fixed;top:10px;left:50%;transform:translateX(-50%);width:min(94vw,690px);background:#491e25;border:2px solid #ff7373;border-radius:12px;padding:14px 18px;color:#fff;box-shadow:0 8px 35px #0009;z-index:99999;font-size:13px;font-weight:700;line-height:1.5";
+const lbBannerText=document.createElement("span");
+lbWarningBanner.append(lbBannerText);
+const lbReloginLink=document.createElement("a");
+lbReloginLink.href="/account/";
+lbReloginLink.textContent="Sign in again";
+lbReloginLink.style.cssText="display:inline-block;margin:8px 0 0 10px;padding:6px 10px;background:#fff;color:#651c27;border-radius:6px;text-decoration:none;font-weight:800";
+lbWarningBanner.append(lbReloginLink);
+document.body.appendChild(lbWarningBanner);
 function lbScheduleText(ms){return new Date(ms).toLocaleString(undefined,
   {weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});}
 function lbScheduleNote(message){lbScheduleStatus.textContent=message;}
+function lbOccurrenceKey(item){return String(item.id)+":"+String(item.startAt);}
+function lbTimeMinutesLabel(value){
+  const hour=Math.floor(Number(value)/60),minute=Number(value)%60;
+  return String(hour%12||12)+":"+String(minute).padStart(2,"0")+(hour<12?" AM":" PM");
+}
+function lbReportHealthIssue(kind,message){
+  if(kind==="auth")lbSchedulerAuthBlocked=true;
+  lbBroadcastHealthIssue=kind;
+  lbBannerText.textContent=message;
+  lbReloginLink.style.display=kind==="auth"?"inline-block":"none";
+  lbWarningBanner.style.display="block";
+  if(broadcasting){
+    document.getElementById("broadcastDot")?.classList.remove("live");
+    const status=document.getElementById("broadcastStatus");
+    if(status)status.textContent=kind==="auth"?"LOGIN REQUIRED — NOT VERIFIED":"BROADCAST NOT VERIFIED";
+  }
+  if("Notification" in window&&Notification.permission==="granted"){
+    const now=Date.now(),reason=kind+":"+message;
+    if(reason!==lbLastHealthNotificationReason||now-lbLastHealthNotificationAt>20*60000){
+      lbLastHealthNotificationAt=now;lbLastHealthNotificationReason=reason;
+      try{
+        const alert=new Notification("LiveBridge broadcaster needs attention",{
+          body:message,tag:"livebridge-broadcaster-warning",requireInteraction:true
+        });
+        alert.onclick=()=>{window.focus();alert.close();};
+      }catch{}
+    }
+  }
+}
+function lbClearHealthIssue(){
+  lbSchedulerAuthBlocked=false;
+  lbBroadcastHealthIssue="";
+  lbWarningBanner.style.display="none";
+}
+function lbHeartbeatVerified(){
+  lbVerifiedHeartbeatAt=Date.now();lbUnverifiedHeartbeats=0;
+  lbClearHealthIssue();
+  if(broadcasting){
+    document.getElementById("broadcastDot")?.classList.add("live");
+    const status=document.getElementById("broadcastStatus");
+    if(status)status.textContent="LIVE · SERVER VERIFIED";
+  }
+}
+function lbIsAuthError(status,data){
+  if(status!==401&&status!==403)return false;
+  if(data?.code==="PLAN_UPGRADE_REQUIRED"||data?.code==="ACCOUNT_NOT_ACTIVE")return false;
+  return /(?:clerk|session|token|authorization|not authorized|expired|sign.?in|unauthorized)/i
+    .test(String(data?.error||data?.message||""));
+}
+function lbScheduleResponseSet(data){
+  lbBroadcastSchedules=[
+    ...(Array.isArray(data.schedules)?data.schedules:[]),
+    ...(Array.isArray(data.weeklySchedules)?data.weeklySchedules:[])
+  ];
+  lbSchedulesRoom=ROOM_ID;lbLastScheduleLoad=Date.now();
+  lbRenderScheduleList();
+  lbHoldScreenWakeLock();
+}
 async function lbScheduleApi(method,path,body){
-  const token=await getBroadcasterSessionToken();
-  if(!token)throw new Error("LiveBridge account session could not be verified.");
-  const response=await fetch(WORKER_URL+path,{
-    method,headers:{"Authorization":"Bearer "+token,...(body?{"Content-Type":"application/json"}:{})},
-    ...(body?{body:JSON.stringify(body)}:{})
-  });
-  let data={};try{data=await response.json()}catch{}
-  if(!response.ok||!data.success)throw new Error(data.error||"Schedule request failed.");
-  return data;
+  for(let attempt=0;attempt<2;attempt++){
+    let token="";
+    try{token=await getBroadcasterSessionToken(attempt===1);}
+    catch(error){
+      if(attempt===0)continue;
+      lbReportHealthIssue("auth","LiveBridge login expired or could not be refreshed. Sign in again before the next scheduled service.");
+      throw error;
+    }
+    if(!token){
+      if(attempt===0)continue;
+      lbReportHealthIssue("auth","LiveBridge is no longer signed in. Sign in again to restore scheduled broadcasting.");
+      throw new Error("LiveBridge login is required.");
+    }
+    let response,data={};
+    try{
+      response=await fetch(WORKER_URL+path,{
+        method,headers:{"Authorization":"Bearer "+token,...(body?{"Content-Type":"application/json"}:{})},
+        ...(body?{body:JSON.stringify(body)}:{})
+      });
+      try{data=await response.json()}catch{}
+    }catch(error){
+      lbReportHealthIssue("connection","LiveBridge cannot verify its connection. Check the computer and internet connection.");
+      throw error;
+    }
+    if(response.ok&&data.success){
+      lbSchedulerAuthBlocked=false;
+      if(!broadcasting&&lbBroadcastHealthIssue==="auth")lbClearHealthIssue();
+      return data;
+    }
+    if(lbIsAuthError(response.status,data)){
+      if(attempt===0)continue;
+      lbReportHealthIssue("auth","LiveBridge login was rejected. Please sign in again; scheduled starts are not safe until login is restored.");
+    }
+    throw new Error(data.error||"Schedule request failed (HTTP "+response.status+").");
+  }
+  throw new Error("Could not verify LiveBridge login.");
 }
 function lbRenderScheduleList(){
   lbScheduleList.replaceChildren();
-  const now=Date.now(),items=lbBroadcastSchedules.filter(x=>Number(x.endAt)>now-60000)
-    .sort((a,b)=>a.startAt-b.startAt);
+  const now=Date.now(),items=lbBroadcastSchedules.filter(x=>x.type==="weekly"||Number(x.endAt)>now-60000)
+    .sort((a,b)=>Number(a.startAt)-Number(b.startAt));
   if(!items.length){
     const empty=document.createElement("div");
-    empty.textContent="No upcoming broadcasts. Choose start and end, then Add Schedule.";
+    empty.textContent="No schedules yet. Choose start and end, then Add Schedule. Select Repeat every week to make a recurring service.";
     empty.style.cssText="color:#9fb2c6;font-size:11px;line-height:1.5;padding:9px;border:1px dashed #436078;border-radius:8px";
     lbScheduleList.appendChild(empty);return;
   }
@@ -2422,37 +2526,56 @@ function lbRenderScheduleList(){
     row.style.cssText="background:rgba(35,72,105,.35);border:1px solid rgba(160,196,225,.18);border-radius:9px;padding:10px;display:flex;gap:8px;align-items:center;justify-content:space-between";
     const info=document.createElement("div");
     info.style.cssText="min-width:0;line-height:1.55;font-size:11px;color:#e5f4ff";
-    const first=document.createElement("strong");first.textContent=lbScheduleText(item.startAt);
-    const second=document.createElement("div");second.textContent="Ends "+lbScheduleText(item.endAt);second.style.color="#a8bfd3";
-    info.append(first,second);
+    const first=document.createElement("strong");
+    const second=document.createElement("div");
+    if(item.type==="weekly"){
+      const endMinute=Number(item.startMinute)+Number(item.durationMinutes);
+      first.textContent="Every "+lbWeekdayNames[Number(item.weekday)]+
+        " · "+lbTimeMinutesLabel(item.startMinute)+" – "+lbTimeMinutesLabel(endMinute);
+      second.textContent="Next "+lbScheduleText(item.startAt)+" · "+(item.timeZone||"local timezone");
+    }else{
+      first.textContent=lbScheduleText(item.startAt);
+      second.textContent="Ends "+lbScheduleText(item.endAt);
+    }
+    second.style.color="#a8bfd3";info.append(first,second);
     const btn=document.createElement("button");btn.type="button";btn.className="lb-btn";
     btn.style.cssText="flex-shrink:0;padding:8px;font-size:11px";
-    btn.textContent="Remove";btn.setAttribute("aria-label","Remove schedule "+lbScheduleText(item.startAt));
+    btn.textContent="Remove";btn.setAttribute("aria-label","Remove schedule "+first.textContent);
     btn.addEventListener("click",async()=>{
       btn.disabled=true;
       try{
-        await lbScheduleApi("POST","/broadcast-schedules-remove",{room:ROOM_ID,id:item.id});
-        lbBroadcastSchedules=lbBroadcastSchedules.filter(x=>x.id!==item.id);
-        lbStartedScheduledSlots.delete(item.id);lbEndedScheduledSlots.delete(item.id);
-        lbRenderScheduleList();lbScheduleNote("Schedule removed.");
-      }catch(e){btn.disabled=false;showLiveBridgeAccountNotice(e.message);}
+        const data=await lbScheduleApi("POST","/broadcast-schedules-remove",{room:ROOM_ID,id:item.id});
+        lbScheduleResponseSet(data);lbScheduleNote("Schedule removed.");
+      }catch(error){btn.disabled=false;showLiveBridgeAccountNotice(error.message);}
     });
     row.append(info,btn);lbScheduleList.appendChild(row);
   }
+}
+async function lbHoldScreenWakeLock(){
+  if(!("wakeLock" in navigator)||document.visibilityState!=="visible")return;
+  if(!lbBroadcastSchedules.length){
+    if(lbWakeLock){try{await lbWakeLock.release();}catch{}lbWakeLock=null;}
+    return;
+  }
+  if(lbWakeLock)return;
+  try{lbWakeLock=await navigator.wakeLock.request("screen");
+    lbWakeLock.addEventListener("release",()=>{lbWakeLock=null;});
+  }catch{} // Unsupported power settings still require an awake broadcaster computer.
 }
 async function lbLoadSchedules(force=false){
   if(lbSchedulesLoading||!ROOM_ID||!broadcasterCanSchedule())return;
   if(!force&&ROOM_ID===lbSchedulesRoom&&Date.now()-lbLastScheduleLoad<35000)return;
   lbSchedulesLoading=true;
   try{
-    const room=ROOM_ID;
-    const data=await lbScheduleApi("GET","/broadcast-schedules?room="+encodeURIComponent(room));
+    const room=ROOM_ID,authority=document.getElementById("lbBroadcastAuthorityConfirm");
+    const ready=authority?.checked===true?"1":"0";
+    const data=await lbScheduleApi("GET","/broadcast-schedules?room="+encodeURIComponent(room)+"&ready="+ready);
     if(room!==ROOM_ID)return;
-    lbBroadcastSchedules=Array.isArray(data.schedules)?data.schedules:[];
-    lbSchedulesRoom=room;lbLastScheduleLoad=Date.now();
-    lbRenderScheduleList();
-  }catch(e){lbScheduleNote("Could not load schedules: "+e.message);}
-  finally{lbSchedulesLoading=false;}
+    lbScheduleResponseSet(data);
+  }catch(error){
+    lbLastScheduleLoad=Date.now(); // Do not retry an expired login every second.
+    lbScheduleNote("Schedule check: "+error.message);
+  }finally{lbSchedulesLoading=false;}
 }
 async function lbCheckBroadcastSchedule(){
   if(lbScheduleTickBusy||!ROOM_ID||!broadcasterCanSchedule())return;
@@ -2460,55 +2583,79 @@ async function lbCheckBroadcastSchedule(){
   try{
     const now=Date.now(),items=lbBroadcastSchedules.slice().sort((a,b)=>a.startAt-b.startAt);
     for(const item of items){
-      const start=Number(item.startAt),end=Number(item.endAt);
-      if(now>=start&&now<end&&!lbStartedScheduledSlots.has(item.id)&&!lbEndedScheduledSlots.has(item.id)){
-        if(broadcasting)lbStartedScheduledSlots.add(item.id);
-        else if(now-(lbScheduledAttempts.get(item.id)||0)>=15000){
-          lbScheduledAttempts.set(item.id,now);lbScheduleNote("Starting scheduled broadcast...");
+      const start=Number(item.startAt),end=Number(item.endAt),key=lbOccurrenceKey(item);
+      if(now>=start&&now<end&&!lbStartedScheduledSlots.has(key)&&!lbEndedScheduledSlots.has(key)){
+        if(!broadcasting&&!lbSchedulerAuthBlocked&&now-(lbScheduledAttempts.get(key)||0)>=20000){
+          lbScheduledAttempts.set(key,now);
+          lbScheduleNote("Starting scheduled service...");
           await toggleBroadcast();
-          if(broadcasting)lbStartedScheduledSlots.add(item.id);
-          else lbScheduleNote("Automatic start could not complete. Check microphone, connection and Terms confirmation.");
+          if(broadcasting)lbStartedScheduledSlots.add(key);
+          else lbScheduleNote("Scheduled start did not complete. Check login, microphone and Terms confirmation.");
         }
       }
-      if(now>=end&&!lbEndedScheduledSlots.has(item.id)){
-        if(broadcasting&&lbStartedScheduledSlots.has(item.id)&&now-end<12*3600000){
-          lbScheduleNote("Ending scheduled broadcast...");
+      if(now>=end&&!lbEndedScheduledSlots.has(key)){
+        // Only stop a broadcast that THIS automation started; never a manually started room.
+        if(broadcasting&&lbStartedScheduledSlots.has(key)&&now-end<12*3600000){
+          lbScheduleNote("Ending scheduled service...");
           await toggleBroadcast();
         }
-        if(!broadcasting||!lbStartedScheduledSlots.has(item.id)){
-          lbEndedScheduledSlots.add(item.id);
-          lbRenderScheduleList();
+        if(!broadcasting||!lbStartedScheduledSlots.has(key)){
+          lbEndedScheduledSlots.add(key);
+          if(item.type!=="weekly")lbRenderScheduleList();
         }
       }
     }
     const next=items.find(x=>Number(x.endAt)>now);
-    if(next&&!(now>=Number(next.startAt)&&now<Number(next.endAt)&&!broadcasting)){
+    if(next&&!(now>=Number(next.startAt)&&now<Number(next.endAt)&&!broadcasting)
+      &&!lbBroadcastHealthIssue){
       lbScheduleNote(now>=Number(next.startAt)
-        ?"Scheduled service in progress — ends "+lbScheduleText(next.endAt)
+        ?"Scheduled service in progress · ends "+lbScheduleText(next.endAt)
         :"Next: "+lbScheduleText(next.startAt)+" to "+lbScheduleText(next.endAt)+
-        ". Keep this broadcaster page open with microphone ready.");
+        ". Leave this computer awake, broadcaster open and microphone connected.");
     }
-  }catch(e){lbScheduleNote("Schedule action failed: "+(e?.message||e));}
+  }catch(error){lbScheduleNote("Schedule error: "+(error?.message||error));}
   finally{lbScheduleTickBusy=false;}
 }
+lbRepeatWeekly.addEventListener("change",()=>{
+  lbWeeklyTimezone.style.display=lbRepeatWeekly.checked?"block":"none";
+  lbWeeklyTimezone.textContent=lbRepeatWeekly.checked
+    ?"Repeats on the same weekday and times in "+
+      (Intl.DateTimeFormat().resolvedOptions().timeZone||"America/Edmonton")+
+      ". Automatic start requires this page, a working microphone, valid sign-in and Terms confirmation."
+    :"";
+});
 lbEnableSchedule.addEventListener("click",async()=>{
   if(!broadcasterCanSchedule()){window.location.href="/plans/index.html";return;}
   const authority=document.getElementById("lbBroadcastAuthorityConfirm");
   if(!authority?.checked){
-    showLiveBridgeAccountNotice("Confirm your organization's authority and required consent before scheduling.");return;
+    showLiveBridgeAccountNotice("Confirm your organization's authority and consent before scheduling.");return;
   }
-  const start=new Date(lbScheduledStart.value).getTime(),end=new Date(lbScheduledEnd.value).getTime();
-  if(!Number.isFinite(start)||!Number.isFinite(end)){
-    showLiveBridgeAccountNotice("Choose both start and end dates and times.");return;
+  const startDate=new Date(lbScheduledStart.value),endDate=new Date(lbScheduledEnd.value);
+  const start=startDate.getTime(),end=endDate.getTime();
+  if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start){
+    showLiveBridgeAccountNotice("Choose valid start and end times, with the end after the start.");return;
+  }
+  let body={room:ROOM_ID,startAt:start,endAt:end};
+  if(lbRepeatWeekly.checked){
+    if(startDate.getDay()!==endDate.getDay()||startDate.toDateString()!==endDate.toDateString()){
+      showLiveBridgeAccountNotice("Recurring services must start and end on the same day.");return;
+    }
+    body={
+      room:ROOM_ID,repeat:"weekly",weekday:startDate.getDay(),
+      startMinute:startDate.getHours()*60+startDate.getMinutes(),
+      durationMinutes:Math.round((end-start)/60000),
+      timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone||"America/Edmonton"
+    };
   }
   lbEnableSchedule.disabled=true;lbEnableSchedule.textContent="Saving...";
   try{
-    const data=await lbScheduleApi("POST","/broadcast-schedules",{room:ROOM_ID,startAt:start,endAt:end});
-    lbBroadcastSchedules=Array.isArray(data.schedules)?data.schedules:[];
-    lbSchedulesRoom=ROOM_ID;lbLastScheduleLoad=Date.now();
+    const data=await lbScheduleApi("POST","/broadcast-schedules",body);
+    lbScheduleResponseSet(data);
     lbScheduledStart.value="";lbScheduledEnd.value="";
-    lbRenderScheduleList();lbScheduleNote("Saved "+lbScheduleText(start)+" to "+lbScheduleText(end)+". Add another or press Done.");
-  }catch(e){showLiveBridgeAccountNotice(e.message||"Could not save schedule.");}
+    lbScheduleNote(lbRepeatWeekly.checked
+      ?"Weekly service saved; it will repeat every "+lbWeekdayNames[body.weekday]+"."
+      :"One-time broadcast saved. Add another or press Done.");
+  }catch(error){showLiveBridgeAccountNotice(error.message||"Could not save schedule.");}
   finally{lbEnableSchedule.disabled=false;lbEnableSchedule.textContent="+ Add Schedule";}
 });
 function lbCloseDateTimePicker(){
@@ -2519,10 +2666,27 @@ document.getElementById("lbSchedulerPickerOK").addEventListener("click",lbCloseD
 document.getElementById("lbScheduleDone").addEventListener("click",()=>{
   lbCloseDateTimePicker();lbSchedulePanel.open=false;
 });
+lbEnableSchedulerAlerts.addEventListener("click",async()=>{
+  if(!("Notification" in window)){
+    lbEnableSchedulerAlerts.textContent="Browser notifications unavailable";return;
+  }
+  try{
+    const status=await Notification.requestPermission();
+    lbEnableSchedulerAlerts.textContent=status==="granted"
+      ?"Desktop alerts enabled":status==="denied"?"Alerts blocked in browser":"Enable desktop alerts";
+  }catch{lbEnableSchedulerAlerts.textContent="Notifications not supported";}
+});
+if("Notification" in window&&Notification.permission==="granted")
+  lbEnableSchedulerAlerts.textContent="Desktop alerts enabled";
+document.addEventListener("change",event=>{
+  if(event.target?.id==="lbBroadcastAuthorityConfirm")lbLoadSchedules(true);
+});
 lbSchedulePanel.addEventListener("toggle",()=>{if(lbSchedulePanel.open)lbLoadSchedules(true);});
-window.addEventListener("focus",()=>{lbLoadSchedules(true);lbCheckBroadcastSchedule();});
+window.addEventListener("focus",()=>{lbLoadSchedules(true);lbCheckBroadcastSchedule();lbHoldScreenWakeLock();});
 document.addEventListener("visibilitychange",()=>{
-  if(document.visibilityState==="visible"){lbLoadSchedules(true);lbCheckBroadcastSchedule();}
+  if(document.visibilityState==="visible"){
+    lbLoadSchedules(true);lbCheckBroadcastSchedule();lbHoldScreenWakeLock();
+  }
 });
 setInterval(()=>{lbLoadSchedules();lbCheckBroadcastSchedule();},1000);
 
