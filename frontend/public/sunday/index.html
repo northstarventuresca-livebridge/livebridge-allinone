@@ -2447,11 +2447,11 @@ async function lbCheckBroadcastSchedule(){
         }
       }
       if(now>=end&&!lbEndedScheduledSlots.has(item.id)){
-        if(broadcasting&&now-end<12*3600000){
+        if(broadcasting&&lbStartedScheduledSlots.has(item.id)&&now-end<12*3600000){
           lbScheduleNote("Ending scheduled broadcast...");
           await toggleBroadcast();
         }
-        if(!broadcasting){
+        if(!broadcasting||!lbStartedScheduledSlots.has(item.id)){
           lbEndedScheduledSlots.add(item.id);
           lbRenderScheduleList();
         }
