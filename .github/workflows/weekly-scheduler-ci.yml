@@ -1,0 +1,28 @@
+name: LiveBridge recurring schedules and auth watchdog
+on:
+  pull_request:
+    paths:
+      - backend/weekly-schedule-utils.mjs
+      - backend/worker.js
+      - frontend/public/sunday/index.html
+      - test-preview/weekly-scheduler.test.mjs
+      - .github/workflows/weekly-scheduler-ci.yml
+  push:
+    branches: [main]
+    paths:
+      - backend/weekly-schedule-utils.mjs
+      - backend/worker.js
+      - frontend/public/sunday/index.html
+      - test-preview/weekly-scheduler.test.mjs
+      - .github/workflows/weekly-scheduler-ci.yml
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node test-preview/weekly-scheduler.test.mjs
+      - run: node test-preview/multi-scheduler-smoke.test.mjs
