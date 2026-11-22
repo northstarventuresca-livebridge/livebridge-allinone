@@ -848,8 +848,13 @@ body{
           "
         >
 
+        <label style="display:flex;align-items:center;gap:9px;font-size:12px;color:#e3f4ff;font-weight:700;margin:0 0 12px;">
+          <input id="lbRepeatWeekly" type="checkbox" style="width:17px;height:17px;accent-color:#4ca9ff;">
+          Repeat this service every week
+        </label>
+        <div id="lbWeeklyTimezone" style="font-size:11px;color:#92bad0;margin:-4px 0 12px;display:none;"></div>
         <button id="lbSchedulerPickerOK" type="button" class="lb-btn" style="margin-bottom:9px;min-height:38px;width:100%;">OK — Done Choosing Time</button>
-        <div style="font-size:11px;color:#9fb2c6;margin-bottom:9px;">Add up to 32 separate broadcasts for the same day or future dates. Times follow your device's timezone.</div>
+        <div style="font-size:11px;color:#9fb2c6;margin-bottom:9px;">Add up to 32 one-time or recurring services. Weekly times stay fixed in your local timezone through daylight-saving changes.</div>
         <button
           id="lbEnableSchedule"
           type="button"
@@ -868,6 +873,10 @@ body{
           Cancel Schedule
         </button>
 
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 9px;">
+          <button id="lbEnableSchedulerAlerts" type="button" class="lb-btn" style="font-size:11px;padding:8px 10px;">Enable desktop alerts</button>
+          <span style="font-size:10px;color:#92bad0;">Email warnings also go to the account address before unattended services.</span>
+        </div>
         <div id="lbScheduleList" aria-live="polite" style="display:grid;gap:8px;margin:5px 0 10px;"></div>
         <button id="lbScheduleDone" type="button" class="lb-btn" style="margin-bottom:8px;">Done</button>
         <div
